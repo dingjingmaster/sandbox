@@ -1,0 +1,18 @@
+//
+// Created by dingjing on 24-6-6.
+//
+
+#ifndef sandbox_SANDBOX_SANDBOX_H
+#define sandbox_SANDBOX_SANDBOX_H
+#include <glib.h>
+#include <fuse.h>
+#include <c/clib.h>
+#include <stdbool.h>
+
+C_BEGIN_EXTERN_C
+
+int sandbox_main (int argc, char* argv[]);
+
+C_END_EXTERN_C
+
+#endif // sandbox_SANDBOX_SANDBOX_H
