@@ -4,10 +4,8 @@
 
 #ifndef sandbox_SANDBOX_SANDBOX_H
 #define sandbox_SANDBOX_SANDBOX_H
-#include <glib.h>
 #include <fuse.h>
 #include <c/clib.h>
-#include <stdbool.h>
 
 C_BEGIN_EXTERN_C
 

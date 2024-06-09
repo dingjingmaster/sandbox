@@ -5,13 +5,20 @@ set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 0)
 set(PROJECT_VERSION_PATCH 0)
 
+set(DEBUG true)
+#set(DEBUG false)
 set(CMAKE_C_STANDARD 11)
 
 add_definitions(
         -w -g
         -D FUSE_USE_VERSION=31
+        -D C_LOG_TAG=\\"sandbox\\"
         -D PACKAGE_VERSION=\\"${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}\\"
 )
+
+if (DEBUG)
+    add_definitions(-D DEBUG)
+endif ()
 
 find_package (PkgConfig)
 
