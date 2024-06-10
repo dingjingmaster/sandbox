@@ -8,9 +8,7 @@
  */
 int main(int argc, char *argv[])
 {
-    C_LOG_INFO("\n\nstart running...");
-
-    C_LOG_VERB("Starting111");
+    C_LOG_INFO("start running...");
 
     // 启动命令行，与后台fuse进行交互
 
