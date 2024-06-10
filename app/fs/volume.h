@@ -6,6 +6,7 @@
 #define sandbox_VOLUME_H
 #include <c/clib.h>
 
+#include "types.h"
 
 C_BEGIN_EXTERN_C
 
@@ -63,14 +64,6 @@ C_BEGIN_EXTERN_C
 #define NVolSetFreeSpaceKnown(nv)         set_nvol_flag(nv, FreeSpaceKnown)
 #define NVolClearFreeSpaceKnown(nv)     clear_nvol_flag(nv, FreeSpaceKnown)
 
-
-typedef cuint16                         FSChar;
-typedef struct _FSAttr                  FSAttr;
-typedef struct _FSInode                 FSInode;
-typedef struct _FSDevice                FSDevice;
-typedef struct _FSVolume                FSVolume;
-typedef struct _FSAttrDef               FSAttrDef;
-typedef struct _FSIndexContext          FSIndexContext;
 
 typedef enum
 {

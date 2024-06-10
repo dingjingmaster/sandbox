@@ -7,6 +7,8 @@
 
 #include <c/clib.h>
 
+#include "types.h"
+
 C_BEGIN_EXTERN_C
 
 #define test_ndev_flag(nd, flag)          test_bit(ND_##flag, (nd)->d_state)
@@ -33,10 +35,6 @@ C_BEGIN_EXTERN_C
 #define NDevSetSync(nd)           set_ndev_flag(nd, Sync)
 #define NDevClearSync(nd)       clear_ndev_flag(nd, Sync)
 
-
-typedef struct _FSDevice                FSDevice;
-typedef struct _FSVolume                FSVolume;
-typedef struct _FSDeviceOperations      FSDeviceOperations;
 
 typedef enum {
     FSD_OPEN,               /* 1: Device is open. */

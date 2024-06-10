@@ -6,9 +6,9 @@
 #define sandbox_FS_H
 #include <c/clib.h>
 
-C_BEGIN_EXTERN_C
+#include "types.h"
 
-typedef struct _MkfsOptions         MkfsOptions;
+C_BEGIN_EXTERN_C
 
 struct _MkfsOptions
 {
