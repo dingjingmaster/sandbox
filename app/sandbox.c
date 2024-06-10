@@ -7,6 +7,24 @@
 #include <c/clib.h>
 #include <signal.h>
 
+/**
+ * @brief
+ *  1. ntfs文件系统格式化： attrdef.c boot.c sd.c mkntfs.c utils.c libntfs-3g
+ */
+
+#define SANDBOX_OPTION(t, p)            {t, offsetof(SandboxOption, p), 1}
+
+typedef struct _SandboxOption           SandboxOption;
+
+struct _SandboxOption
+{
+    const char*         mountPoint;     // 挂在点后续去掉
+    const char*         format;         // 格式化文件系统的位置, @note:// 后续去掉
+    unsigned int        size;           // 格式化文件系统的大小，单位是MB
+    bool                umount;         // 卸载文件系统
+    int                 showHelp;
+};
+
 
 /**
  * @brief 初始化文件系统
@@ -90,29 +108,85 @@ static int sandbox_fuse_write(const char* path, const char*buf, size_t size, off
  */
 static bool sandbox_check_access_rights();
 
+/**
+ * @brief 格式化一个文件系统
+ * @param key 加密密钥
+ * @param path 要格式文件系统的路径
+ * @param size 文件系统大小
+ * @return
+ */
+static bool sandbox_format_fs(const char* key, const char* path, csize size);
 
-int sandbox_main(int argc, char **argv)
+/**
+ * @brief 帮助
+ * @param program
+ */
+static void show_help (const char* program);
+
+/**
+ * @brief 输出命令行参数解析结果
+ * @param cmdline
+ */
+static void show_cmd (SandboxOption* cmdline);
+
+/**
+ * @brief 解析命令行参数
+ * @param data
+ * @param arg
+ * @param key
+ * @param outargs
+ * @return
+ */
+int sandbox_cmd_parse(void *data, const char *arg, int key, struct fuse_args *outargs);
+
+
+static SandboxOption gsOptions;
+static const struct fuse_opt gsOptionsSpec[] = {
+    SANDBOX_OPTION("--size", size),
+    SANDBOX_OPTION("--umount", umount),
+    SANDBOX_OPTION("--format", format),
+    SANDBOX_OPTION("--help", showHelp),
+    SANDBOX_OPTION("--mount", mountPoint),
+    FUSE_OPT_END,
+};
+static struct fuse_operations gsFuseOps = {
+    .init = sandbox_fuse_init,
+    .destroy = sandbox_fuse_destroy,
+    .open = sandbox_fuse_open,
+    .read = sandbox_fuse_read,
+    .write = sandbox_fuse_write,
+    .access = sandbox_fuse_access,
+    .getattr = sandbox_fuse_getattr,
+    .opendir = sandbox_fuse_opendir,
+    .readdir = sandbox_fuse_readdir,
+};
+
+
+int sandbox_main(int argc, char *argv[])
 {
-    static struct fuse_operations gsFuseOps = {0};
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 
-    // if (-1 == fuse_opt_parse(argc, argv, &optionSpec, NULL)) {
-        // return 1;
-    // }
+    if (-1 == fuse_opt_parse(&args, &gsOptions, gsOptionsSpec, sandbox_cmd_parse)) {
+        C_LOG_WARNING("Invalid arguments");
+        return 1;
+    }
 
-    gsFuseOps.init = sandbox_fuse_init;
-    gsFuseOps.destroy = sandbox_fuse_destroy;
+    show_cmd(&gsOptions);
 
-    gsFuseOps.open = sandbox_fuse_open;
-    gsFuseOps.read = sandbox_fuse_read;
-    gsFuseOps.write = sandbox_fuse_write;
-    gsFuseOps.access = sandbox_fuse_access;
-    gsFuseOps.getattr = sandbox_fuse_getattr;
-    gsFuseOps.opendir = sandbox_fuse_opendir;
-    gsFuseOps.readdir = sandbox_fuse_readdir;
+    if (gsOptions.showHelp) {
+        show_help(argv[0]);
+        exit(0);
+    }
+    else if (gsOptions.format) {
+        // 格式化一个文件系统
+        sandbox_format_fs("sandbox", gsOptions.format, gsOptions.size);
+    }
+
 
     int ret = fuse_main(argc, argv, &gsFuseOps, NULL);
+
     fuse_opt_free_args(&args);
+
     return ret;
 }
 
@@ -220,6 +294,75 @@ static int sandbox_fuse_write(const char* path, const char*buf, size_t size, off
 }
 
 static bool sandbox_check_access_rights()
+{
+    return true;
+}
+
+static void show_help (const char* program)
+{
+    printf("usage: %s [options] <params>\n", c_strrstr(program, "/") ? (c_strrstr(program, "/") + 1) : program);
+    printf("options:\n");
+    printf("    --mount=<path>    mount point\n");
+    printf("    --umount          umount this filesystem\n");
+    printf("    --format=<path>   format this filesystem\n");
+    printf("    --size=<size>     size of this filesystem(MB)\n");
+    printf("    --help            show this help\n");
+    printf("\n");
+}
+
+static void show_cmd (SandboxOption* cmdline)
+{
+    c_return_if_fail (cmdline);
+
+    C_LOG_VERB(""
+        "\nmount    : %s"
+        "\numount   : %s"
+        "\nformat   : %s"
+        "\nsize     : %d MB",
+        (cmdline->mountPoint ? cmdline->mountPoint : "<null>"),
+        (cmdline->umount ? "true" : "false"),
+        (cmdline->format ? cmdline->format : "<null>"),
+        (cmdline->size)
+        );
+}
+
+int sandbox_cmd_parse(void *data, const char *arg, int key, struct fuse_args *outargs)
+{
+    c_return_val_if_fail(data, 1);
+
+    C_LOG_VERB("arg : %s", arg);
+
+    SandboxOption* cmdline = (SandboxOption*)data;
+
+    if (c_str_has_prefix(arg, "--mount=")) {
+        cmdline->mountPoint = c_strdup(arg + 8);
+        return 0;
+    }
+    else if (c_str_has_prefix(arg, "--umount")) {
+        cmdline->umount = true;
+        return 0;
+    }
+    else if (c_str_has_prefix(arg, "--format=")) {
+        cmdline->format = c_strdup(arg + 9);
+        return 0;
+    }
+    else if (c_str_has_prefix(arg, "--size=")) {
+        cmdline->size = c_ascii_strtoll(arg + 7, NULL, 10);
+        return 0;
+    }
+    else if (c_str_has_prefix(arg, "--help")) {
+        cmdline->showHelp = true;
+        return 0;
+    }
+
+    printf("Invalid commandline!\n");
+
+    show_help(outargs->argv[0]);
+
+    return -1;
+}
+
+static bool sandbox_format_fs(const char* key, const char* path, csize size)
 {
     return true;
 }

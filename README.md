@@ -28,7 +28,7 @@ losetup /dev/loop0 ./xx.iso
 
 ### 5. 将设备挂在到指定目录
 ```shell
-./sandbox -m /dev/loop0 /xxx/<挂载点>
+./sandbox --mount /dev/loop0 /xxx/<挂载点>
 ```
 
 ### 6. 卸载挂在点
