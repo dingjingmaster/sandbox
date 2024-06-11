@@ -286,7 +286,7 @@ int fs_get_file_security(struct SECURITY_API * scapi, const char * path, u32 sel
 int fs_set_file_security(struct SECURITY_API * scapi, const char * path, u32 selection, const char * attr);
 int fs_get_file_attributes(struct SECURITY_API * scapi, const char * path);
 bool fs_set_file_attributes(struct SECURITY_API * scapi, const char * path, s32 attrib);
-bool fs_read_directory(struct SECURITY_API * scapi, const char * path, FSFillDir callback, void * context);
+bool fs_read_directory(struct SECURITY_API * scapi, const char * path, fs_filldir_t callback, void * context);
 int fs_read_sds(struct SECURITY_API * scapi, char * buf, u32 size, u32 offset);
 INDEX_ENTRY* fs_read_sii(struct SECURITY_API * scapi, INDEX_ENTRY * entry);
 INDEX_ENTRY* fs_read_sdh(struct SECURITY_API * scapi, INDEX_ENTRY * entry);

@@ -44,7 +44,6 @@ C_BEGIN_EXTERN_C
 #define MFT_REF_MASK_CPU        0x0000ffffffffffffULL
 #define MFT_REF_MASK_LE         (cint64)(MFT_REF_MASK_CPU)
 
-typedef cuint64 MFT_REF;
 typedef cint64  leMFT_REF;   /* a little-endian MFT_MREF */
 
 #define MK_MREF(m, s)           ((MFT_REF)(((MFT_REF)(s) << 48) | ((MFT_REF)(m) & MFT_REF_MASK_CPU)))
@@ -1264,7 +1263,7 @@ typedef struct {
 } __attribute__((__packed__)) SDH_INDEX_KEY;
 
 typedef struct {
-    ntfschar name[0];       /* The name of the volume in Unicode. */
+    FSChar name[0];       /* The name of the volume in Unicode. */
 } __attribute__((__packed__)) VOLUME_NAME;
 
 typedef enum
@@ -1354,7 +1353,7 @@ typedef struct {
 
 typedef struct {
     /*  0   NTFS_RECORD; -- Unfolded here as gcc doesn't like unnamed structs. */
-    NTFS_RECORD_TYPES magic;/* Magic is "INDX". */
+    FS_RECORD_TYPES magic;/* Magic is "INDX". */
     le16 usa_ofs;           /* See NTFS_RECORD definition. */
     le16 usa_count;         /* See NTFS_RECORD definition. */
 
@@ -1784,7 +1783,7 @@ typedef struct
                         void *device_end[0];    /* Marker for offsetof(). */
                 } __attribute__((__packed__));
                 /* For symbolic links. */
-                ntfschar target[0];
+                FSChar target[0];
         } __attribute__((__packed__));
 } __attribute__((__packed__)) INTX_FILE;
 

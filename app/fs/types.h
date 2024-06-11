@@ -10,6 +10,8 @@
 
 C_BEGIN_EXTERN_C
 
+#define FSDeviceDefaultIoOps    gFSDeviceUnixIoOps
+
 #define STATUS_OK                               (0)
 #define STATUS_ERROR                            (-1)
 #define STATUS_RESIDENT_ATTRIBUTE_FILLED_MFT    (-2)
@@ -255,7 +257,13 @@ typedef u16                             le16;
 typedef u32                             le32;
 typedef u64                             le64;
 
+typedef u16                             sle16;
+
 typedef u64                             sle64;
+typedef sle64                           leLSN;
+typedef sle64                           leLCN;
+
+typedef cuint64                         MFT_REF;
 
 typedef struct _FSAttr                  FSAttr;
 typedef struct _FSInode                 FSInode;
@@ -271,6 +279,9 @@ typedef RunlistElement                  Runlist;
 
 
 typedef int (*COLLATE)(FSVolume *vol, const void *data1, int len1, const void *data2, int len2);
+typedef int (*fs_filldir_t)(void *dirent, const FSChar *name, const int name_len, const int name_type, const s64 pos, const MFT_REF mref, const unsigned dt_type);
+
+extern FSDeviceOperations gFSDeviceUnixIoOps;
 
 C_END_EXTERN_C
 

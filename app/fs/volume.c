@@ -4,13 +4,20 @@
 
 #include "volume.h"
 
+#include <fcntl.h>
 #include <locale.h>
-#include <bits/fcntl-linux.h>
 
+#include "mft.h"
 #include "attr.h"
+#include "cache.h"
 #include "inode.h"
 #include "device.h"
 #include "layout.h"
+#include "unistr.h"
+#include "runlist.h"
+#include "log-file.h"
+#include "bootsect.h"
+#include "security.h"
 
 
 const char * ntfs_home =
@@ -587,8 +594,8 @@ static int fs_volume_check_logfile(FSVolume * vol)
      * after such an event.
      */
     if (rp
-        && (rp->majorVer == const_cpu_to_le16(2))
-        && (rp->minorVer == const_cpu_to_le16(0))) {
+        && (rp->major_ver == const_cpu_to_le16(2))
+        && (rp->minor_ver == const_cpu_to_le16(0))) {
         C_LOG_ERROR("Metadata kept in Windows cache, refused to mount.\n");
         err = EPERM;
     }
@@ -1210,7 +1217,7 @@ FSVolume* fs_mount(const char * name __attribute__((unused)), FSMountFlags flags
     FSVolume * vol;
 
     /* Allocate an fs_device structure. */
-    dev = fs_device_alloc(name, 0, &fs_device_default_io_ops, NULL);
+    dev = fs_device_alloc(name, 0, &FSDeviceDefaultIoOps, NULL);
     if (!dev)
         return NULL;
     /* Call fs_device_mount() to do the actual mount. */
@@ -1435,7 +1442,7 @@ error_exit:
 }
 
 
-int fs_volume_write_flags(FSVolume * vol, const cint16 flags)
+int fs_volume_write_flags(FSVolume * vol, const cuint16 flags)
 {
     ATTR_RECORD * a;
     VOLUME_INFORMATION * c;

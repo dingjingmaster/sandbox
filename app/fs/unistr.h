@@ -21,24 +21,24 @@ extern void fs_name_upcase(FSChar *name, u32 name_len, const FSChar *upcase, con
 extern void fs_name_locase(FSChar *name, u32 name_len, const FSChar* locase, const u32 locase_len);
 extern void fs_file_value_upcase(FILE_NAME_ATTR *file_name_attr,
 const FSChar *upcase, const u32 upcase_len);
-extern int ntfs_ucstombs(const FSChar *ins, const int ins_len, char **outs, int outs_len);
-extern int ntfs_mbstoucs(const char *ins, FSChar **outs);
+extern int fs_ucstombs(const FSChar *ins, const int ins_len, char **outs, int outs_len);
+extern int fs_mbstoucs(const char *ins, FSChar **outs);
 
-extern char *ntfs_uppercase_mbs(const char *low, const FSChar *upcase, u32 upcase_len);
+extern char *fs_uppercase_mbs(const char *low, const FSChar *upcase, u32 upcase_len);
 
-extern void ntfs_upcase_table_build(FSChar *uc, u32 uc_len);
-extern u32 ntfs_upcase_build_default(FSChar **upcase);
-extern FSChar *ntfs_locase_table_build(const FSChar *uc, u32 uc_cnt);
+extern void fs_upcase_table_build(FSChar *uc, u32 uc_len);
+extern u32 fs_upcase_build_default(FSChar **upcase);
+extern FSChar *fs_locase_table_build(const FSChar *uc, u32 uc_cnt);
 
-extern FSChar *ntfs_str2ucs(const char *s, int *len);
+extern FSChar *fs_str2ucs(const char *s, int *len);
 
-extern void ntfs_ucsfree(FSChar *ucs);
+extern void fs_ucsfree(FSChar *ucs);
 
-extern bool ntfs_forbidden_chars(const FSChar *name, int len, bool strict);
-extern bool ntfs_forbidden_names(FSVolume *vol, const FSChar *name, int len, bool strict);
-extern bool ntfs_collapsible_chars(FSVolume *vol, const FSChar *shortname, int shortlen, const FSChar *longname, int longlen);
+extern bool fs_forbidden_chars(const FSChar *name, int len, bool strict);
+extern bool fs_forbidden_names(FSVolume *vol, const FSChar *name, int len, bool strict);
+extern bool fs_collapsible_chars(FSVolume *vol, const FSChar *shortname, int shortlen, const FSChar *longname, int longlen);
 
-extern int ntfs_set_char_encoding(const char *locale);
+extern int fs_set_char_encoding(const char *locale);
 
 C_END_EXTERN_C
 
