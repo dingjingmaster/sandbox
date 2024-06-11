@@ -24,9 +24,9 @@ C_BEGIN_EXTERN_C
 #define NTFS_V3_0(major, minor) ((major) == 3 && (minor) == 0)
 #define NTFS_V3_1(major, minor) ((major) == 3 && (minor) == 1)
 
-#define test_nvol_flag(nv, flag)        test_bit(NV_##flag, (nv)->state)
-#define set_nvol_flag(nv, flag)         set_bit(NV_##flag, (nv)->state)
-#define clear_nvol_flag(nv, flag)       clear_bit(NV_##flag, (nv)->state)
+#define test_nvol_flag(nv, flag)        test_bit(FSV_##flag, (nv)->state)
+#define set_nvol_flag(nv, flag)         set_bit(FSV_##flag, (nv)->state)
+#define clear_nvol_flag(nv, flag)       clear_bit(FSV_##flag, (nv)->state)
 
 #define NVolReadOnly(nv)                 test_nvol_flag(nv, ReadOnly)
 #define NVolSetReadOnly(nv)               set_nvol_flag(nv, ReadOnly)
@@ -68,8 +68,8 @@ C_BEGIN_EXTERN_C
 typedef enum
 {
     FS_MNT_NONE                 = 0x00000000,
-    FS_MNT_READONLY             = 0x00000001,
-    FS_MNT_MAY_READONLY         = 0x02000000,
+    FS_MNT_ReadOnly             = 0x00000001,
+    FS_MNT_MayReadOnly          = 0x02000000,
     FS_MNT_FORENSIC             = 0x04000000,
     FS_MNT_EXCLUSIVE            = 0x08000000,
     FS_MNT_RECOVER              = 0x10000000,
@@ -83,7 +83,8 @@ typedef enum
     FS_MF_READONLY              = 4,    /* Device is mounted read-only. */
 };
 
-typedef enum {
+typedef enum
+{
     FS_VOLUME_OK                = 0,
     FS_VOLUME_SYNTAX_ERROR      = 11,
     FS_VOLUME_NOT_NTFS          = 12,
@@ -101,15 +102,15 @@ typedef enum {
 
 typedef enum
 {
-    FS_VOLUME_READONLY,            /* 1: Volume is read-only. */
-    FS_VOLUME_CASE_SENSITIVE,      /* 1: Volume is mounted case-sensitive. */
-    FS_VOLUME_LOG_FILE_EMPTY,      /* 1: $logFile journal is empty. */
-    FS_VOLUME_SHOW_SYS_FILES,      /* 1: Show NTFS metafiles. */
-    FS_VOLUME_SHOW_HIDE_FILES,     /* 1: Show files marked hidden. */
-    FS_VOLUME_HIDE_DOT_FILES,      /* 1: Set hidden flag on dot files */
-    FS_VOLUME_COMPRESSION,         /* 1: allow compression */
-    FS_VOLUME_NO_FIXUP_WARN,       /* 1: Do not log fixup errors */
-    FS_VOLUME_FREE_SPACE_KNOWN,    /* 1: The free space is now known */
+    FSV_ReadOnly,            /* 1: Volume is read-only. */
+    FSV_CaseSensitive,       /* 1: Volume is mounted case-sensitive. */
+    FSV_LogFileEmpty,        /* 1: $logFile journal is empty. */
+    FSV_ShowSysFiles,        /* 1: Show NTFS metafiles. */
+    FSV_ShowHidFiles,        /* 1: Show files marked hidden. */
+    FSV_HideDotFiles,        /* 1: Set hidden flag on dot files */
+    FSV_Compression,         /* 1: allow compression */
+    FSV_NoFixupWarn,         /* 1: Do not log fixup errors */
+    FSV_FreeSpaceKnown,      /* 1: The free space is now known */
 } FSVolumeStateBits;
 
 typedef enum

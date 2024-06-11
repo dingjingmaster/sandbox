@@ -7,6 +7,9 @@
 #include <c/clib.h>
 #include <signal.h>
 
+#include "fs/volume.h"
+
+
 /**
  * @brief
  *  1. ntfs文件系统格式化： attrdef.c boot.c sd.c mkntfs.c utils.c libntfs-3g
@@ -160,6 +163,8 @@ static struct fuse_operations gsFuseOps = {
     .opendir = sandbox_fuse_opendir,
     .readdir = sandbox_fuse_readdir,
 };
+
+static FSVolume* gsVolume = NULL;
 
 
 int sandbox_main(int argc, char *argv[])
@@ -364,5 +369,19 @@ int sandbox_cmd_parse(void *data, const char *arg, int key, struct fuse_args *ou
 
 static bool sandbox_format_fs(const char* key, const char* path, csize size)
 {
+    gsVolume = fs_volume_alloc();
+    if (!gsVolume) {
+        C_LOG_ERROR("fs_volume_alloc() failed!");
+        goto done;
+    }
+
+    gsVolume->majorVer = 3;
+    gsVolume->minorVer = 1;
+
+    gsVolume->volName = c_strdup("Sandbox");
+
     return true;
+
+done:
+    return false;
 }

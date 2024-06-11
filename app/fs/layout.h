@@ -555,7 +555,8 @@ typedef enum
     FILE_ATTR_VIEW_INDEX_PRESENT    = (cint32)(0x20000000),
 } __attribute__((__packed__)) FILE_ATTR_FLAGS;
 
-typedef struct {
+typedef struct
+{
 /*Ofs*/
 /*  0*/ cint64 creation_time;            /* Time file was created. Updated when
                                            a filename is changed(?). */
@@ -1281,8 +1282,8 @@ typedef enum
 
 typedef struct {
     le64 reserved;          /* Not used (yet?). */
-    u8 major_ver;           /* Major version of the ntfs format. */
-    u8 minor_ver;           /* Minor version of the ntfs format. */
+    u8 majorVer;           /* Major version of the ntfs format. */
+    u8 minorVer;           /* Minor version of the ntfs format. */
     VOLUME_FLAGS flags;     /* Bit array of VOLUME_* flags. */
 } __attribute__((__packed__)) VOLUME_INFORMATION;
 typedef struct {

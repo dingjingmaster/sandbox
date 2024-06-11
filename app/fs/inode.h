@@ -6,17 +6,18 @@
 #define sandbox_INODE_H
 #include <c/clib.h>
 
+#include "layout.h"
 #include "types.h"
 
 C_BEGIN_EXTERN_C
 
 
-#define test_nino_flag(ni, flag)                test_bit(NI_##flag, (ni)->state)
-#define set_nino_flag(ni, flag)                 set_bit(NI_##flag, (ni)->state)
-#define clear_nino_flag(ni, flag)               clear_bit(NI_##flag, (ni)->state)
+#define test_nino_flag(ni, flag)                test_bit(FSI_##flag, (ni)->state)
+#define set_nino_flag(ni, flag)                 set_bit(FSI_##flag, (ni)->state)
+#define clear_nino_flag(ni, flag)               clear_bit(fsI_##flag, (ni)->state)
 
-#define test_and_set_nino_flag(ni, flag)        test_and_set_bit(NI_##flag, (ni)->state)
-#define test_and_clear_nino_flag(ni, flag)      test_and_clear_bit(NI_##flag, (ni)->state)
+#define test_and_set_nino_flag(ni, flag)        test_and_set_bit(FSI_##flag, (ni)->state)
+#define test_and_clear_nino_flag(ni, flag)      test_and_clear_bit(FSI_##flag, (ni)->state)
 
 #define NInoDirty(ni)                           test_nino_flag(ni, Dirty)
 #define NInoSetDirty(ni)                        set_nino_flag(ni, Dirty)
@@ -51,15 +52,15 @@ C_BEGIN_EXTERN_C
 
 typedef enum
 {
-    FSI_DIRTY,              /* 1: Mft record needs to be written to disk. */
+    FSI_Dirty,              /* 1: Mft record needs to be written to disk. */
 
     /* The NI_AttrList* tests only make sense for base inodes. */
-    FSI_ATTR_LIST,          /* 1: Mft record contains an attribute list. */
-    FSI_ATTR_LIST_DIRTY,    /* 1: Attribute list needs to be written to the mft record and then to disk. */
-    FSI_FILE_NAME_DIRTY,    /* 1: FILE_NAME attributes need to be updated in the index. */
-    FSI_V3_EXTENSIONS,      /* 1: JPA v3.x extensions present. */
-    FSI_TIMES_SET,          /* 1: Use times which were set */
-    FSI_KNOWN_SIZE,         /* 1: Set if sizes are meaningful */
+    FSI_AttrList,          /* 1: Mft record contains an attribute list. */
+    FSI_AttrListDirty,    /* 1: Attribute list needs to be written to the mft record and then to disk. */
+    FSI_FileNameDirty,    /* 1: FILE_NAME attributes need to be updated in the index. */
+    FSI_V3Extensions,      /* 1: JPA v3.x extensions present. */
+    FSI_TimesSet,          /* 1: Use times which were set */
+    FSI_KnownSize,         /* 1: Set if sizes are meaningful */
 } FSInodeStateBits;
 
 typedef enum
@@ -101,48 +102,34 @@ struct _FSInode
     cint64  usn;
 };
 
-extern ntfs_inode *ntfs_inode_base(ntfs_inode *ni);
-
-extern ntfs_inode *ntfs_inode_allocate(ntfs_volume *vol);
-
-extern ntfs_inode *ntfs_inode_open(ntfs_volume *vol, const MFT_REF mref);
-
-extern int ntfs_inode_close(ntfs_inode *ni);
-extern int ntfs_inode_close_in_dir(ntfs_inode *ni, ntfs_inode *dir_ni);
+FSInode *fs_inode_base(FSInode *ni);
+FSInode *fs_inode_allocate(FSVolume *vol);
+FSInode *fs_inode_open(FSVolume *vol, const MFT_REF mref);
+int fs_inode_close(FSInode *ni);
+int fs_inode_close_in_dir(FSInode *ni, FSInode *dir_ni);
 
 #if CACHE_NIDATA_SIZE
 
 struct CACHED_GENERIC;
 
-extern int ntfs_inode_real_close(ntfs_inode *ni);
-extern void ntfs_inode_invalidate(ntfs_volume *vol, const MFT_REF mref);
-extern void ntfs_inode_nidata_free(const struct CACHED_GENERIC *cached);
-extern int ntfs_inode_nidata_hash(const struct CACHED_GENERIC *item);
+extern int fs_inode_real_close(FSInode *ni);
+extern void fs_inode_invalidate(FSVolume *vol, const MFT_REF mref);
+extern void fs_inode_nidata_free(const struct CACHED_GENERIC *cached);
+extern int fs_inode_nidata_hash(const struct CACHED_GENERIC *item);
 
 #endif
 
 
-extern ntfs_inode *ntfs_extent_inode_open(ntfs_inode *base_ni,
-                const leMFT_REF mref);
-
-extern int ntfs_inode_attach_all_extents(ntfs_inode *ni);
-
-extern void ntfs_inode_mark_dirty(ntfs_inode *ni);
-
-extern void ntfs_inode_update_times(ntfs_inode *ni, ntfs_time_update_flags mask);
-
-extern int ntfs_inode_sync(ntfs_inode *ni);
-
-extern int ntfs_inode_add_attrlist(ntfs_inode *ni);
-
-extern int ntfs_inode_free_space(ntfs_inode *ni, int size);
-
-extern int ntfs_inode_badclus_bad(u64 mft_no, ATTR_RECORD *a);
-
-extern int ntfs_inode_get_times(ntfs_inode *ni, char *value, size_t size);
-
-extern int ntfs_inode_set_times(ntfs_inode *ni, const char *value,
-                        size_t size, int flags);
+FSInode *fs_extent_inode_open(FSInode *base_ni, const leMFT_REF mref);
+int fs_inode_attach_all_extents(FSInode *ni);
+void fs_inode_mark_dirty(FSInode *ni);
+void fs_inode_update_times(FSInode *ni, FSTimeUpdateFlags mask);
+int fs_inode_sync(FSInode *ni);
+int fs_inode_add_attrlist(FSInode *ni);
+int fs_inode_free_space(FSInode *ni, int size);
+int fs_inode_badclus_bad(cuint64 mft_no, ATTR_RECORD *a);
+int fs_inode_get_times(FSInode *ni, char *value, size_t size);
+int fs_inode_set_times(FSInode *ni, const char *value, size_t size, int flags);
 
 
 C_END_EXTERN_C

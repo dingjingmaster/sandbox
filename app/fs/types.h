@@ -224,9 +224,39 @@ C_BEGIN_EXTERN_C
 #define const_cpu_to_sbe32(x)   ((sbe32) __constant_cpu_to_be32((u32) x))
 #define const_cpu_to_sbe64(x)   ((sbe64) __constant_cpu_to_be64((u64) x))
 
+typedef enum
+{
+    CASE_SENSITIVE = 0,
+    IGNORE_CASE = 1,
+} IGNORE_CASE_BOOL;
 
+union ALIGNMENT
+{
+    cuint64     u64align;
+    void*       ptralign;
+} ;
 
+typedef cint8                           s8;
+typedef cuint8                          u8;
+typedef cint16                          s16;
+typedef cuint16                         u16;
+typedef cint32                          s32;
+typedef cuint32                         u32;
+typedef cuint64                         u64;
+typedef cint64                          s64;
+typedef cint64                          s64;
+typedef cint64                          VCN;
+typedef cint64                          LCN;
+typedef cuint64                         leVCN;
 typedef cuint16                         FSChar;
+
+typedef u8                              le8;
+typedef u16                             le16;
+typedef u32                             le32;
+typedef u64                             le64;
+
+typedef u64                             sle64;
+
 typedef struct _FSAttr                  FSAttr;
 typedef struct _FSInode                 FSInode;
 typedef struct _FSDevice                FSDevice;
@@ -234,9 +264,13 @@ typedef struct _FSVolume                FSVolume;
 typedef struct _FSAttrDef               FSAttrDef;
 typedef struct _MkfsOptions             MkfsOptions;
 typedef struct _FSIndexContext          FSIndexContext;
+typedef struct _RunlistElement          RunlistElement;
+typedef struct _FSAttrSearchCtx         FSAttrSearchCtx;
 typedef struct _FSDeviceOperations      FSDeviceOperations;
+typedef RunlistElement                  Runlist;
 
 
+typedef int (*COLLATE)(FSVolume *vol, const void *data1, int len1, const void *data2, int len2);
 
 C_END_EXTERN_C
 
