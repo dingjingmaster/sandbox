@@ -195,6 +195,14 @@ int filesystem_main(int argc, char *argv[])
     return ret;
 }
 
+bool filesystem_generated_iso(const char *absolutePath, cuint64 sizeMB)
+{
+    c_return_val_if_fail(absolutePath && (absolutePath[0] == '/'), false);
+
+
+    return true;
+}
+
 static void* sandbox_fuse_init (struct fuse_conn_info* conn, struct fuse_config* cfg)
 {
     C_LOG_VERB("");
