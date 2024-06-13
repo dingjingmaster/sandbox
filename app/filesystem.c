@@ -28,6 +28,11 @@ struct _SandboxOption
     int                 showHelp;
 };
 
+/**
+ * @brief 获取 loop 设备与关联文件
+ */
+static const CHashTable* filesystem_loop_files ();
+
 
 /**
  * @brief 初始化文件系统
@@ -164,7 +169,7 @@ static struct fuse_operations gsFuseOps = {
     .readdir = sandbox_fuse_readdir,
 };
 
-static FSVolume* gsVolume = NULL;
+static FSVolume*    gsVolume = NULL;
 
 
 int filesystem_main(int argc, char *argv[])
@@ -186,7 +191,6 @@ int filesystem_main(int argc, char *argv[])
         // 格式化一个文件系统
         sandbox_format_fs("sandbox", gsOptions.format, gsOptions.size);
     }
-
 
     int ret = fuse_main(argc, argv, &gsFuseOps, NULL);
 
@@ -259,9 +263,16 @@ bool filesystem_generated_iso(const char *absolutePath, cuint64 sizeMB)
     return true;
 }
 
-bool filesystem_format(const char *filePath)
+bool filesystem_format(const char *devPath, const char *fsType)
 {
-    return 0;
+    c_return_val_if_fail(devPath && fsType, false);
+
+    return true;
+}
+
+
+static const CHashTable* filesystem_loop_files ()
+{
 }
 
 static void* sandbox_fuse_init (struct fuse_conn_info* conn, struct fuse_config* cfg)

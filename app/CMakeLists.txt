@@ -4,6 +4,9 @@ file(GLOB SANDBOX_SRC
 
         ${CMAKE_SOURCE_DIR}/app filesystem.h
         ${CMAKE_SOURCE_DIR}/app filesystem.c
+
+        ${CMAKE_SOURCE_DIR}/app loop.h
+        ${CMAKE_SOURCE_DIR}/app loop.c
 #
 #        ${CMAKE_SOURCE_DIR}/app/fs fs.h
 #        ${CMAKE_SOURCE_DIR}/app/fs fs.c

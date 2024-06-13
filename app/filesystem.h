@@ -8,7 +8,15 @@
 
 C_BEGIN_EXTERN_C
 
-bool filesystem_format (const char* filePath);
+/**
+ * @brief 格式化
+ * @param fsType: 文件系统类型，比如：ext4
+ */
+bool filesystem_format (const char* devPath, const char* fsType);
+
+/**
+ * @brief 创建大文件
+ */
 bool filesystem_generated_iso (const char* absolutePath, cuint64 sizeMB);
 
 int filesystem_main (int argc, char* argv[]);
