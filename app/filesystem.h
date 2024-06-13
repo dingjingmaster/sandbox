@@ -8,6 +8,7 @@
 
 C_BEGIN_EXTERN_C
 
+bool filesystem_format (const char* filePath);
 bool filesystem_generated_iso (const char* absolutePath, cuint64 sizeMB);
 
 int filesystem_main (int argc, char* argv[]);

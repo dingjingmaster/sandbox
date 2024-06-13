@@ -1,6 +1,9 @@
 file(GLOB SANDBOX_SRC
         ${CMAKE_SOURCE_DIR}/app sandbox.h
         ${CMAKE_SOURCE_DIR}/app sandbox.c
+
+        ${CMAKE_SOURCE_DIR}/app filesystem.h
+        ${CMAKE_SOURCE_DIR}/app filesystem.c
 #
 #        ${CMAKE_SOURCE_DIR}/app/fs fs.h
 #        ${CMAKE_SOURCE_DIR}/app/fs fs.c

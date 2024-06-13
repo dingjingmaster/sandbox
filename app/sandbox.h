@@ -9,6 +9,7 @@
 
 C_BEGIN_EXTERN_C
 
+bool sandbox_init(int argc, char* argv[]);
 int sandbox_main(int argc, char* argv[]);
 
 C_END_EXTERN_C

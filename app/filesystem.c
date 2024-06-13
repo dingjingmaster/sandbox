@@ -197,10 +197,71 @@ int filesystem_main(int argc, char *argv[])
 
 bool filesystem_generated_iso(const char *absolutePath, cuint64 sizeMB)
 {
-    c_return_val_if_fail(absolutePath && (absolutePath[0] == '/'), false);
+    c_return_val_if_fail(absolutePath && (absolutePath[0] == '/') && (sizeMB > 0), false);
 
+    bool hasError = false;
+
+    cchar* dirPath = c_strdup(absolutePath);
+    if (dirPath) {
+        cchar* dir = c_strrstr(dirPath, "/");
+        if (dir) {
+            *dir = '\0';
+        }
+        C_LOG_VERB("dir: %s", dirPath);
+
+        if (!c_file_test(dirPath, C_FILE_TEST_EXISTS)) {
+            if (0 != c_mkdir_with_parents(dirPath, 0700)) {
+                C_LOG_VERB("mkdir_with_parents: '%s' error.", dirPath);
+                hasError = true;
+            }
+        }
+        c_free0(dirPath);
+    }
+    c_return_val_if_fail(!hasError, false);
+
+    int fd = open(absolutePath, O_RDWR | O_CREAT, 0600);
+    if (fd < 0) {
+        C_LOG_VERB("open: '%s' error: %s", absolutePath, c_strerror(errno));
+        return false;
+    }
+
+    if (lseek(fd, 0, SEEK_END) > 0) {
+        return true;
+    }
+
+    do {
+        cuint64 needSize = 1024 * 1024 * sizeMB;
+        int ret = lseek(fd, needSize - 1, SEEK_SET);
+        if (ret < 0) {
+            C_LOG_VERB("lseek: '%s' error: %s", absolutePath, c_strerror(errno));
+            hasError = true;
+            break;
+        }
+        else {
+            if (-1 == write(fd, "", 1)) {
+                C_LOG_VERB("write: '%s' error: %s", absolutePath, c_strerror(errno));
+                hasError = true;
+                break;
+            }
+            c_fsync(fd);
+        }
+    } while (0);
+
+    CError* error = NULL;
+    c_close(fd, &error);
+    if (error) {
+        hasError = true;
+        C_LOG_VERB("close: '%s' error: %s", absolutePath, error->message);
+        c_error_free(error);
+    }
+    c_return_val_if_fail(!hasError, false);
 
     return true;
+}
+
+bool filesystem_format(const char *filePath)
+{
+    return 0;
 }
 
 static void* sandbox_fuse_init (struct fuse_conn_info* conn, struct fuse_config* cfg)
@@ -377,6 +438,8 @@ int sandbox_cmd_parse(void *data, const char *arg, int key, struct fuse_args *ou
 
 static bool sandbox_format_fs(const char* key, const char* path, csize size)
 {
+    c_assert(false);
+#if 0
     gsVolume = fs_volume_alloc();
     if (!gsVolume) {
         C_LOG_ERROR("fs_volume_alloc() failed!");
@@ -389,7 +452,7 @@ static bool sandbox_format_fs(const char* key, const char* path, csize size)
     gsVolume->volName = c_strdup("Sandbox");
 
     return true;
-
+#endif
 done:
     return false;
 }
