@@ -19,8 +19,9 @@ int main(int argc, char *argv[])
     }
     // 1. 检测是否已经启动一个实例，如果启动，则此实例作为通信客户端使用
 
-    // 启动命令行，与后台fuse进行交互
+    // 2. 创建新的 namespace
 
+    // 3. 挂载文件系统
     if (!sandbox_mount_filesystem(sc)) {
         C_LOG_ERROR("sandbox_mount_filesystem failed!");
         return -1;
