@@ -7,6 +7,9 @@ file(GLOB SANDBOX_SRC
 
         ${CMAKE_SOURCE_DIR}/app loop.h
         ${CMAKE_SOURCE_DIR}/app loop.c
+
+        ${CMAKE_SOURCE_DIR}/app polkit.h
+        ${CMAKE_SOURCE_DIR}/app polkit.c
 #
 #        ${CMAKE_SOURCE_DIR}/app/fs fs.h
 #        ${CMAKE_SOURCE_DIR}/app/fs fs.c
@@ -24,10 +27,12 @@ target_link_libraries(sandbox PUBLIC
         ${FUSE_LIBRARIES}
         ${GLIB_LIBRARIES}
         ${CLIB_LIBRARIES}
+        ${DISK_LIBRARIES}
 )
 
 target_include_directories(sandbox PUBLIC
         ${FUSE_INCLUDE_DIRS}
         ${GLIB_INCLUDE_DIRS}
         ${CLIB_INCLUDE_DIRS}
+        ${DISK_INCLUDE_DIRS}
 )

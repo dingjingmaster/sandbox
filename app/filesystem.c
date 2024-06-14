@@ -7,6 +7,8 @@
 #include <fuse.h>
 #include <c/clib.h>
 #include <signal.h>
+#include <sys/mount.h>
+#include <udisks/udisks.h>
 
 #include "fs/volume.h"
 
@@ -147,6 +149,10 @@ static void show_cmd (SandboxOption* cmdline);
  */
 int sandbox_cmd_parse(void *data, const char *arg, int key, struct fuse_args *outargs);
 
+/**
+ * @brief 获取块设备
+ */
+static UDisksObject* getObjectFromBlockDevice(UDisksClient* client, const gchar* bDevice);
 
 static SandboxOption gsOptions;
 static const struct fuse_opt gsOptionsSpec[] = {
@@ -267,7 +273,174 @@ bool filesystem_format(const char *devPath, const char *fsType)
 {
     c_return_val_if_fail(devPath && fsType, false);
 
+    bool formatted = false;
+    UDisksBlock* block = NULL;
+    UDisksClient* client = NULL;
+    UDisksObject* udisksObj = NULL;
+
+    do {
+        client = udisks_client_new_sync(NULL, NULL);
+        if (!client)    { break; }
+        udisksObj = getObjectFromBlockDevice(client, devPath);
+        if (!udisksObj) { break; }
+        block = udisks_object_get_block (udisksObj);
+        if (!block)     { break; }
+        {
+            // format
+            GError* error = NULL;
+            GVariantBuilder optionsBuilder;
+            g_variant_builder_init(&optionsBuilder, G_VARIANT_TYPE_VARDICT);
+            g_variant_builder_add (&optionsBuilder, "{sv}", "label", g_variant_new_string ("Sandbox"));
+            g_variant_builder_add (&optionsBuilder, "{sv}", "take-ownership", g_variant_new_boolean (TRUE));
+            formatted = udisks_block_call_format_sync(block, fsType, g_variant_builder_end(&optionsBuilder), NULL, &error);
+            if (error) {
+                C_LOG_ERROR("format error: %s", error->message);
+                break;
+            }
+        }
+    } while (false);
+
+    if (block)      { g_object_unref(block); }
+    if (udisksObj)  { g_object_unref(udisksObj); }
+    if (client)     { g_object_unref(client); }
+
+    return formatted;
+}
+
+bool filesystem_check(const char *devPath)
+{
+    c_return_val_if_fail(devPath, false);
+
+    bool checkOK = false;
+    UDisksFilesystem* fs = NULL;
+    UDisksClient* client = NULL;
+    UDisksObject* udisksObj = NULL;
+
+    do {
+        client = udisks_client_new_sync(NULL, NULL);
+        if (!client)    { break; }
+        udisksObj = getObjectFromBlockDevice(client, devPath);
+        if (!udisksObj) { break; }
+        fs = udisks_object_get_filesystem(udisksObj);
+        if (!fs)        { break; }
+
+        {
+            // check
+            GError* error = NULL;
+            GVariantBuilder opt1;
+            g_variant_builder_init(&opt1, G_VARIANT_TYPE_VARDICT);
+            g_variant_builder_add (&opt1, "{sv}", "auth.no_user_interaction", g_variant_new_boolean(true));
+            checkOK = udisks_filesystem_call_check_sync(fs, g_variant_builder_end(&opt1), NULL, NULL, &error);
+            if (error) {
+                C_LOG_ERROR("format error: %s", error->message);
+                g_error_free(error);
+                error = NULL;
+                break;
+            }
+            C_LOG_VERB("check filesystem: %s", (checkOK ? "OK" : "Failed"));
+
+            // 检查不通过则尝试修复
+            GVariantBuilder opt2;
+            g_variant_builder_init(&opt2, G_VARIANT_TYPE_VARDICT);
+            g_variant_builder_add (&opt2, "{sv}", "auth.no_user_interaction", g_variant_new_boolean(true));
+            checkOK = udisks_filesystem_call_repair_sync(fs, g_variant_builder_end(&opt2), NULL, NULL, &error);
+            if (error) {
+                C_LOG_ERROR("format error: %s", error->message);
+                g_error_free(error);
+                error = NULL;
+                break;
+            }
+        }
+    } while (false);
+
+    if (fs)         { g_object_unref(fs); }
+    if (udisksObj)  { g_object_unref(udisksObj); }
+    if (client)     { g_object_unref(client); }
+
+    return checkOK;
+}
+
+bool filesystem_mount(const char* devName, const char* fsType, const char *mountPoint)
+{
+    c_return_val_if_fail(devName && mountPoint, false);
+
+    if (!c_file_test(mountPoint, C_FILE_TEST_EXISTS)) {
+        c_mkdir_with_parents(mountPoint, 0700);
+    }
+
+    c_return_val_if_fail(c_file_test(mountPoint, C_FILE_TEST_EXISTS), false);
+
+    // 检测是否挂载成功
+
+    // 开始挂载
+    errno = 0;
+    if (0 != mount (devName, mountPoint, fsType, MS_DIRSYNC | MS_NODIRATIME | MS_NOSUID | MS_NOSYMFOLLOW, NULL)) {
+        C_LOG_ERROR("mount failed :%s", c_strerror(errno));
+        return false;
+    }
+
     return true;
+}
+
+bool filesystem_is_mount(const char *devPath)
+{
+    c_return_val_if_fail(devPath, false);
+
+    bool mountOK = false;
+    UDisksFilesystem* fs = NULL;
+    UDisksClient* client = NULL;
+    UDisksObject* udisksObj = NULL;
+
+    do {
+        client = udisks_client_new_sync(NULL, NULL);
+        if (!client)    { break; }
+        udisksObj = getObjectFromBlockDevice(client, devPath);
+        if (!udisksObj) { break; }
+        fs = udisks_object_get_filesystem(udisksObj);
+        if (!fs)        { break; }
+
+        {
+            // is mount?
+            const char* const* mp = udisks_filesystem_get_mount_points(fs);
+            if (c_strv_const_length(mp) > 0) {
+                mountOK = true;
+                break;
+            }
+        }
+    } while (false);
+
+    if (fs)         { g_object_unref(fs); }
+    if (udisksObj)  { g_object_unref(udisksObj); }
+    if (client)     { g_object_unref(client); }
+
+    return mountOK;
+}
+
+static UDisksObject* getObjectFromBlockDevice(UDisksClient* client, const gchar* dev)
+{
+    struct stat statbuf;
+    UDisksBlock* block = NULL;
+    UDisksObject* object = NULL;
+    UDisksObject* cryptoBackingObject = NULL;
+    const gchar* cryptoBackingDevice = NULL;
+
+    c_return_val_if_fail(stat(dev, &statbuf) == 0, object);
+
+    block = udisks_client_get_block_for_dev (client, statbuf.st_rdev);
+    c_return_val_if_fail(block != NULL, object);
+
+    object = UDISKS_OBJECT (g_dbus_interface_dup_object (G_DBUS_INTERFACE (block)));
+
+    cryptoBackingDevice = udisks_block_get_crypto_backing_device ((udisks_object_peek_block (object)));
+    cryptoBackingObject = udisks_client_get_object (client, cryptoBackingDevice);
+    if (cryptoBackingObject != NULL) {
+        g_object_unref (object);
+        object = cryptoBackingObject;
+    }
+
+    g_object_unref (block);
+
+    return object;
 }
 
 

@@ -43,6 +43,8 @@ bool loop_check_file_is_inuse(const char* fileName)
 {
     c_return_val_if_fail(fileName, false);
 
+    loop_info_update();
+
     C_LOCK(gsLoopDevice);
 
     bool ret = c_hash_table_contains(gsLoopDevices->fileLoop, fileName);
@@ -56,6 +58,8 @@ bool loop_check_device_is_inuse(const char* devName)
 {
     c_return_val_if_fail(devName, false);
 
+    loop_info_update();
+
     C_LOCK(gsLoopDevice);
 
     bool ret = c_hash_table_contains(gsLoopDevices->loopFile, devName);
@@ -67,6 +71,8 @@ bool loop_check_device_is_inuse(const char* devName)
 
 char *loop_get_free_device_name()
 {
+    loop_info_update();
+
     FILE* fr = popen("losetup -f", "r");
 
     c_return_val_if_fail(fr, NULL);
@@ -89,12 +95,21 @@ bool loop_mknod(const char *devName)
 {
     c_return_val_if_fail(devName, false);
 
-    return (0 == mknod(devName, S_IFBLK, 7));
+    errno = 0;
+
+    bool ret = (0 == mknod(devName, S_IFBLK, 7));
+    if (!ret) {
+        C_LOG_ERROR("mknod failed: %s", c_strerror(errno));
+    }
+
+    return ret;
 }
 
 char *loop_get_device_name_by_file_name(const char *fileName)
 {
     c_return_val_if_fail(fileName, NULL);
+
+    loop_info_update();
 
     C_LOCK(gsLoopDevice);
 

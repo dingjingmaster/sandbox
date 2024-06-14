@@ -23,7 +23,9 @@ endif ()
 find_package (PkgConfig)
 
 pkg_check_modules(FUSE REQUIRED fuse3)
+pkg_check_modules(DISK REQUIRED udisks2)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(CLIB REQUIRED clibrary-c-static)
+pkg_check_modules(PKEXEC REQUIRED polkit-gobject-1)
 
 add_subdirectory(app)

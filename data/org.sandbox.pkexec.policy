@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD polkit Policy Configuration 1.0//EN" "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
+<policyconfig>
+    <vendor>Sandbox</vendor>
+    <vendor_url>https://url</vendor_url>
+    <action id="org.sandbox.pkexec.policy">
+        <description>sandbox init</description>
+        <description xml:lang="zh_CN">sandbox init</description>
+        <message>Authentication is required to run the polkit example program (user=$(user), user.gecos=$(user.gecos), user.display=$(user.display), program=$(program), command_line=$(command_line))</message>
+        <message xml:lang="zh_CN">需要验证：运行 sandbox 示例程序 Frobnicate (user=$(user), user.gecos=$(user.gecos), user.display=$(user.display), program=$(program), command_line=$(command_line))</message>
+        <icon_name>audio-x-generic</icon_name>
+        <defaults>
+            <allow_any>no</allow_any>
+            <allow_inactive>no</allow_inactive>
+            <allow_active>auth_admin_keep</allow_active>
+        </defaults>
+        <annotate key="org.freedesktop.policykit.exec.path">/data/code/sandbox/cmake-build-debug/app/sandbox</annotate>
+    </action>
+</policyconfig>
