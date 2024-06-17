@@ -47,7 +47,7 @@ bool loop_check_file_is_inuse(const char* fileName)
 
     C_LOCK(gsLoopDevice);
 
-    bool ret = c_hash_table_contains(gsLoopDevices->fileLoop, fileName);
+    bool ret = c_hash_table_contains(gsLoopDevices->fileLoop, c_file_path_format_arr(fileName));
 
     C_UNLOCK(gsLoopDevice);
 
@@ -62,7 +62,7 @@ bool loop_check_device_is_inuse(const char* devName)
 
     C_LOCK(gsLoopDevice);
 
-    bool ret = c_hash_table_contains(gsLoopDevices->loopFile, devName);
+    bool ret = c_hash_table_contains(gsLoopDevices->loopFile, c_file_path_format_arr(devName));
 
     C_UNLOCK(gsLoopDevice);
 
@@ -113,7 +113,7 @@ char *loop_get_device_name_by_file_name(const char *fileName)
 
     C_LOCK(gsLoopDevice);
 
-    char* value = c_hash_table_lookup(gsLoopDevices->fileLoop, fileName);
+    char* value = c_hash_table_lookup(gsLoopDevices->fileLoop, c_file_path_format_arr(fileName));
 
     C_UNLOCK(gsLoopDevice);
 
@@ -132,10 +132,11 @@ bool loop_attach_file_to_loop(const char *fileName, const char *devName)
         return false;
     }
 
+    // FIXME://
     bool res = true;
-    char buf[4096] = {0};
-    fgets(buf, sizeof(buf) - 1, fr);
-    if (!c_str_has_prefix(buf, "0")) {
+    char buf[8] = {0};
+    c_file_read_line_arr(fr, buf, sizeof(buf) - 1);
+    if (c_strlen(buf) > 0 && 0 == c_strcmp0("0", buf)) {
         C_LOG_ERROR("error: %s", buf);
         res = false;
     }
@@ -159,16 +160,19 @@ static bool loop_info_update()
         c_once_init_leave(&inited, 1);
     }
 
-    FILE* fr = popen("losetup -a -O 'NAME,BACK-FILE' | tail +2 | awk -F' ' '{print $1\"\t\"$3}'", "r");
+    FILE* fr = popen("losetup -a -O 'NAME,BACK-FILE' | tail +2 | awk -F' ' '{print $1\"\t\"$2}'", "r");
     c_return_val_if_fail(fr, false);
 
     while (true) {
-        char line[10240];
-        if (!fgets(line, sizeof(line) - 1, fr)) {
+        char line[10240] = {0};
+
+        if (!c_file_read_line_arr(fr, line, sizeof(line) - 1)) {
             break;
         }
 
-        line = c_strstrip(line);
+        c_strchug_arr(line);
+        c_strchomp_arr(line);
+        c_strtrim_arr(line);
 
         char** p = c_strsplit(line, "\t", -1);
         if (!p) {
@@ -181,24 +185,8 @@ static bool loop_info_update()
             continue;
         }
 
-        C_LOG_VERB("'%s' <-- '%s'", p[0], p[1]);
-
-        char* loop = p[0];
-//        char* tmp = c_strrstr(loop, ":");
-//        if (tmp) {
-//            tmp[0] = '\0';
-//        }
-
-        char* file = p[1];
-//        tmp = c_strrstr(file, ")");
-//        if (tmp) {
-//            tmp[0] = '\0';
-//        }
-
-//        tmp = c_strstr(file, "(");
-//        if (tmp) {
-//            file = tmp + 1;
-//        }
+        char* loop = c_file_path_format_arr(p[0]);
+        char* file = c_file_path_format_arr(p[1]);
 
         if (!loop || !file) {
             c_strfreev(p);

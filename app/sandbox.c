@@ -42,11 +42,13 @@ SandboxContext* sandbox_init(int argc, char **argv)
         sc = c_malloc0(sizeof(SandboxContext));
         if (!sc) { ret = false; }
         sc->isoFullPath = c_strdup(DEBUG_ISO_PATH);
+        sc->isoFullPath = c_file_path_format_arr(sc->isoFullPath);
         if (!sc->isoFullPath) { ret = false; }
         sc->isoSize = DEBUG_ISO_SIZE;
         sc->filesystemType = c_strdup(DEBUG_FS_TYPE);
         if (!sc->filesystemType) { ret = false; }
         sc->mountPoint = c_strdup(DEBUG_MOUNT_POINT);
+        sc->mountPoint = c_file_path_format_arr(sc->mountPoint);
         if (!sc->mountPoint) { ret = false; }
     } while (false);
 
@@ -69,6 +71,7 @@ bool sandbox_mount_filesystem(SandboxContext *context)
     // 检测文件是否关联了设备
     bool isInuse = loop_check_file_is_inuse(context->isoFullPath);
     if (!isInuse) {
+        C_LOG_VERB("%s is not in use", context->isoFullPath);
         char* loopDev = loop_get_free_device_name();
         c_return_val_if_fail(loopDev, false);
         C_LOG_VERB("loop dev name: %s", loopDev);
@@ -83,6 +86,7 @@ bool sandbox_mount_filesystem(SandboxContext *context)
         c_free(loopDev);
     }
     else {
+        C_LOG_VERB("%s is in use", context->isoFullPath);
         context->loopDevName = loop_get_device_name_by_file_name(context->isoFullPath);
     }
 
