@@ -10,10 +10,11 @@
 #include "filesystem.h"
 
 
-#define DEBUG_ISO_SIZE      1024
-#define DEBUG_FS_TYPE       "ext2"
-#define DEBUG_MOUNT_POINT   "/home/dingjing/a/"
-#define DEBUG_FULL_PATH     "/home/dingjing/sandbox.iso"
+#define DEBUG_ISO_SIZE              1024
+#define DEBUG_FS_TYPE               "ext2"
+#define DEBUG_ROOT                  "/usr/local/ultrasec/"
+#define DEBUG_MOUNT_POINT           DEBUG_ROOT"/.sandbox/"
+#define DEBUG_ISO_PATH              DEBUG_ROOT"/data/sandbox.iso"
 
 
 struct _SandboxContext
@@ -40,7 +41,7 @@ SandboxContext* sandbox_init(int argc, char **argv)
     do {
         sc = c_malloc0(sizeof(SandboxContext));
         if (!sc) { ret = false; }
-        sc->isoFullPath = c_strdup(DEBUG_FULL_PATH);
+        sc->isoFullPath = c_strdup(DEBUG_ISO_PATH);
         if (!sc->isoFullPath) { ret = false; }
         sc->isoSize = DEBUG_ISO_SIZE;
         sc->filesystemType = c_strdup(DEBUG_FS_TYPE);

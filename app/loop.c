@@ -159,14 +159,16 @@ static bool loop_info_update()
         c_once_init_leave(&inited, 1);
     }
 
-    FILE* fr = popen("losetup -a | awk '{print $1\"\t\"$3}'", "r");
+    FILE* fr = popen("losetup -a -O 'NAME,BACK-FILE' | tail +2 | awk -F' ' '{print $1\"\t\"$3}'", "r");
     c_return_val_if_fail(fr, false);
 
     while (true) {
-        char line[4096];
-        if (!fgets(line, sizeof(line), fr)) {
+        char line[10240];
+        if (!fgets(line, sizeof(line) - 1, fr)) {
             break;
         }
+
+        line = c_strstrip(line);
 
         char** p = c_strsplit(line, "\t", -1);
         if (!p) {
@@ -175,24 +177,28 @@ static bool loop_info_update()
 
         if (2 != c_strv_length(p)) {
             c_strfreev(p);
+            C_LOG_VERB("strsplit failed!");
             continue;
         }
 
+        C_LOG_VERB("'%s' <-- '%s'", p[0], p[1]);
+
         char* loop = p[0];
-        char* tmp = c_strrstr(loop, ":");
-        if (tmp) {
-            tmp[0] = '\0';
-        }
+//        char* tmp = c_strrstr(loop, ":");
+//        if (tmp) {
+//            tmp[0] = '\0';
+//        }
 
         char* file = p[1];
-        tmp = c_strrstr(file, ")");
-        if (tmp) {
-            tmp[0] = '\0';
-        }
+//        tmp = c_strrstr(file, ")");
+//        if (tmp) {
+//            tmp[0] = '\0';
+//        }
 
-        if (c_str_has_prefix(file, "(")) {
-            file += 1;
-        }
+//        tmp = c_strstr(file, "(");
+//        if (tmp) {
+//            file = tmp + 1;
+//        }
 
         if (!loop || !file) {
             c_strfreev(p);

@@ -2,6 +2,7 @@
 #include <c/clib.h>
 
 #include "sandbox.h"
+#include "environ.h"
 
 /**
  * @brief 需要实现的功能说明
@@ -11,6 +12,9 @@ int main(int argc, char *argv[])
 {
     int ret = 0;
     C_LOG_INFO("start running...");
+
+    // 保存环境变量
+    environ_init();
 
     SandboxContext* sc = sandbox_init(argc, argv);
     if (!sc) {
