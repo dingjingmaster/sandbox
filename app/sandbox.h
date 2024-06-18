@@ -12,12 +12,12 @@ C_BEGIN_EXTERN_C
 
 typedef struct _SandboxContext SandboxContext;
 
+bool                sandbox_is_first            ();
 SandboxContext*     sandbox_init                (int argc, char* argv[]);
 void                sandbox_cwd                 (SandboxContext* context);
 bool                sandbox_mount_filesystem    (SandboxContext* context);
 cint                sandbox_main                (SandboxContext* context);
 void                sandbox_destroy             (SandboxContext** context);
-
 
 
 

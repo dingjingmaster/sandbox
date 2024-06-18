@@ -9,7 +9,7 @@
 #include <sys/un.h>
 #include <gio/gio.h>
 #include <sys/file.h>
-#include <bits/socket.h>
+#include <sys/socket.h>
 
 #include "loop.h"
 #include "filesystem.h"
@@ -41,21 +41,25 @@ struct _SandboxContext
 
     struct Socket {
         char*               sandboxSock;            // 通信用的本地套
+        GSocket*            socket;                 // Socket
+        GSocketService*     listener;               // SocketListener
+        GThreadPool*        worker;                 // ThreadPool
 
     } socket;
 
     GMainLoop*          mainLoop;
 };
 
-static bool sandbox_is_first();
-static void sandbox_launch_first(SandboxContext *context);
-static void sandbox_launch_other(SandboxContext *context);
+static void     sandbox_launch_other(SandboxContext *context);
+static void     sandbox_process_req (gpointer data, gpointer udata);
+static gboolean sandbox_new_req     (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData);
 
-SandboxContext* sandbox_init(int argc, char **argv)
+SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
 {
     bool ret = true;
     SandboxContext* sc = NULL;
 
+    // 分配资源
     do {
         sc = c_malloc0(sizeof(SandboxContext));
         if (!sc) { ret = false; break; }
@@ -84,10 +88,53 @@ SandboxContext* sandbox_init(int argc, char **argv)
         // socket
         sc->socket.sandboxSock = c_strdup(DEBUG_SOCKET_PATH);
         if (!sc->socket.sandboxSock) { ret = false; break; }
+        sc->socket.listener = g_socket_service_new();
+        if (!sc->socket.listener) { ret = false; break; }
     } while (false);
+
+    // 创建 server
+    do {
+        GError* error = NULL;
+        struct sockaddr_un addrT;
+        memset (&addrT, 0, sizeof (addrT));
+        addrT.sun_family = AF_LOCAL;
+        strncpy (addrT.sun_path, sc->socket.sandboxSock, sizeof(addrT.sun_path) - 1);
+        GSocketAddress* addr = g_socket_address_new_from_native(&addrT, sizeof (addrT));
+        sc->socket.socket = g_socket_new (G_SOCKET_FAMILY_UNIX, G_SOCKET_TYPE_STREAM, G_SOCKET_PROTOCOL_DEFAULT, &error);
+        if (error) {
+            C_LOG_ERROR("error: %s", error->message);
+            c_assert(error);    // FIXME://
+            break;
+        }
+        g_socket_set_blocking (sc->socket.socket, true);
+
+        if (sandbox_is_first()) {
+            if (!g_socket_bind (sc->socket.socket, addr, false, &error)) {
+                C_LOG_ERROR("bind error: %s", error->message);
+                c_assert(error);    // FIXME://
+            }
+
+            if (!g_socket_listen (sc->socket.socket, &error)) {
+                C_LOG_ERROR("listen error: %s", error->message);
+                c_assert(error);    // FIXME://
+            }
+            g_socket_listener_add_socket (G_SOCKET_LISTENER(sc->socket.listener), sc->socket.socket, NULL, NULL);
+
+            sc->socket.worker = g_thread_pool_new (sandbox_process_req, sc, 10, true, &error);
+            if (error) {
+                C_LOG_ERROR("g_thread_pool_new error: %s", error->message);
+                c_assert(error);    // FIXME://
+            }
+
+            c_assert(!error && sc->socket.listener && sc->socket.socket);
+            c_chmod (sc->socket.sandboxSock, 0777);
+            g_signal_connect (G_SOCKET_LISTENER(sc->socket.listener), "incoming", (GCallback) sandbox_new_req, sc);
+        }
+    } while (0);
 
     if (!ret) {
         sandbox_destroy(&sc);
+        return NULL;
     }
 
     return sc;
@@ -200,6 +247,10 @@ void sandbox_destroy(SandboxContext** context)
         c_free((*context)->socket.sandboxSock);
     }
 
+    if ((*context)->socket.listener) {
+        g_object_unref((*context)->socket.listener);
+        (*context)->socket.listener = NULL;
+    }
     // finally
     c_free(*context);
 }
@@ -219,7 +270,7 @@ cint sandbox_main(SandboxContext *context)
     if (sandbox_is_first()) {
         C_LOG_INFO("first launch, start running...");
         sandbox_cwd(context);
-        sandbox_launch_first(context);
+        g_socket_service_start(G_SOCKET_SERVICE(context->socket.listener));
         g_main_loop_run(context->mainLoop);
         sandbox_destroy(&context);
         C_LOG_INFO("first launch, stop!");
@@ -231,74 +282,43 @@ cint sandbox_main(SandboxContext *context)
     return 0;
 }
 
-static bool sandbox_is_first()
+bool sandbox_is_first()
 {
-    const char* lockFile = DEBUG_LOCK_PATH;
+    static bool ret = false;
+    static cuint inited = 0;
 
-    bool ret = false;
-    do {
-        static int fw = 0; // 不要释放
-        fw = open(lockFile, O_RDWR | O_CREAT, 0777);
-        if (-1 == fw) {
-            break;
-        }
+    if (c_once_init_enter(&inited)) {
+        do {
+            static int fw = 0; // 不要释放
+            fw = open(DEBUG_LOCK_PATH, O_RDWR | O_CREAT, 0777);
+            if (-1 == fw) {
+                break;
+            }
 
-        if (0 == flock(fw, LOCK_EX | LOCK_NB)) {
-            ret = true;
-            break;
-        }
-    } while (false);
+            if (0 == flock(fw, LOCK_EX | LOCK_NB)) {
+                ret = true;
+                break;
+            }
+        } while (false);
+        c_once_init_leave(&inited, 1);
+    }
 
     return ret;
 }
 
-static void sandbox_launch_first(SandboxContext *context)
-{
-    c_assert(context);
-
-    // 提权
-
-    // 启动服务
-    do {
-        GError* error = NULL;
-        struct sockaddr_un addrT;
-        memset (&addrT, 0, sizeof (addrT));
-        addrT.sun_family = AF_LOCAL;
-        strncpy (addrT.sun_path, context->socket.sandboxSock, sizeof(addrT.sun_path) - 1);
-        GSocketAddress* addr = g_socket_address_new_from_native(&addrT, sizeof (addrT));
-        context->socket.sandboxSock = g_socket_new (G_SOCKET_FAMILY_UNIX, G_SOCKET_TYPE_STREAM, G_SOCKET_PROTOCOL_DEFAULT, &error);
-        if (error) {
-            C_LOG_ERROR("error: %s", error->message);
-            c_assert(error);    // FIXME://
-            break;
-        }
-        g_socket_set_blocking (mSocket, true);
-
-        if (!g_socket_bind (mSocket, addr, false, &error)) {
-            qWarning() << "bind error: " << error->message;
-            qApp->exit (-1);
-        }
-
-        if (!g_socket_listen (mSocket, &error)) {
-            qWarning() << "listen error: " << error->message;
-            qApp->exit (-1);
-        }
-
-        g_socket_listener_add_socket (G_SOCKET_LISTENER(mServer), mSocket, nullptr, nullptr);
-
-        mWorker = g_thread_pool_new (process_client_req, this, 10, true, &error);
-        if (error) {
-            qWarning() << error->message;
-        }
-        g_assert(!error && mServer && mSocket);
-
-        g_chmod (DSM_FILE_CONTROL_SERVER_SOCKET_PATH, 0777);
-
-        g_signal_connect (G_SOCKET_LISTENER(mServer), "incoming", (GCallback) new_client_connect, this);
-    } while (0);
-}
 
 static void sandbox_launch_other(SandboxContext *context)
 {
 
+}
+
+static void sandbox_process_req (gpointer data, gpointer udata)
+{
+
+}
+
+static gboolean sandbox_new_req (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData)
+{
+
+    return true;
 }
