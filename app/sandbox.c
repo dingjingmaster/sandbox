@@ -9,9 +9,8 @@
 #include <sys/un.h>
 #include <gio/gio.h>
 #include <sys/file.h>
-#include <sys/socket.h>
 #include <sys/stat.h>
-#include <udisks/udisks-generated.h>
+#include <sys/socket.h>
 
 #include "loop.h"
 #include "filesystem.h"
