@@ -6,7 +6,10 @@
 
 #include <fcntl.h>
 #include <c/clib.h>
+#include <sys/un.h>
+#include <gio/gio.h>
 #include <sys/file.h>
+#include <bits/socket.h>
 
 #include "loop.h"
 #include "filesystem.h"
@@ -36,8 +39,12 @@ struct _SandboxContext
         char**          env;                        // 当前环境变量
     } status;
 
+    struct Socket {
+        char*               sandboxSock;            // 通信用的本地套
+
+    } socket;
+
     GMainLoop*          mainLoop;
-    char*               sandboxSock;                // 通信用的本地套
 };
 
 static bool sandbox_is_first();
@@ -75,8 +82,8 @@ SandboxContext* sandbox_init(int argc, char **argv)
         if (!sc->mainLoop) { ret = false; break; }
 
         // socket
-        sc->sandboxSock = c_strdup(DEBUG_SOCKET_PATH);
-        if (!sc->sandboxSock) { ret = false; break; }
+        sc->socket.sandboxSock = c_strdup(DEBUG_SOCKET_PATH);
+        if (!sc->socket.sandboxSock) { ret = false; break; }
     } while (false);
 
     if (!ret) {
@@ -189,8 +196,8 @@ void sandbox_destroy(SandboxContext** context)
     }
 
     // socket
-    if ((*context)->sandboxSock) {
-        c_free((*context)->sandboxSock);
+    if ((*context)->socket.sandboxSock) {
+        c_free((*context)->socket.sandboxSock);
     }
 
     // finally
@@ -247,9 +254,48 @@ static bool sandbox_is_first()
 
 static void sandbox_launch_first(SandboxContext *context)
 {
+    c_assert(context);
+
     // 提权
 
     // 启动服务
+    do {
+        GError* error = NULL;
+        struct sockaddr_un addrT;
+        memset (&addrT, 0, sizeof (addrT));
+        addrT.sun_family = AF_LOCAL;
+        strncpy (addrT.sun_path, context->socket.sandboxSock, sizeof(addrT.sun_path) - 1);
+        GSocketAddress* addr = g_socket_address_new_from_native(&addrT, sizeof (addrT));
+        context->socket.sandboxSock = g_socket_new (G_SOCKET_FAMILY_UNIX, G_SOCKET_TYPE_STREAM, G_SOCKET_PROTOCOL_DEFAULT, &error);
+        if (error) {
+            C_LOG_ERROR("error: %s", error->message);
+            c_assert(error);    // FIXME://
+            break;
+        }
+        g_socket_set_blocking (mSocket, true);
+
+        if (!g_socket_bind (mSocket, addr, false, &error)) {
+            qWarning() << "bind error: " << error->message;
+            qApp->exit (-1);
+        }
+
+        if (!g_socket_listen (mSocket, &error)) {
+            qWarning() << "listen error: " << error->message;
+            qApp->exit (-1);
+        }
+
+        g_socket_listener_add_socket (G_SOCKET_LISTENER(mServer), mSocket, nullptr, nullptr);
+
+        mWorker = g_thread_pool_new (process_client_req, this, 10, true, &error);
+        if (error) {
+            qWarning() << error->message;
+        }
+        g_assert(!error && mServer && mSocket);
+
+        g_chmod (DSM_FILE_CONTROL_SERVER_SOCKET_PATH, 0777);
+
+        g_signal_connect (G_SOCKET_LISTENER(mServer), "incoming", (GCallback) new_client_connect, this);
+    } while (0);
 }
 
 static void sandbox_launch_other(SandboxContext *context)
