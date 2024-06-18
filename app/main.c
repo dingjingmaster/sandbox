@@ -21,9 +21,14 @@ int main(int argc, char *argv[])
         C_LOG_ERROR("sandbox_init failed!");
         return -1;
     }
+
+    // 切换工作路径
+    sandbox_cwd(sc);
+
     // 1. 检测是否已经启动一个实例，如果启动，则此实例作为通信客户端使用
 
     // 2. 创建新的 namespace
+
 
     // 3. 挂载文件系统
     if (!sandbox_mount_filesystem(sc)) {

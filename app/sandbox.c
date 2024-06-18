@@ -19,12 +19,17 @@
 
 struct _SandboxContext
 {
-    char*           isoFullPath;
-    cuint64         isoSize;
-    char*           loopDevName;
-    char*           filesystemType;
+    struct DeviceInfo {
+        char*           isoFullPath;                // 文件系统路径
+        cuint64         isoSize;                    // 文件系统大小
+        char*           loopDevName;                // loop设备名称
+        char*           filesystemType;             // 文件系统类型
+        char*           mountPoint;                 // 设备挂载点
+    } deviceInfo;
 
-    char*           mountPoint;
+    struct Status {
+        char*           cwd;                        // 程序工作路径，默认在程序安装目录下
+    } status;
 };
 
 
@@ -41,15 +46,21 @@ SandboxContext* sandbox_init(int argc, char **argv)
     do {
         sc = c_malloc0(sizeof(SandboxContext));
         if (!sc) { ret = false; }
-        sc->isoFullPath = c_strdup(DEBUG_ISO_PATH);
-        sc->isoFullPath = c_file_path_format_arr(sc->isoFullPath);
-        if (!sc->isoFullPath) { ret = false; }
-        sc->isoSize = DEBUG_ISO_SIZE;
-        sc->filesystemType = c_strdup(DEBUG_FS_TYPE);
-        if (!sc->filesystemType) { ret = false; }
-        sc->mountPoint = c_strdup(DEBUG_MOUNT_POINT);
-        sc->mountPoint = c_file_path_format_arr(sc->mountPoint);
-        if (!sc->mountPoint) { ret = false; }
+
+        // device
+        sc->deviceInfo.isoFullPath = c_strdup(DEBUG_ISO_PATH);
+        sc->deviceInfo.isoFullPath = c_file_path_format_arr(sc->deviceInfo.isoFullPath);
+        if (!sc->deviceInfo.isoFullPath) { ret = false; }
+        sc->deviceInfo.isoSize = DEBUG_ISO_SIZE;
+        sc->deviceInfo.filesystemType = c_strdup(DEBUG_FS_TYPE);
+        if (!sc->deviceInfo.filesystemType) { ret = false; }
+        sc->deviceInfo.mountPoint = c_strdup(DEBUG_MOUNT_POINT);
+        sc->deviceInfo.mountPoint = c_file_path_format_arr(sc->deviceInfo.mountPoint);
+        if (!sc->deviceInfo.mountPoint) { ret = false; }
+
+        // status
+        sc->status.cwd = c_strdup(DEBUG_ROOT);
+        if (!sc->status.cwd) { ret = false; }
     } while (false);
 
     if (!ret) {
@@ -63,15 +74,15 @@ bool sandbox_mount_filesystem(SandboxContext *context)
 {
     c_return_val_if_fail(context, false);
 
-    if (!filesystem_generated_iso (context->isoFullPath, context->isoSize)) {
-        C_LOG_VERB("Generate iso failed: %s, size: %d", context->isoFullPath, context->isoSize);
+    if (!filesystem_generated_iso (context->deviceInfo.isoFullPath, context->deviceInfo.isoSize)) {
+        C_LOG_VERB("Generate iso failed: %s, size: %d", context->deviceInfo.isoFullPath, context->deviceInfo.isoSize);
         return false;
     }
 
     // 检测文件是否关联了设备
-    bool isInuse = loop_check_file_is_inuse(context->isoFullPath);
+    bool isInuse = loop_check_file_is_inuse(context->deviceInfo.isoFullPath);
     if (!isInuse) {
-        C_LOG_VERB("%s is not in use", context->isoFullPath);
+        C_LOG_VERB("%s is not in use", context->deviceInfo.isoFullPath);
         char* loopDev = loop_get_free_device_name();
         c_return_val_if_fail(loopDev, false);
         C_LOG_VERB("loop dev name: %s", loopDev);
@@ -82,42 +93,42 @@ bool sandbox_mount_filesystem(SandboxContext *context)
                 return false;
             }
         }
-        context->loopDevName = c_strdup(loopDev);
+        context->deviceInfo.loopDevName = c_strdup(loopDev);
         c_free(loopDev);
     }
     else {
-        context->loopDevName = loop_get_device_name_by_file_name(context->isoFullPath);
-        C_LOG_VERB("'%s' is in use '%s'", context->isoFullPath, context->loopDevName);
+        context->deviceInfo.loopDevName = loop_get_device_name_by_file_name(context->deviceInfo.isoFullPath);
+        C_LOG_VERB("'%s' is in use '%s'", context->deviceInfo.isoFullPath, context->deviceInfo.loopDevName);
     }
 
-    c_return_val_if_fail(context->loopDevName, false);
+    c_return_val_if_fail(context->deviceInfo.loopDevName, false);
 
     // 检测设备是否关联了文件
-    isInuse = loop_check_device_is_inuse(context->loopDevName);
+    isInuse = loop_check_device_is_inuse(context->deviceInfo.loopDevName);
     if (!isInuse) {
         // 将文件和设备进行关联
-        if (!loop_attach_file_to_loop(context->isoFullPath, context->loopDevName)) {
+        if (!loop_attach_file_to_loop(context->deviceInfo.isoFullPath, context->deviceInfo.loopDevName)) {
             C_LOG_ERROR("attach file to device error!");
             return false;
         }
     }
 
     // 检查是否挂载了文件系统
-    if (filesystem_is_mount(context->loopDevName)) {
+    if (filesystem_is_mount(context->deviceInfo.loopDevName)) {
         C_LOG_VERB("device already mounted!");
         return true;
     }
 
     // 检查是否需要格式化文件系统，需要则进行系统格式化
-    if (!filesystem_check(context->loopDevName)) {
-        if (!filesystem_format(context->loopDevName, context->filesystemType)) {
+    if (!filesystem_check(context->deviceInfo.loopDevName)) {
+        if (!filesystem_format(context->deviceInfo.loopDevName, context->deviceInfo.filesystemType)) {
             C_LOG_ERROR("device format error!");
             return false;
         }
     }
 
     // 挂载系统
-    if (!filesystem_mount(context->loopDevName, context->filesystemType, context->mountPoint)) {
+    if (!filesystem_mount(context->deviceInfo.loopDevName, context->deviceInfo.filesystemType, context->deviceInfo.mountPoint)) {
         C_LOG_ERROR("device mount error!");
         return false;
     }
@@ -129,22 +140,39 @@ void sandbox_destroy(SandboxContext** context)
 {
     c_return_if_fail(context && *context);
 
-    if ((*context)->isoFullPath) {
-        c_free((*context)->isoFullPath);
+    // device
+    if ((*context)->deviceInfo.isoFullPath) {
+        c_free((*context)->deviceInfo.isoFullPath);
     }
 
-    if ((*context)->filesystemType) {
-        c_free((*context)->filesystemType);
+    if ((*context)->deviceInfo.filesystemType) {
+        c_free((*context)->deviceInfo.filesystemType);
     }
 
-    if ((*context)->loopDevName) {
-        c_free((*context)->loopDevName);
+    if ((*context)->deviceInfo.loopDevName) {
+        c_free((*context)->deviceInfo.loopDevName);
     }
 
-    if ((*context)->mountPoint) {
-        c_free((*context)->mountPoint);
+    if ((*context)->deviceInfo.mountPoint) {
+        c_free((*context)->deviceInfo.mountPoint);
     }
 
+    // status
+    if ((*context)->status.cwd) {
+        c_free((*context)->status.cwd);
+    }
+
+    // finally
     c_free(*context);
+}
+
+void sandbox_cwd(SandboxContext *context)
+{
+    if (!context->status.cwd || c_file_test(context->status.cwd, C_FILE_TEST_IS_DIR)) {
+        C_LOG_WARNING("chdir error");
+        return;
+    }
+
+    chdir(context->status.cwd);
 }
 
