@@ -10,6 +10,8 @@
 #include <gio/gio.h>
 #include <sys/file.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <udisks/udisks-generated.h>
 
 #include "loop.h"
 #include "filesystem.h"
@@ -20,7 +22,7 @@
 #define DEBUG_ROOT                  "/usr/local/ultrasec/"
 #define DEBUG_MOUNT_POINT           DEBUG_ROOT"/.sandbox/"
 #define DEBUG_ISO_PATH              DEBUG_ROOT"/data/sandbox.iso"
-#define DEBUG_SOCKET_PATH           DEBUG_ROOT"/data/.sandbox.sock"
+#define DEBUG_SOCKET_PATH           DEBUG_ROOT"/data/sandbox.sock"
 #define DEBUG_LOCK_PATH             DEBUG_ROOT"/data/.sandbox.lock"
 
 
@@ -50,9 +52,24 @@ struct _SandboxContext
     GMainLoop*          mainLoop;
 };
 
-static void     sandbox_launch_other(SandboxContext *context);
+typedef struct
+{
+    gboolean            terminator;                 // 打开终端
+    gboolean            fileManager;                // 打开文件管理器
+} CommandLine;
+
+static void     sandbox_req         (SandboxContext *context);
 static void     sandbox_process_req (gpointer data, gpointer udata);
 static gboolean sandbox_new_req     (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData);
+
+static CommandLine gsCmdline = {0};
+
+
+static GOptionEntry gsEntry[] = {
+    {"terminator", 't', 0, C_OPTION_ARG_NONE, &(gsCmdline.terminator), "Open with the terminator", NULL},
+    {"file-manager", 'f', 0, C_OPTION_ARG_NONE, &(gsCmdline.fileManager), "Open with the file manager", NULL},
+    {NULL},
+};
 
 SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
 {
@@ -92,10 +109,12 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
         if (!sc->socket.listener) { ret = false; break; }
     } while (false);
 
+    if (!ret) { goto end; }
+
     // 创建 server
     do {
         GError* error = NULL;
-        struct sockaddr_un addrT;
+        struct sockaddr_un addrT = {0};
         memset (&addrT, 0, sizeof (addrT));
         addrT.sun_family = AF_LOCAL;
         strncpy (addrT.sun_path, sc->socket.sandboxSock, sizeof(addrT.sun_path) - 1);
@@ -103,39 +122,65 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
         sc->socket.socket = g_socket_new (G_SOCKET_FAMILY_UNIX, G_SOCKET_TYPE_STREAM, G_SOCKET_PROTOCOL_DEFAULT, &error);
         if (error) {
             C_LOG_ERROR("error: %s", error->message);
-            c_assert(error);    // FIXME://
+            ret = false;
             break;
         }
         g_socket_set_blocking (sc->socket.socket, true);
 
         if (sandbox_is_first()) {
+            if (0 == c_access(sc->socket.sandboxSock, R_OK | W_OK)) {
+                c_remove (sc->socket.sandboxSock);
+            }
             if (!g_socket_bind (sc->socket.socket, addr, false, &error)) {
+                ret = false;
                 C_LOG_ERROR("bind error: %s", error->message);
-                c_assert(error);    // FIXME://
+                break;
             }
 
             if (!g_socket_listen (sc->socket.socket, &error)) {
+                ret = false;
                 C_LOG_ERROR("listen error: %s", error->message);
-                c_assert(error);    // FIXME://
+                break;
             }
-            g_socket_listener_add_socket (G_SOCKET_LISTENER(sc->socket.listener), sc->socket.socket, NULL, NULL);
+            g_socket_listener_add_socket (G_SOCKET_LISTENER(sc->socket.listener), sc->socket.socket, NULL, &error);
+            if (error) {
+                ret = false;
+                C_LOG_ERROR("g_socket_listener_add_socket error: %s", error->message);
+                break;
+            }
 
             sc->socket.worker = g_thread_pool_new (sandbox_process_req, sc, 10, true, &error);
             if (error) {
+                ret = false;
                 C_LOG_ERROR("g_thread_pool_new error: %s", error->message);
-                c_assert(error);    // FIXME://
+                break;
             }
 
-            c_assert(!error && sc->socket.listener && sc->socket.socket);
+            // c_assert(!sc->socket.listener && !sc->socket.socket);
             c_chmod (sc->socket.sandboxSock, 0777);
             g_signal_connect (G_SOCKET_LISTENER(sc->socket.listener), "incoming", (GCallback) sandbox_new_req, sc);
         }
+        else {
+            GOptionContext* cmdCtx = NULL;
+            do {
+                GError* error = NULL;
+                cmdCtx = g_option_context_new(NULL);
+                g_option_context_add_main_entries(cmdCtx, gsEntry, NULL);
+                // g_option_context_set_translate_func()
+                if (!g_option_context_parse(cmdCtx, &argc, &argv, &error)) {
+                    C_LOG_ERROR("parse error: %s", error->message);
+                    c_assert(error);    // FIXME://
+                    break;
+                }
+            } while (false);
+            if (cmdCtx) {
+                g_option_context_free(cmdCtx);
+            }
+        }
     } while (0);
 
-    if (!ret) {
-        sandbox_destroy(&sc);
-        return NULL;
-    }
+end:
+    if (!ret) { sandbox_destroy(&sc); return NULL; }
 
     return sc;
 }
@@ -272,12 +317,13 @@ cint sandbox_main(SandboxContext *context)
         sandbox_cwd(context);
         g_socket_service_start(G_SOCKET_SERVICE(context->socket.listener));
         g_main_loop_run(context->mainLoop);
-        sandbox_destroy(&context);
         C_LOG_INFO("first launch, stop!");
     }
     else {
-        sandbox_launch_other(context);
+        sandbox_req (context);
     }
+
+    sandbox_destroy(&context);
 
     return 0;
 }
@@ -290,7 +336,9 @@ bool sandbox_is_first()
     if (c_once_init_enter(&inited)) {
         do {
             static int fw = 0; // 不要释放
+            const cuint m = umask(0);
             fw = open(DEBUG_LOCK_PATH, O_RDWR | O_CREAT, 0777);
+            umask(m);
             if (-1 == fw) {
                 break;
             }
@@ -307,7 +355,7 @@ bool sandbox_is_first()
 }
 
 
-static void sandbox_launch_other(SandboxContext *context)
+static void sandbox_req(SandboxContext *context)
 {
 
 }

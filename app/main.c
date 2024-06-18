@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
     }
     SandboxContext* sc = sandbox_init(argc, argv);
     if (!sc) {
-        C_LOG_ERROR_CONSOLE("sandbox_init failed!");
+        C_LOG_ERROR("sandbox_init failed!");
         return -1;
     }
 
