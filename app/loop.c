@@ -160,12 +160,14 @@ static bool loop_info_update()
         c_once_init_leave(&inited, 1);
     }
 
+    system("losetup -D");
+
     FILE* fr = popen("losetup -a -O 'NAME,BACK-FILE' | tail +2 | awk -F' ' '{print $1\"\t\"$2}'", "r");
     c_return_val_if_fail(fr, false);
 
+    char line[10240] = {0};
     while (true) {
-        char line[10240] = {0};
-
+        memset(line, 0, sizeof(line));
         if (!c_file_read_line_arr(fr, line, sizeof(line) - 1)) {
             break;
         }
@@ -176,6 +178,7 @@ static bool loop_info_update()
 
         char** p = c_strsplit(line, "\t", -1);
         if (!p) {
+            c_strfreev(p);
             continue;
         }
 
@@ -185,29 +188,33 @@ static bool loop_info_update()
             continue;
         }
 
-        char* loop = c_file_path_format_arr(p[0]);
-        char* file = c_file_path_format_arr(p[1]);
-
-        if (!loop || !file) {
-            c_strfreev(p);
-            continue;
+        char* loopT = c_strdup(p[0]);
+        char* fileT = c_strdup(p[1]);
+        if (!loopT || !fileT) {
+            c_free(loopT);
+            c_free(fileT);
         }
+        c_strfreev(p);
 
         C_LOCK(gsLoopDevice);
-        if (c_hash_table_lookup(gsLoopDevices->loopFile, loop)) {
-            c_strfreev(p);
-            C_UNLOCK(gsLoopDevice);
-            continue;
-        }
-        c_hash_table_insert(gsLoopDevices->loopFile, c_strdup(loop), c_strdup(file));
+        do {
+            const char* loopF = c_file_path_format_arr(loopT);
+            const char* fileF = c_file_path_format_arr(fileT);
 
-        if (c_hash_table_lookup(gsLoopDevices->fileLoop, file)) {
-            c_strfreev(p);
-            C_UNLOCK(gsLoopDevice);
-            continue;
-        }
-        c_hash_table_insert(gsLoopDevices->fileLoop, c_strdup(file), c_strdup(loop));
-        c_strfreev(p);
+            if (c_hash_table_contains(gsLoopDevices->loopFile, loopF)) {
+                break;
+            }
+            char* loop1 = c_strdup(loopF);
+            char* file1 = c_strdup(fileF);
+            c_hash_table_insert(gsLoopDevices->loopFile, loop1, file1);
+
+            if (c_hash_table_contains(gsLoopDevices->fileLoop, fileF)) {
+                break;
+            }
+            char* loop2 = c_strdup(loopF);
+            char* file2 = c_strdup(fileF);
+            c_hash_table_insert(gsLoopDevices->fileLoop, file2, loop2);
+        } while (false);
         C_UNLOCK(gsLoopDevice);
     }
     fclose(fr);

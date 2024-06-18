@@ -86,8 +86,8 @@ bool sandbox_mount_filesystem(SandboxContext *context)
         c_free(loopDev);
     }
     else {
-        C_LOG_VERB("%s is in use", context->isoFullPath);
         context->loopDevName = loop_get_device_name_by_file_name(context->isoFullPath);
+        C_LOG_VERB("'%s' is in use '%s'", context->isoFullPath, context->loopDevName);
     }
 
     c_return_val_if_fail(context->loopDevName, false);
