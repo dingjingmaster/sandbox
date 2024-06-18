@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+import "extend-field.proto";
+
+enum CommandLineTypeE
+{
+    CMD_Q_VERSION                         = 0;
+    CMD_Q_OPEN_TERMINATOR                 = 1;
+    CMD_Q_OPEN_FILE_MANAGER               = 2;
+};
+
+message CommandLine
+{
+    CommandLineTypeE      cmdType         = 1;
+    repeated ExtendField  extendField     = 2;
+}

@@ -27,13 +27,16 @@ file(GLOB SANDBOX_SRC
 #        ${CMAKE_SOURCE_DIR}/app/fs fs/volume.c
 )
 
-add_executable(sandbox main.c ${SANDBOX_SRC})
+include(proto/proto.cmake)
+
+add_executable(sandbox main.c ${SANDBOX_SRC} ${PROTO_SRC_C})
 
 target_link_libraries(sandbox PUBLIC
 #        ${FUSE_LIBRARIES}
         ${GLIB_LIBRARIES}
         ${CLIB_LIBRARIES}
         ${DISK_LIBRARIES}
+        ${PROTO_LIBRARIES}
 )
 
 target_include_directories(sandbox PUBLIC
@@ -41,4 +44,5 @@ target_include_directories(sandbox PUBLIC
         ${GLIB_INCLUDE_DIRS}
         ${CLIB_INCLUDE_DIRS}
         ${DISK_INCLUDE_DIRS}
+        ${PROTO_INCLUDE_DIRS}
 )

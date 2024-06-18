@@ -14,6 +14,8 @@
 
 #include "loop.h"
 #include "filesystem.h"
+#include "proto/command-line.pb-c.h"
+#include "proto/extend-field.pb-c.h"
 
 
 #define DEBUG_ISO_SIZE              1024
@@ -41,10 +43,11 @@ struct _SandboxContext
     } status;
 
     struct Socket {
-        char*               sandboxSock;            // 通信用的本地套
         GSocket*            socket;                 // Socket
-        GSocketService*     listener;               // SocketListener
         GThreadPool*        worker;                 // ThreadPool
+        GSocketAddress*     address;                // SocketAddress
+        GSocketService*     listener;               // SocketListener
+        char*               sandboxSock;            // 通信用的本地套
 
     } socket;
 
@@ -55,13 +58,14 @@ typedef struct
 {
     gboolean            terminator;                 // 打开终端
     gboolean            fileManager;                // 打开文件管理器
-} CommandLine;
+} CmdLine;
 
+static bool     sandbox_send_cmd    (SandboxContext* context);
 static void     sandbox_req         (SandboxContext *context);
 static void     sandbox_process_req (gpointer data, gpointer udata);
 static gboolean sandbox_new_req     (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData);
 
-static CommandLine gsCmdline = {0};
+static CmdLine gsCmdline = {0};
 
 
 static GOptionEntry gsEntry[] = {
@@ -117,7 +121,7 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
         memset (&addrT, 0, sizeof (addrT));
         addrT.sun_family = AF_LOCAL;
         strncpy (addrT.sun_path, sc->socket.sandboxSock, sizeof(addrT.sun_path) - 1);
-        GSocketAddress* addr = g_socket_address_new_from_native(&addrT, sizeof (addrT));
+        sc->socket.address = g_socket_address_new_from_native(&addrT, sizeof (addrT));
         sc->socket.socket = g_socket_new (G_SOCKET_FAMILY_UNIX, G_SOCKET_TYPE_STREAM, G_SOCKET_PROTOCOL_DEFAULT, &error);
         if (error) {
             C_LOG_ERROR("error: %s", error->message);
@@ -130,7 +134,7 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
             if (0 == c_access(sc->socket.sandboxSock, R_OK | W_OK)) {
                 c_remove (sc->socket.sandboxSock);
             }
-            if (!g_socket_bind (sc->socket.socket, addr, false, &error)) {
+            if (!g_socket_bind (sc->socket.socket, sc->socket.address, false, &error)) {
                 ret = false;
                 C_LOG_ERROR("bind error: %s", error->message);
                 break;
@@ -356,7 +360,56 @@ bool sandbox_is_first()
 
 static void sandbox_req(SandboxContext *context)
 {
+    c_return_if_fail(context);
 
+    CommandLine cmd;
+    command_line__init(&cmd);
+
+    if (gsCmdline.terminator) {
+        // 请求打开终端
+        cmd.cmdtype = COMMAND_LINE_TYPE_E__CMD_Q_OPEN_TERMINATOR;
+    }
+    else if (gsCmdline.fileManager) {
+        // 请求打开文件管理器
+        cmd.cmdtype = COMMAND_LINE_TYPE_E__CMD_Q_OPEN_FILE_MANAGER;
+    }
+    else {
+        printf("error command or check daemon is exists!\n");
+        return;
+    }
+
+    // 打包，请求
+    {
+        GError* error = NULL;
+        const cuint64 len = command_line__get_packed_size(&cmd);
+        char* buf = c_malloc0(len);
+        const cuint64 lenP = command_line__pack(&cmd, buf);
+        if (len != lenP) {
+            printf("socket error!\n");
+            goto err;
+        }
+
+        g_socket_connect(context->socket.socket, context->socket.address, NULL, &error);
+        if (error) {
+            printf("connect error: %s\n", error->message);
+            goto err;
+        }
+
+        g_socket_condition_wait(context->socket.socket, G_IO_OUT, NULL, &error);
+        if (error) {
+            printf("send error: %s\n", error->message);
+            goto err;
+        }
+
+        printf("send buf[%d]: \n", len);
+        g_socket_send_with_blocking(context->socket.socket, buf, len, true, NULL, &error);
+        if (error) {
+            printf("send error: %s\n", error->message);
+            goto err;
+        }
+err:
+        return;
+    }
 }
 
 static void sandbox_process_req (gpointer data, gpointer udata)
@@ -366,6 +419,23 @@ static void sandbox_process_req (gpointer data, gpointer udata)
 
 static gboolean sandbox_new_req (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData)
 {
+    C_LOG_INFO("new");
 
     return true;
+}
+
+static bool sandbox_send_cmd (SandboxContext* context)
+{
+    c_return_val_if_fail(context, false);
+
+    GSocketClient* client = NULL;
+
+    do {
+        client = g_socket_client_new();
+        if (!client) {break;}
+
+        g_socket_client_set_local_address(client, context->socket.address);
+
+
+    } while (false);
 }
