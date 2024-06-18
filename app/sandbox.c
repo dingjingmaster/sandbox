@@ -4,7 +4,9 @@
 
 #include "sandbox.h"
 
+#include <fcntl.h>
 #include <c/clib.h>
+#include <sys/file.h>
 
 #include "loop.h"
 #include "filesystem.h"
@@ -15,6 +17,8 @@
 #define DEBUG_ROOT                  "/usr/local/ultrasec/"
 #define DEBUG_MOUNT_POINT           DEBUG_ROOT"/.sandbox/"
 #define DEBUG_ISO_PATH              DEBUG_ROOT"/data/sandbox.iso"
+#define DEBUG_SOCKET_PATH           DEBUG_ROOT"/data/.sandbox.sock"
+#define DEBUG_LOCK_PATH             DEBUG_ROOT"/data/.sandbox.lock"
 
 
 struct _SandboxContext
@@ -30,13 +34,11 @@ struct _SandboxContext
     struct Status {
         char*           cwd;                        // 程序工作路径，默认在程序安装目录下
     } status;
+
+    GMainLoop*          mainLoop;
+    char*               sandboxSock;                // 通信用的本地套
 };
 
-
-int sandbox_main(int argc, char **argv)
-{
-    return 0;
-}
 
 SandboxContext* sandbox_init(int argc, char **argv)
 {
@@ -45,22 +47,30 @@ SandboxContext* sandbox_init(int argc, char **argv)
 
     do {
         sc = c_malloc0(sizeof(SandboxContext));
-        if (!sc) { ret = false; }
+        if (!sc) { ret = false; break; }
 
         // device
         sc->deviceInfo.isoFullPath = c_strdup(DEBUG_ISO_PATH);
         sc->deviceInfo.isoFullPath = c_file_path_format_arr(sc->deviceInfo.isoFullPath);
-        if (!sc->deviceInfo.isoFullPath) { ret = false; }
+        if (!sc->deviceInfo.isoFullPath) { ret = false; break; }
         sc->deviceInfo.isoSize = DEBUG_ISO_SIZE;
         sc->deviceInfo.filesystemType = c_strdup(DEBUG_FS_TYPE);
-        if (!sc->deviceInfo.filesystemType) { ret = false; }
+        if (!sc->deviceInfo.filesystemType) { ret = false; break; }
         sc->deviceInfo.mountPoint = c_strdup(DEBUG_MOUNT_POINT);
         sc->deviceInfo.mountPoint = c_file_path_format_arr(sc->deviceInfo.mountPoint);
-        if (!sc->deviceInfo.mountPoint) { ret = false; }
+        if (!sc->deviceInfo.mountPoint) { ret = false; break; }
 
         // status
         sc->status.cwd = c_strdup(DEBUG_ROOT);
-        if (!sc->status.cwd) { ret = false; }
+        if (!sc->status.cwd) { ret = false; break; }
+
+        // main loop
+        sc->mainLoop = g_main_loop_new(NULL, false);
+        if (!sc->mainLoop) { ret = false; break; }
+
+        // socket
+        sc->sandboxSock = c_strdup(DEBUG_SOCKET_PATH);
+        if (!sc->sandboxSock) { ret = false; break; }
     } while (false);
 
     if (!ret) {
@@ -140,6 +150,12 @@ void sandbox_destroy(SandboxContext** context)
 {
     c_return_if_fail(context && *context);
 
+    // main loop
+    if ((*context)->mainLoop) {
+        g_main_loop_quit((*context)->mainLoop);
+        g_main_loop_unref((*context)->mainLoop);
+    }
+
     // device
     if ((*context)->deviceInfo.isoFullPath) {
         c_free((*context)->deviceInfo.isoFullPath);
@@ -162,17 +178,60 @@ void sandbox_destroy(SandboxContext** context)
         c_free((*context)->status.cwd);
     }
 
+    // socket
+    if ((*context)->sandboxSock) {
+        c_free((*context)->sandboxSock);
+    }
+
     // finally
     c_free(*context);
 }
 
 void sandbox_cwd(SandboxContext *context)
 {
-    if (!context->status.cwd || c_file_test(context->status.cwd, C_FILE_TEST_IS_DIR)) {
+    if (!context->status.cwd || !c_file_test(context->status.cwd, C_FILE_TEST_IS_DIR)) {
         C_LOG_WARNING("chdir error");
         return;
     }
 
     chdir(context->status.cwd);
+}
+
+cint sandbox_main(SandboxContext *context)
+{
+    g_main_loop_run(context->mainLoop);
+    sandbox_destroy(&context);
+
+    C_LOG_INFO("stop!");
+
+    return 0;
+}
+
+bool sandbox_is_first(SandboxContext* context)
+{
+    c_assert(context);
+
+    const char* lockFile = DEBUG_LOCK_PATH;
+
+    bool ret = false;
+    do {
+        static int fw = 0; // 不要释放
+        fw = open(lockFile, O_RDWR | O_CREAT, 0777);
+        if (-1 == fw) {
+            break;
+        }
+
+        if (0 == flock(fw, LOCK_EX | LOCK_NB)) {
+            ret = true;
+            break;
+        }
+    } while (false);
+
+    return ret;
+}
+
+void sandbox_launch_first(SandboxContext *context)
+{
+
 }
 

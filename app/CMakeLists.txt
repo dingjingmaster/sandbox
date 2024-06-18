@@ -1,10 +1,4 @@
 file(GLOB SANDBOX_SRC
-        ${CMAKE_SOURCE_DIR}/app sandbox.h
-        ${CMAKE_SOURCE_DIR}/app sandbox.c
-
-        ${CMAKE_SOURCE_DIR}/app filesystem.h
-        ${CMAKE_SOURCE_DIR}/app filesystem.c
-
         ${CMAKE_SOURCE_DIR}/app loop.h
         ${CMAKE_SOURCE_DIR}/app loop.c
 
@@ -13,7 +7,16 @@ file(GLOB SANDBOX_SRC
 
         ${CMAKE_SOURCE_DIR}/app environ.h
         ${CMAKE_SOURCE_DIR}/app environ.c
-#
+
+        ${CMAKE_SOURCE_DIR}/app sandbox.h
+        ${CMAKE_SOURCE_DIR}/app sandbox.c
+
+        ${CMAKE_SOURCE_DIR}/app namespace.h
+        ${CMAKE_SOURCE_DIR}/app namespace.c
+
+        ${CMAKE_SOURCE_DIR}/app filesystem.h
+        ${CMAKE_SOURCE_DIR}/app filesystem.c
+
 #        ${CMAKE_SOURCE_DIR}/app/fs fs.h
 #        ${CMAKE_SOURCE_DIR}/app/fs fs.c
 
@@ -27,14 +30,14 @@ file(GLOB SANDBOX_SRC
 add_executable(sandbox main.c ${SANDBOX_SRC})
 
 target_link_libraries(sandbox PUBLIC
-        ${FUSE_LIBRARIES}
+#        ${FUSE_LIBRARIES}
         ${GLIB_LIBRARIES}
         ${CLIB_LIBRARIES}
         ${DISK_LIBRARIES}
 )
 
 target_include_directories(sandbox PUBLIC
-        ${FUSE_INCLUDE_DIRS}
+#        ${FUSE_INCLUDE_DIRS}
         ${GLIB_INCLUDE_DIRS}
         ${CLIB_INCLUDE_DIRS}
         ${DISK_INCLUDE_DIRS}

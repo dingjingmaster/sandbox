@@ -4,14 +4,23 @@
 
 #include "filesystem.h"
 
-#include <fuse.h>
+//#include <fuse.h>
 #include <c/clib.h>
 #include <signal.h>
 #include <sys/mount.h>
 #include <udisks/udisks.h>
+#include <sys/stat.h>
 
 #include "fs/volume.h"
 
+
+/**
+ * @brief 获取块设备
+ */
+static UDisksObject* getObjectFromBlockDevice(UDisksClient* client, const gchar* bDevice);
+
+
+#if 0
 /**
  * @brief
  *  1. ntfs文件系统格式化： attrdef.c boot.c sd.c mkntfs.c utils.c libntfs-3g
@@ -149,11 +158,6 @@ static void show_cmd (SandboxOption* cmdline);
  */
 int sandbox_cmd_parse(void *data, const char *arg, int key, struct fuse_args *outargs);
 
-/**
- * @brief 获取块设备
- */
-static UDisksObject* getObjectFromBlockDevice(UDisksClient* client, const gchar* bDevice);
-
 static SandboxOption gsOptions;
 static const struct fuse_opt gsOptionsSpec[] = {
     SANDBOX_OPTION("--size", size),
@@ -205,6 +209,7 @@ int filesystem_main(int argc, char *argv[])
     return ret;
 }
 
+#endif
 bool filesystem_generated_iso(const char *absolutePath, cuint64 sizeMB)
 {
     c_return_val_if_fail(absolutePath && (absolutePath[0] == '/') && (sizeMB > 0), false);
@@ -448,6 +453,7 @@ static const CHashTable* filesystem_loop_files ()
 {
 }
 
+#if 0
 static void* sandbox_fuse_init (struct fuse_conn_info* conn, struct fuse_config* cfg)
 {
     C_LOG_VERB("");
@@ -619,6 +625,8 @@ int sandbox_cmd_parse(void *data, const char *arg, int key, struct fuse_args *ou
 
     return -1;
 }
+
+#endif
 
 static bool sandbox_format_fs(const char* key, const char* path, csize size)
 {
