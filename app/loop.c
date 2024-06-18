@@ -86,7 +86,7 @@ char *loop_get_free_device_name()
         char* s = c_strrstr(line, "\n");
         while (s) {s[0] = '\0'; s = c_strrstr(line, "\n");};
     } while (0);
-    fclose(fr);
+    pclose(fr);
 
     return ((strlen(line) > 0) ? c_strdup(line) : NULL);
 }
@@ -124,23 +124,26 @@ bool loop_attach_file_to_loop(const char *fileName, const char *devName)
 {
     c_return_val_if_fail(fileName && devName, false);
 
-    char* cmd = c_strdup_printf("losetup %s %s && echo $?", devName, fileName);
-    c_assert(cmd);
-    FILE* fr = popen(cmd, "r");
-    if (!fr) {
-        C_LOG_ERROR("popen error!");
-        return false;
-    }
-
-    // FIXME://
+    FILE* fr = NULL;
     bool res = true;
-    char buf[8] = {0};
-    c_file_read_line_arr(fr, buf, sizeof(buf) - 1);
-    if (c_strlen(buf) > 0 && 0 == c_strcmp0("0", buf)) {
-        C_LOG_ERROR("error: %s", buf);
-        res = false;
-    }
-    fclose(fr);
+    do {
+        char* cmd = c_strdup_printf("losetup %s %s && echo $?", devName, fileName);
+        c_assert(cmd);
+        fr = popen(cmd, "r");
+        c_free(cmd);
+        if (!fr) {
+            C_LOG_ERROR("popen error!");
+            break;
+        }
+
+        char buf[16] = {0};
+        c_file_read_line_arr(fr, buf, sizeof(buf) - 1);
+        if (c_strlen(buf) > 0 && 0 == c_strcmp0("0", buf)) {
+            C_LOG_ERROR("error: %s", buf);
+            res = false;
+        }
+    } while (false);
+    pclose(fr);
 
     return res;
 }
@@ -217,7 +220,7 @@ static bool loop_info_update()
         } while (false);
         C_UNLOCK(gsLoopDevice);
     }
-    fclose(fr);
+    pclose(fr);
 
     return true;
 }
