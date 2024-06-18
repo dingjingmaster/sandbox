@@ -33,12 +33,16 @@ struct _SandboxContext
 
     struct Status {
         char*           cwd;                        // 程序工作路径，默认在程序安装目录下
+        char**          env;                        // 当前环境变量
     } status;
 
     GMainLoop*          mainLoop;
     char*               sandboxSock;                // 通信用的本地套
 };
 
+static bool sandbox_is_first();
+static void sandbox_launch_first(SandboxContext *context);
+static void sandbox_launch_other(SandboxContext *context);
 
 SandboxContext* sandbox_init(int argc, char **argv)
 {
@@ -63,6 +67,8 @@ SandboxContext* sandbox_init(int argc, char **argv)
         // status
         sc->status.cwd = c_strdup(DEBUG_ROOT);
         if (!sc->status.cwd) { ret = false; break; }
+        sc->status.env = c_get_environ();
+        if (!sc->status.env) { ret = false; break; }
 
         // main loop
         sc->mainLoop = g_main_loop_new(NULL, false);
@@ -178,6 +184,10 @@ void sandbox_destroy(SandboxContext** context)
         c_free((*context)->status.cwd);
     }
 
+    if ((*context)->status.env) {
+        c_strfreev((*context)->status.env);
+    }
+
     // socket
     if ((*context)->sandboxSock) {
         c_free((*context)->sandboxSock);
@@ -199,18 +209,23 @@ void sandbox_cwd(SandboxContext *context)
 
 cint sandbox_main(SandboxContext *context)
 {
-    g_main_loop_run(context->mainLoop);
-    sandbox_destroy(&context);
-
-    C_LOG_INFO("stop!");
+    if (sandbox_is_first()) {
+        C_LOG_INFO("first launch, start running...");
+        sandbox_cwd(context);
+        sandbox_launch_first(context);
+        g_main_loop_run(context->mainLoop);
+        sandbox_destroy(&context);
+        C_LOG_INFO("first launch, stop!");
+    }
+    else {
+        sandbox_launch_other(context);
+    }
 
     return 0;
 }
 
-bool sandbox_is_first(SandboxContext* context)
+static bool sandbox_is_first()
 {
-    c_assert(context);
-
     const char* lockFile = DEBUG_LOCK_PATH;
 
     bool ret = false;
@@ -230,8 +245,14 @@ bool sandbox_is_first(SandboxContext* context)
     return ret;
 }
 
-void sandbox_launch_first(SandboxContext *context)
+static void sandbox_launch_first(SandboxContext *context)
+{
+    // 提权
+
+    // 启动服务
+}
+
+static void sandbox_launch_other(SandboxContext *context)
 {
 
 }
-

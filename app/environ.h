@@ -13,9 +13,11 @@ C_BEGIN_EXTERN_C
 
 /**
  * @brief 保留初始的环境变量
+ * @note 不要用这个
  */
 void environ_init (void);
 
+char**  environ_get_all (void);
 
 C_END_EXTERN_C
 

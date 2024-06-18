@@ -16,3 +16,8 @@ void environ_init(void)
         C_LOG_WRITE_FILE(C_LOG_LEVEL_INFO, gsEnviron[i]);
     }
 }
+
+char** environ_get_all(void)
+{
+    return c_get_environ();
+}

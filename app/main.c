@@ -14,40 +14,11 @@
  */
 int main(int argc, char *argv[])
 {
-    int ret = 0;
-    C_LOG_INFO("start running...");
-
-    // 保存环境变量
-    environ_init();
-
-    // 初始化 sandbox 参数
     SandboxContext* sc = sandbox_init(argc, argv);
     if (!sc) {
-        C_LOG_ERROR("sandbox_init failed!");
+        C_LOG_ERROR_CONSOLE("sandbox_init failed!");
         return -1;
     }
-
-    // 1. 检测是否已经启动一个实例
-    if (sandbox_is_first(sc)) {
-        // 2. 切换工作路径
-        C_LOG_VERB("first launch");
-        sandbox_cwd(sc);
-        sandbox_launch_first(sc);
-        return sandbox_main(sc);
-    }
-
-    C_LOG_VERB("second launch");
-
-
-    // 3. 创建新的 namespace
-
-    // 4. apparmor
-
-    // 5. 挂载文件系统
-//    if (!sandbox_mount_filesystem(sc)) {
-//        C_LOG_ERROR("sandbox_mount_filesystem failed!");
-//        return -1;
-//    }
 
     return sandbox_main(sc);
 }
