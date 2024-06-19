@@ -46,3 +46,7 @@ target_include_directories(sandbox PUBLIC
         ${DISK_INCLUDE_DIRS}
         ${PROTO_INCLUDE_DIRS}
 )
+
+target_compile_definitions(sandbox PUBLIC
+        -D_GNU_SOURCE
+)

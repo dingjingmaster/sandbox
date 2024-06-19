@@ -5,7 +5,6 @@
 #ifndef sandbox_SANDBOX_NAMESPACE_H
 #define sandbox_SANDBOX_NAMESPACE_H
 #include <c/clib.h>
-#include <sys/stat.h>
 
 C_BEGIN_EXTERN_C
 
@@ -23,7 +22,7 @@ bool namespace_check_availed    ();
  * 4. 与本地目录绑定 -- usr/ etc/
  * 5. 执行 chroot 时候要执行的命令
  */
-bool namespace_execute_cmd      (const char* mountPoint, const char* devName, const char* cmd, const char** env);
+bool namespace_execute_cmd      (const cchar* fs, const cchar* fsType, const cchar* mountPoint, const cchar* cmd, const cchar* const * env);
 
 bool namespace_enter            ();
 

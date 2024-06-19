@@ -13,6 +13,7 @@
 #include <sys/socket.h>
 
 #include "loop.h"
+#include "namespace.h"
 #include "filesystem.h"
 #include "proto/command-line.pb-c.h"
 #include "proto/extend-field.pb-c.h"
@@ -30,16 +31,16 @@
 struct _SandboxContext
 {
     struct DeviceInfo {
-        char*           isoFullPath;                // 文件系统路径
+        cchar*          isoFullPath;                // 文件系统路径
         cuint64         isoSize;                    // 文件系统大小
-        char*           loopDevName;                // loop设备名称
-        char*           filesystemType;             // 文件系统类型
-        char*           mountPoint;                 // 设备挂载点
+        cchar*          loopDevName;                // loop设备名称
+        cchar*          filesystemType;             // 文件系统类型
+        cchar*          mountPoint;                 // 设备挂载点
     } deviceInfo;
 
     struct Status {
-        char*           cwd;                        // 程序工作路径，默认在程序安装目录下
-        char**          env;                        // 当前环境变量
+        cchar*          cwd;                        // 程序工作路径，默认在程序安装目录下
+        cchar**         env;                        // 当前环境变量
     } status;
 
     struct Socket {
@@ -47,7 +48,7 @@ struct _SandboxContext
         GThreadPool*        worker;                 // ThreadPool
         GSocketAddress*     address;                // SocketAddress
         GSocketService*     listener;               // SocketListener
-        char*               sandboxSock;            // 通信用的本地套
+        cchar*              sandboxSock;            // 通信用的本地套
     } socket;
 
     struct CmdLine {
@@ -409,10 +410,24 @@ static void sandbox_process_req (gpointer data, gpointer udata)
     switch (cmd->cmdtype) {
         case COMMAND_LINE_TYPE_E__CMD_Q_OPEN_TERMINATOR: {
             C_LOG_INFO("Open terminator");
+            const char* cmd = "ls";
+            bool ret = namespace_execute_cmd(sc->deviceInfo.isoFullPath,
+                                                sc->deviceInfo.filesystemType,
+                                                sc->deviceInfo.mountPoint,
+                                                cmd,
+                                                (const cchar * const *)sc->status.env);
+            C_LOG_INFO("return: %s", ret ? "true" : "false");
             break;
         }
         case COMMAND_LINE_TYPE_E__CMD_Q_OPEN_FILE_MANAGER: {
             C_LOG_INFO("Open file manager");
+            const char* cmd = "ls";
+            bool ret = namespace_execute_cmd(sc->deviceInfo.isoFullPath,
+                                                sc->deviceInfo.filesystemType,
+                                                sc->deviceInfo.mountPoint,
+                                                cmd,
+                                                (const cchar * const *)sc->status.env);
+            C_LOG_INFO("return: %s", ret ? "true" : "false");
             break;
         }
         default: {
