@@ -5,8 +5,9 @@ import "extend-field.proto";
 enum CommandLineTypeE
 {
     CMD_Q_VERSION                         = 0;
-    CMD_Q_OPEN_TERMINATOR                 = 1;
-    CMD_Q_OPEN_FILE_MANAGER               = 2;
+    CMD_Q_QUIT                            = 1;
+    CMD_Q_OPEN_TERMINATOR                 = 2;
+    CMD_Q_OPEN_FILE_MANAGER               = 3;
 };
 
 message CommandLine

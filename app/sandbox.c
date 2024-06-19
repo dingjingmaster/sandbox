@@ -60,6 +60,7 @@ struct _SandboxContext
 
 typedef struct
 {
+    gboolean            quit;                       // 退出
     gboolean            terminator;                 // 打开终端
     gboolean            fileManager;                // 打开文件管理器
 } CmdLine;
@@ -76,6 +77,7 @@ static CmdLine gsCmdline = {0};
 static GOptionEntry gsEntry[] = {
     {"terminator", 't', 0, C_OPTION_ARG_NONE, &(gsCmdline.terminator), "Open with the terminator", NULL},
     {"file-manager", 'f', 0, C_OPTION_ARG_NONE, &(gsCmdline.fileManager), "Open with the file manager", NULL},
+    {"quit", 'q', 0, C_OPTION_ARG_NONE, &(gsCmdline.quit), "exit daemon", NULL},
     {NULL},
 };
 
@@ -375,6 +377,10 @@ static void sandbox_req(SandboxContext *context)
         // 请求打开文件管理器
         cmd.cmdtype = COMMAND_LINE_TYPE_E__CMD_Q_OPEN_FILE_MANAGER;
     }
+    else if (gsCmdline.quit) {
+        // 关闭守护进程
+        cmd.cmdtype = COMMAND_LINE_TYPE_E__CMD_Q_QUIT;
+    }
     else {
         char* help = g_option_context_get_help(context->cmdLine.cmdCtx, true, NULL);
         printf(help);
@@ -410,24 +416,35 @@ static void sandbox_process_req (gpointer data, gpointer udata)
     switch (cmd->cmdtype) {
         case COMMAND_LINE_TYPE_E__CMD_Q_OPEN_TERMINATOR: {
             C_LOG_INFO("Open terminator");
-            const char* cmd = "ls";
-            bool ret = namespace_execute_cmd(sc->deviceInfo.isoFullPath,
-                                                sc->deviceInfo.filesystemType,
-                                                sc->deviceInfo.mountPoint,
-                                                cmd,
-                                                (const cchar * const *)sc->status.env);
+            NewProcessParam param = {
+                .cmd = "ls",
+                .fsSize = sc->deviceInfo.isoSize,
+                .fsType = sc->deviceInfo.filesystemType,
+                .mountPoint = sc->deviceInfo.mountPoint,
+                .isoFullPath = sc->deviceInfo.isoFullPath,
+                .env = (const cchar* const*)sc->status.env,
+            };
+            bool ret = namespace_execute_cmd(&param);
             C_LOG_INFO("return: %s", ret ? "true" : "false");
             break;
         }
         case COMMAND_LINE_TYPE_E__CMD_Q_OPEN_FILE_MANAGER: {
             C_LOG_INFO("Open file manager");
-            const char* cmd = "ls";
-            bool ret = namespace_execute_cmd(sc->deviceInfo.isoFullPath,
-                                                sc->deviceInfo.filesystemType,
-                                                sc->deviceInfo.mountPoint,
-                                                cmd,
-                                                (const cchar * const *)sc->status.env);
+            NewProcessParam param = {
+                .cmd = "",
+                .fsSize = sc->deviceInfo.isoSize,
+                .fsType = sc->deviceInfo.filesystemType,
+                .mountPoint = sc->deviceInfo.mountPoint,
+                .isoFullPath = sc->deviceInfo.isoFullPath,
+                .env = (const cchar* const*)sc->status.env,
+            };
+            bool ret = namespace_execute_cmd(&param);
             C_LOG_INFO("return: %s", ret ? "true" : "false");
+            break;
+        }
+        case COMMAND_LINE_TYPE_E__CMD_Q_QUIT: {
+            C_LOG_INFO("Quit");
+            g_main_loop_quit(sc->mainLoop);
             break;
         }
         default: {

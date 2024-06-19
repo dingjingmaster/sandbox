@@ -18,6 +18,8 @@
  * @brief 获取块设备
  */
 static UDisksObject* getObjectFromBlockDevice(UDisksClient* client, const gchar* bDevice);
+static bool mklink(const char* src, const char* dest);
+static bool mkbind(const char* src, const char* dest);
 
 
 #if 0
@@ -421,6 +423,62 @@ bool filesystem_is_mount(const char *devPath)
     return mountOK;
 }
 
+bool filesystem_rootfs(const char *mountPoint)
+{
+    c_return_val_if_fail(mountPoint && '/' == mountPoint[0], false);
+
+    char oldPath[2048] = {0};
+
+    getcwd(oldPath, sizeof(oldPath) - 1);
+
+    chdir(mountPoint);
+
+    // 软连接 bin
+    {
+        if (!mklink("usr/bin", "./bin")) {
+            return false;
+        }
+    }
+
+    // 软连接 lib
+    {
+        if (!mklink("usr/lib", "./lib")) {
+            return false;
+        }
+    }
+
+    // 软连接 lib64
+    {
+        if (!mklink("usr/lib", "./lib64")) {
+            return false;
+        }
+    }
+
+    chdir(oldPath);
+
+    // 创建 etc/ 绑定
+    {
+        cchar* etcB = c_strdup_printf("%s/etc", mountPoint);
+        if (!mkbind("/etc", etcB)) {
+            c_free(etcB);
+            return false;
+        }
+        c_free(etcB);
+    }
+
+    // 创建 usr/ 绑定
+    {
+        cchar* usrB = c_strdup_printf("%s/usr", mountPoint);
+        if (!mkbind("/usr", usrB)) {
+            c_free(usrB);
+            return false;
+        }
+        c_free(usrB);
+    }
+
+    return true;
+}
+
 static UDisksObject* getObjectFromBlockDevice(UDisksClient* client, const gchar* dev)
 {
     struct stat statbuf;
@@ -647,4 +705,43 @@ static bool sandbox_format_fs(const char* key, const char* path, csize size)
 #endif
 done:
     return false;
+}
+
+static bool mklink(const char* src, const char* dest)
+{
+    c_return_val_if_fail(src && dest, false);
+
+    if (!c_file_test(dest, C_FILE_TEST_EXISTS)) {
+        errno = 0;
+        int ret = symlink(src, dest);
+        if (0 != ret && errno != EEXIST) {
+            C_LOG_ERROR("'%s - %s' link error(%d): %s", src, dest, errno, c_strerror(errno));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool mkbind(const char* src, const char* dest)
+{
+    c_return_val_if_fail(src && dest, false);
+
+    if (!c_file_test(dest, C_FILE_TEST_EXISTS)) {
+        errno = 0;
+        if (-1 == c_mkdir_with_parents(dest, 0755)) {
+            C_LOG_ERROR("%s error: %s", dest, c_strerror(errno));
+        }
+    }
+
+    // @todo:// 检测是否是挂载点，不是则挂载
+    int flags = MS_BIND;
+    errno = 0;
+    int ret = mount(src, dest, NULL, flags, NULL);
+    if (ret != 0) {
+        C_LOG_ERROR("error: %d -- %s", ret, c_strerror(errno));
+        return false;
+    }
+
+    return true;
 }

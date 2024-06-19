@@ -34,6 +34,11 @@ bool filesystem_generated_iso (const char* absolutePath, cuint64 sizeMB);
  */
 bool filesystem_mount (const char* devName, const char* fsType, const char* mountPoint);
 
+/**
+ * @brief 制作根文件系统
+ */
+bool filesystem_rootfs (const char* mountPoint);
+
 //int filesystem_main (int argc, char* argv[]);
 
 C_END_EXTERN_C
