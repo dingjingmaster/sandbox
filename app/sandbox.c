@@ -48,8 +48,11 @@ struct _SandboxContext
         GSocketAddress*     address;                // SocketAddress
         GSocketService*     listener;               // SocketListener
         char*               sandboxSock;            // 通信用的本地套
-
     } socket;
+
+    struct CmdLine {
+        GOptionContext*     cmdCtx;
+    } cmdLine;
 
     GMainLoop*          mainLoop;
 };
@@ -60,9 +63,10 @@ typedef struct
     gboolean            fileManager;                // 打开文件管理器
 } CmdLine;
 
-static bool     sandbox_send_cmd    (SandboxContext* context);
 static void     sandbox_req         (SandboxContext *context);
 static void     sandbox_process_req (gpointer data, gpointer udata);
+static csize    read_all_data       (GSocket* fr, char** out/*out*/);
+static bool     sandbox_send_cmd    (SandboxContext* context, CommandLine* cmd);
 static gboolean sandbox_new_req     (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData);
 
 static CmdLine gsCmdline = {0};
@@ -164,21 +168,18 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
             g_signal_connect (G_SOCKET_LISTENER(sc->socket.listener), "incoming", (GCallback) sandbox_new_req, sc);
         }
         else {
-            GOptionContext* cmdCtx = NULL;
             do {
                 GError* error = NULL;
-                cmdCtx = g_option_context_new(NULL);
-                g_option_context_add_main_entries(cmdCtx, gsEntry, NULL);
+                sc->cmdLine.cmdCtx = g_option_context_new(NULL);
+                g_option_context_add_main_entries(sc->cmdLine.cmdCtx, gsEntry, NULL);
                 // g_option_context_set_translate_func()
-                if (!g_option_context_parse(cmdCtx, &argc, &argv, &error)) {
+                if (!g_option_context_parse(sc->cmdLine.cmdCtx, &argc, &argv, &error)) {
                     C_LOG_ERROR("parse error: %s", error->message);
-                    c_assert(error);    // FIXME://
+                    ret = false;
                     break;
                 }
             } while (false);
-            if (cmdCtx) {
-                g_option_context_free(cmdCtx);
-            }
+
         }
     } while (0);
 
@@ -374,68 +375,155 @@ static void sandbox_req(SandboxContext *context)
         cmd.cmdtype = COMMAND_LINE_TYPE_E__CMD_Q_OPEN_FILE_MANAGER;
     }
     else {
-        printf("error command or check daemon is exists!\n");
+        char* help = g_option_context_get_help(context->cmdLine.cmdCtx, true, NULL);
+        printf(help);
         return;
     }
 
-    // 打包，请求
-    {
-        GError* error = NULL;
-        const cuint64 len = command_line__get_packed_size(&cmd);
-        char* buf = c_malloc0(len);
-        const cuint64 lenP = command_line__pack(&cmd, buf);
+    sandbox_send_cmd(context, &cmd);
+}
+
+static void sandbox_process_req (gpointer data, gpointer udata)
+{
+    c_return_if_fail(data);
+    if (!udata) { g_object_unref((GSocketConnection*)data); return; }
+
+    char* binStr = NULL;
+    CommandLine* cmd = NULL;
+    GSocketConnection* conn = (GSocketConnection*) data;
+    const SandboxContext* sc = (SandboxContext*) udata;
+
+    GSocket* socket = g_socket_connection_get_socket (conn);
+
+    cuint64 strLen = read_all_data (socket, &binStr);
+    if (strLen <= 0) {
+        C_LOG_ERROR("read client data null");
+        goto out;
+    }
+
+    cmd = command_line__unpack(NULL, strLen, binStr);
+    if (!cmd) {
+        C_LOG_ERROR("CommandLine parse error!");
+        goto out;
+    }
+    switch (cmd->cmdtype) {
+        case COMMAND_LINE_TYPE_E__CMD_Q_OPEN_TERMINATOR: {
+            C_LOG_INFO("Open terminator");
+            break;
+        }
+        case COMMAND_LINE_TYPE_E__CMD_Q_OPEN_FILE_MANAGER: {
+            C_LOG_INFO("Open file manager");
+            break;
+        }
+        default: {
+            C_LOG_ERROR("Unrecognized command type!");
+            break;
+        }
+    }
+
+out:
+    // finished!
+    if (conn)   { g_object_unref (conn); }
+    if (cmd)    { command_line__free_unpacked(cmd, NULL); }
+
+    (void) udata;
+}
+
+static gboolean sandbox_new_req (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData)
+{
+    (void*) ls;
+    (void*) srcObj;
+
+    C_LOG_INFO("new request!");
+
+    c_return_val_if_fail(uData, false);
+
+    g_object_ref(conn);
+
+    GError* error = NULL;
+    g_thread_pool_push(((SandboxContext*)uData)->socket.worker, conn, &error);
+    if (error) {
+        C_LOG_ERROR("%s", error->message);
+        g_object_unref(conn);
+        return false;
+    }
+
+    return true;
+}
+
+static bool sandbox_send_cmd (SandboxContext* context, CommandLine* cmd)
+{
+    c_return_val_if_fail(context && cmd, false);
+
+    char* buf = NULL;
+    GError* error = NULL;
+
+    do {
+        const cuint64 len = command_line__get_packed_size(cmd);
+        buf = c_malloc0(len);
+        const cuint64 lenP = command_line__pack(cmd, buf);
         if (len != lenP) {
             printf("socket error!\n");
-            goto err;
+            break;
         }
 
         g_socket_connect(context->socket.socket, context->socket.address, NULL, &error);
         if (error) {
             printf("connect error: %s\n", error->message);
-            goto err;
+            break;
         }
 
         g_socket_condition_wait(context->socket.socket, G_IO_OUT, NULL, &error);
         if (error) {
             printf("send error: %s\n", error->message);
-            goto err;
+            break;
         }
 
-        printf("send buf[%d]: \n", len);
         g_socket_send_with_blocking(context->socket.socket, buf, len, true, NULL, &error);
         if (error) {
             printf("send error: %s\n", error->message);
-            goto err;
+            break;
         }
-err:
-        return;
-    }
-}
-
-static void sandbox_process_req (gpointer data, gpointer udata)
-{
-
-}
-
-static gboolean sandbox_new_req (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData)
-{
-    C_LOG_INFO("new");
-
-    return true;
-}
-
-static bool sandbox_send_cmd (SandboxContext* context)
-{
-    c_return_val_if_fail(context, false);
-
-    GSocketClient* client = NULL;
-
-    do {
-        client = g_socket_client_new();
-        if (!client) {break;}
-
-        g_socket_client_set_local_address(client, context->socket.address);
-
-
     } while (false);
+
+    c_free(buf);
+    if (error) { g_error_free(error); error = NULL; }
+}
+
+static csize read_all_data(GSocket* fr, char** out/*out*/)
+{
+    c_return_val_if_fail(out, 0);
+
+    gsize len = 0;
+    char* str = NULL;
+    GError* error = NULL;
+
+    gsize readLen = 0;
+    char buf[1024] = {0};
+
+    while ((readLen = g_socket_receive(fr, buf, sizeof(buf) - 1, NULL, &error)) > 0) {
+        if (error) {
+            C_LOG_ERROR("%s", error->message);
+            break;
+        }
+
+        char* tmp = (cchar*) c_malloc0 (sizeof (char) * (len + readLen + 1));
+        if (str && len > 0) {
+            memcpy (tmp, str, len);
+            c_free (str);
+        }
+        memcpy (tmp + len, buf, readLen);
+        str = tmp;
+        len += readLen;
+
+        if (readLen < sizeof (buf) - 1) {
+            break;
+        }
+    }
+
+    if(error) g_error_free(error);
+    if (*out) c_free0 (*out);
+    *out = str;
+
+    return len;
 }

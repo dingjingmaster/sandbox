@@ -12,9 +12,20 @@ C_BEGIN_EXTERN_C
 /**
  * @brief 检查 namespace 是否启用
  */
-bool namespace_check_availed ();
+bool namespace_check_availed    ();
 
-bool namespace_enter();
+/**
+ * @brief
+ * 在私有 namespace 中执行命令
+ * 1. 挂载设备 -- 挂载点, 设备名
+ * 2. 创建设备节点 -- /dev/null
+ * 3. 创建必要软连接 -- (/usr/bin -- /bin) (/usr/lib -- /lib) (/usr/lib -- /lib64)
+ * 4. 与本地目录绑定 -- usr/ etc/
+ * 5. 执行 chroot 时候要执行的命令
+ */
+bool namespace_execute_cmd      (const char* mountPoint, const char* devName, const char* cmd, const char** env);
+
+bool namespace_enter            ();
 
 C_END_EXTERN_C
 

@@ -225,7 +225,7 @@ bool filesystem_generated_iso(const char *absolutePath, cuint64 sizeMB)
         C_LOG_VERB("dir: %s", dirPath);
 
         if (!c_file_test(dirPath, C_FILE_TEST_EXISTS)) {
-            if (0 != c_mkdir_with_parents(dirPath, 0700)) {
+            if (0 != c_mkdir_with_parents(dirPath, 0755)) {
                 C_LOG_VERB("mkdir_with_parents: '%s' error.", dirPath);
                 hasError = true;
             }

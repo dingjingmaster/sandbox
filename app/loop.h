@@ -14,14 +14,14 @@ C_BEGIN_EXTERN_C
 
 typedef struct _LoopDevice LoopDevice;
 
-char*   loop_get_free_device_name();
-bool    loop_mknod(const char* devName);
-bool    loop_check_file_is_inuse(const char* fileName);
-bool    loop_check_device_is_inuse(const char* devName);
-char*   loop_get_device_name_by_file_name(const char* fileName);
+char*   loop_get_free_device_name           ();
+bool    loop_mknod                          (const char* devName);
+bool    loop_check_file_is_inuse            (const char* fileName);
+bool    loop_check_device_is_inuse          (const char* devName);
+char*   loop_get_device_name_by_file_name   (const char* fileName);
 
-// 不需要更新设备
-bool    loop_attach_file_to_loop(const char* fileName, const char* devName);
+/* 不需要更新设备 */
+bool    loop_attach_file_to_loop            (const char* fileName, const char* devName);
 
 void loop_debug_print();
 

@@ -23,3 +23,13 @@ bool namespace_enter()
 {
     return 0;
 }
+
+bool namespace_execute_cmd(const char *mountPoint, const char *devName, const char *cmd, const char **env)
+{
+    return 0;
+}
+
+bool namespace_execute_with_fs()
+{
+    return 0;
+}
