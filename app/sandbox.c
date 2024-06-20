@@ -20,7 +20,7 @@
 
 
 #define DEBUG_ISO_SIZE              1024
-#define DEBUG_FS_TYPE               "ext2"
+#define DEBUG_FS_TYPE               "ext3"
 #define DEBUG_ROOT                  "/usr/local/ultrasec/"
 #define DEBUG_MOUNT_POINT           DEBUG_ROOT"/.sandbox/"
 #define DEBUG_ISO_PATH              DEBUG_ROOT"/data/sandbox.iso"

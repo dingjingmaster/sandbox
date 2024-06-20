@@ -23,6 +23,7 @@ endif ()
 find_package (PkgConfig)
 
 pkg_check_modules(FUSE REQUIRED fuse3)
+pkg_check_modules(MOUNT REQUIRED mount)
 pkg_check_modules(DISK REQUIRED udisks2)
 pkg_check_modules(GLIB REQUIRED gio-2.0)
 pkg_check_modules(PROTO REQUIRED libprotobuf-c)

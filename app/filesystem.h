@@ -39,6 +39,10 @@ bool filesystem_mount (const char* devName, const char* fsType, const char* moun
  */
 bool filesystem_rootfs (const char* mountPoint);
 
+/**
+ * @brief 检测是否是挂载点
+ */
+bool filesystem_is_mountpoint (const char* mountPoint);
 //int filesystem_main (int argc, char* argv[]);
 
 C_END_EXTERN_C

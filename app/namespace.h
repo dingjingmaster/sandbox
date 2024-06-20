@@ -18,7 +18,6 @@ struct _NewProcessParam
     const char*             fsType;
     const char*             mountPoint;
     const char*             isoFullPath;
-
 };
 
 /**
@@ -36,6 +35,11 @@ bool namespace_check_availed    ();
  * 5. 执行 chroot 时候要执行的命令
  */
 bool namespace_execute_cmd      (const NewProcessParam* param);
+
+/**
+ * @brief 进入命名空间
+ */
+bool namespace_enter            ();
 
 C_END_EXTERN_C
 

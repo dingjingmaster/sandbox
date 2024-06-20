@@ -36,6 +36,7 @@ target_link_libraries(sandbox PUBLIC
         ${GLIB_LIBRARIES}
         ${CLIB_LIBRARIES}
         ${DISK_LIBRARIES}
+        ${MOUNT_LIBRARIES}
         ${PROTO_LIBRARIES}
 )
 
@@ -44,6 +45,7 @@ target_include_directories(sandbox PUBLIC
         ${GLIB_INCLUDE_DIRS}
         ${CLIB_INCLUDE_DIRS}
         ${DISK_INCLUDE_DIRS}
+        ${MOUNT_INCLUDE_DIRS}
         ${PROTO_INCLUDE_DIRS}
 )
 

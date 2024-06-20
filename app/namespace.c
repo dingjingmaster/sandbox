@@ -69,6 +69,11 @@ bool namespace_execute_cmd (const NewProcessParam* param)
     return true;
 }
 
+bool namespace_enter()
+{
+    return 0;
+}
+
 
 static int namespace_child_process (void* udata)
 {

@@ -7,9 +7,10 @@
 //#include <fuse.h>
 #include <c/clib.h>
 #include <signal.h>
+#include <sys/stat.h>
+#include <libmount.h>
 #include <sys/mount.h>
 #include <udisks/udisks.h>
-#include <sys/stat.h>
 
 #include "fs/volume.h"
 
@@ -18,8 +19,9 @@
  * @brief 获取块设备
  */
 static UDisksObject* getObjectFromBlockDevice(UDisksClient* client, const gchar* bDevice);
-static bool mklink(const char* src, const char* dest);
-static bool mkbind(const char* src, const char* dest);
+static bool file_is_link    (const char* path);
+static bool mklink          (const char* src, const char* dest);
+static bool mkbind          (const char* src, const char* dest);
 
 
 #if 0
@@ -381,7 +383,7 @@ bool filesystem_mount(const char* devName, const char* fsType, const char *mount
 
     // 开始挂载
     errno = 0;
-    if (0 != mount (devName, mountPoint, fsType, MS_DIRSYNC | MS_NODIRATIME | MS_NOSUID | MS_NOSYMFOLLOW, NULL)) {
+    if (0 != mount (devName, mountPoint, fsType, MS_SILENT | MS_NOSUID, NULL)) {
         C_LOG_ERROR("mount failed :%s", c_strerror(errno));
         return false;
     }
@@ -435,21 +437,21 @@ bool filesystem_rootfs(const char *mountPoint)
 
     // 软连接 bin
     {
-        if (!mklink("usr/bin", "./bin")) {
+        if (!mklink("usr/bin", "bin")) {
             return false;
         }
     }
 
     // 软连接 lib
     {
-        if (!mklink("usr/lib", "./lib")) {
+        if (!mklink("usr/lib", "lib")) {
             return false;
         }
     }
 
     // 软连接 lib64
     {
-        if (!mklink("usr/lib", "./lib64")) {
+        if (!mklink("usr/lib", "lib64")) {
             return false;
         }
     }
@@ -477,6 +479,63 @@ bool filesystem_rootfs(const char *mountPoint)
     }
 
     return true;
+}
+
+bool filesystem_is_mountpoint(const char *mountPoint)
+{
+    c_return_val_if_fail(mountPoint, false);
+
+    struct stat st;
+
+    errno = 0;
+    int ret = lstat(mountPoint, &st);
+    if (ret) {
+        C_LOG_ERROR("get '%s' stat: %s", c_strerror(errno));
+        return false;
+    }
+
+    {
+#ifndef _PATH_PROC_MOUNTINFO
+#define _PATH_PROC_MOUNTINFO	"/proc/self/mountinfo"
+#endif
+        struct libmnt_fs* fs = NULL;
+        struct libmnt_cache* cache = NULL;
+        struct libmnt_table* tb = mnt_new_table_from_file(_PATH_PROC_MOUNTINFO);
+        if (!tb) {
+            int len;
+            struct stat pst;
+            char buf[PATH_MAX], *cn;
+
+            cn = mnt_resolve_path(mountPoint, NULL);
+            len = snprintf(buf, sizeof(buf) - 1, "%s/..", cn ? cn : mountPoint);
+            c_free(cn);
+            if (len < 0 || (size_t) len >= sizeof(buf) - 1) {
+                C_LOG_ERROR("error!");
+                return false;
+            }
+            if (stat(buf, &pst) != 0) {
+                C_LOG_ERROR("stat error");
+                return false;
+            }
+            if (st.st_dev != pst.st_dev || st.st_ino != pst.st_ino) {
+                return true;
+            }
+            return false;
+        }
+
+        cache = mnt_new_cache();
+        mnt_table_set_cache(tb, cache);
+        mnt_unref_cache(cache);
+        fs = mnt_table_find_target(tb, mountPoint, MNT_ITER_BACKWARD);
+        if (fs && mnt_fs_get_target(fs)) {
+            mnt_unref_table(tb);
+            return true;
+        }
+        mnt_unref_table(tb);
+        return false;
+    }
+
+    return S_ISLNK(st.st_mode);
 }
 
 static UDisksObject* getObjectFromBlockDevice(UDisksClient* client, const gchar* dev)
@@ -711,12 +770,17 @@ static bool mklink(const char* src, const char* dest)
 {
     c_return_val_if_fail(src && dest, false);
 
-    if (!c_file_test(dest, C_FILE_TEST_EXISTS)) {
+    if (!c_file_test(dest, C_FILE_TEST_IS_SYMLINK)) {
         errno = 0;
-        int ret = symlink(src, dest);
-        if (0 != ret && errno != EEXIST) {
-            C_LOG_ERROR("'%s - %s' link error(%d): %s", src, dest, errno, c_strerror(errno));
-            return false;
+        if (!file_is_link(dest)) {
+            int ret = symlink(src, dest);
+            if (0 != ret && errno != EEXIST) {
+                C_LOG_ERROR("'%s - %s' link error(%d): %s", src, dest, errno, c_strerror(errno));
+                return false;
+            }
+        }
+        else {
+            C_LOG_VERB("Link file: '%s' exists", dest);
         }
     }
 
@@ -734,7 +798,11 @@ static bool mkbind(const char* src, const char* dest)
         }
     }
 
-    // @todo:// 检测是否是挂载点，不是则挂载
+    if (filesystem_is_mountpoint(dest)) {
+        C_LOG_VERB("%s is mount point!", dest);
+        return true;
+    }
+
     int flags = MS_BIND;
     errno = 0;
     int ret = mount(src, dest, NULL, flags, NULL);
@@ -744,4 +812,15 @@ static bool mkbind(const char* src, const char* dest)
     }
 
     return true;
+}
+
+static bool file_is_link (const char* path)
+{
+    c_return_val_if_fail(path, false);
+
+    struct stat st;
+
+    lstat(path, &st);
+
+    return S_ISLNK(st.st_mode);
 }
