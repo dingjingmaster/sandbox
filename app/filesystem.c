@@ -379,9 +379,11 @@ bool filesystem_mount(const char* devName, const char* fsType, const char *mount
 
     c_return_val_if_fail(c_file_test(mountPoint, C_FILE_TEST_EXISTS), false);
 
-    // 检测是否挂载成功
+    if (filesystem_is_mountpoint(mountPoint)) {
+        C_LOG_VERB("%s already mounted!", mountPoint);
+        return true;
+    }
 
-    // 开始挂载
     errno = 0;
     if (0 != mount (devName, mountPoint, fsType, MS_SILENT | MS_NOSUID, NULL)) {
         C_LOG_ERROR("mount failed :%s", c_strerror(errno));
@@ -538,6 +540,7 @@ bool filesystem_is_mountpoint(const char *mountPoint)
     return S_ISLNK(st.st_mode);
 }
 
+
 static UDisksObject* getObjectFromBlockDevice(UDisksClient* client, const gchar* dev)
 {
     struct stat statbuf;
@@ -564,7 +567,6 @@ static UDisksObject* getObjectFromBlockDevice(UDisksClient* client, const gchar*
 
     return object;
 }
-
 
 static const CHashTable* filesystem_loop_files ()
 {
