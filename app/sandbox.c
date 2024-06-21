@@ -138,7 +138,6 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
         g_socket_set_blocking (sc->socket.socket, true);
 
         if (sandbox_is_first()) {
-
             bool ret = namespace_enter();
             if (!ret) {
                 ret = false;
@@ -146,8 +145,6 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
                 break;
             }
             C_LOG_INFO("sandbox change cwd");
-
-
 
             if (0 == c_access(sc->socket.sandboxSock, R_OK | W_OK)) {
                 c_remove (sc->socket.sandboxSock);
