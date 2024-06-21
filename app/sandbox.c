@@ -190,7 +190,8 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
                     break;
                 }
             } while (false);
-
+            // FIXME:// xorg-xhost
+            system("xhost +");
         }
     } while (0);
 

@@ -11,6 +11,7 @@
 #include <libmount.h>
 #include <sys/mount.h>
 #include <udisks/udisks.h>
+#include <sys/sysmacros.h>
 
 #include "fs/volume.h"
 
@@ -20,6 +21,8 @@
  */
 static UDisksObject* getObjectFromBlockDevice(UDisksClient* client, const gchar* bDevice);
 static bool file_is_link    (const char* path);
+static bool mount_dev       (const char* mountPoint);
+static bool mount_proc      (const char* mountPoint);
 static bool mklink          (const char* src, const char* dest);
 static bool mkbind          (const char* src, const char* dest);
 
@@ -384,17 +387,17 @@ bool filesystem_mount(const char* devName, const char* fsType, const char *mount
         return true;
     }
 
-//    errno = 0;
-//    if (0 != mount("proc", "/proc", "proc", MS_NOSUID|MS_NOEXEC|MS_NODEV, NULL)) {
-//        C_LOG_ERROR("mount failed :%s", c_strerror(errno));
-//        return false;
-//    }
-
     errno = 0;
     if (0 != mount (devName, mountPoint, fsType, MS_SILENT | MS_NOSUID, NULL)) {
         C_LOG_ERROR("mount failed :%s", c_strerror(errno));
         return false;
     }
+
+//    errno = 0;
+//    if (0 != mount("proc", "/proc", "proc", MS_NOSUID|MS_NOEXEC|MS_NODEV, NULL)) {
+//        C_LOG_ERROR("mount failed :%s", c_strerror(errno));
+//        return false;
+//    }
 
     return true;
 }
@@ -484,6 +487,18 @@ bool filesystem_rootfs(const char *mountPoint)
             return false;
         }
         c_free(usrB);
+    }
+
+    // dev
+    if (!mount_dev(mountPoint)) {
+        C_LOG_ERROR("mount dev");
+        return false;
+    }
+
+    // proc
+    if (!mount_proc(mountPoint)) {
+        C_LOG_ERROR("mount proc!");
+        return false;
     }
 
     return true;
@@ -831,4 +846,50 @@ static bool file_is_link (const char* path)
     lstat(path, &st);
 
     return S_ISLNK(st.st_mode);
+}
+
+static bool mount_proc (const char* mountPoint)
+{
+    c_return_val_if_fail(mountPoint, false);
+
+    char* proc = c_strdup_printf("%s/proc", mountPoint);
+    c_return_val_if_fail(proc, false);
+
+    if (!c_file_test(proc, C_FILE_TEST_EXISTS)) {
+        c_mkdir_with_parents(proc, 0777);
+    }
+
+    if (0 != mount("proc", proc, "proc", 0, NULL)) {
+        C_LOG_ERROR("proc mount failed! ");
+        c_free(proc);
+        return false;
+    }
+
+    c_free(proc);
+
+    return true;
+}
+
+static bool mount_dev (const char* mountPoint)
+{
+
+    cchar* dev = c_strdup_printf("%s/dev", mountPoint);
+    if (!c_file_test(dev, C_FILE_TEST_EXISTS)) {
+        c_mkdir_with_parents(dev, 0755);
+    }
+    c_free(dev);
+
+    dev = c_strdup_printf("%s/dev/null", mountPoint);
+    if (!c_file_test(dev, C_FILE_TEST_EXISTS)) {
+        errno = 0;
+        dev_t devT = makedev(1, 3);
+        if (0 != mknod(dev, S_IFCHR | 0777, devT)) {
+            C_LOG_ERROR("mknod /dev/null error: %s", strerror(errno));
+            c_free(dev);
+            return false;
+        }
+    }
+    c_free(dev);
+
+    return true;
 }
