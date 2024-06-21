@@ -25,7 +25,7 @@
 #define DEBUG_MOUNT_POINT           DEBUG_ROOT"/.sandbox/"
 #define DEBUG_ISO_PATH              DEBUG_ROOT"/data/sandbox.iso"
 #define DEBUG_SOCKET_PATH           DEBUG_ROOT"/data/sandbox.sock"
-#define DEBUG_LOCK_PATH             DEBUG_ROOT"/data/.sandbox.lock"
+#define DEBUG_LOCK_PATH             DEBUG_ROOT"/data/sandbox.lock"
 
 
 struct _SandboxContext
@@ -138,6 +138,17 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
         g_socket_set_blocking (sc->socket.socket, true);
 
         if (sandbox_is_first()) {
+
+            bool ret = namespace_enter();
+            if (!ret) {
+                ret = false;
+                C_LOG_ERROR("namespace enter failed!");
+                break;
+            }
+            C_LOG_INFO("sandbox change cwd");
+
+
+
             if (0 == c_access(sc->socket.sandboxSock, R_OK | W_OK)) {
                 c_remove (sc->socket.sandboxSock);
             }
@@ -392,6 +403,7 @@ static void sandbox_req(SandboxContext *context)
 
 static void sandbox_process_req (gpointer data, gpointer udata)
 {
+    C_LOG_VERB("process req");
     c_return_if_fail(data);
     if (!udata) { g_object_unref((GSocketConnection*)data); return; }
 

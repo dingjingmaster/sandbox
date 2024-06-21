@@ -384,6 +384,12 @@ bool filesystem_mount(const char* devName, const char* fsType, const char *mount
         return true;
     }
 
+//    errno = 0;
+//    if (0 != mount("proc", "/proc", "proc", MS_NOSUID|MS_NOEXEC|MS_NODEV, NULL)) {
+//        C_LOG_ERROR("mount failed :%s", c_strerror(errno));
+//        return false;
+//    }
+
     errno = 0;
     if (0 != mount (devName, mountPoint, fsType, MS_SILENT | MS_NOSUID, NULL)) {
         C_LOG_ERROR("mount failed :%s", c_strerror(errno));

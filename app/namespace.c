@@ -11,14 +11,17 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <linux/sched.h>
+#include <sys/mount.h>
 
 #include "loop.h"
 #include "filesystem.h"
 
 
 static int      namespace_child_process         (void* udata);
+static void     namespace_set_propagation       (unsigned long flags);
 static bool     namespace_check_params_debug    (NewProcessParam* param);
 static void     namespace_chroot_execute        (const char* cmd, const char* mountPoint, const char* const * env);
+
 
 bool namespace_check_availed()
 {
@@ -42,6 +45,26 @@ bool namespace_execute_cmd (const NewProcessParam* param)
 
     C_LOG_INFO("Prepare enter new namespace");
 
+#if 1
+//    // unshare -m -p -f
+//    int flags = CLONE_NEWNS | CLONE_NEWPID;
+//
+//    errno = 0;
+//    int ret = unshare(flags);
+//    if (0 != ret) {
+//        C_LOG_ERROR("unshare error: %d %s", errno, c_strerror(errno));
+//        return false;
+//    }
+//
+//    int child = fork();
+//    if (0 == child) {
+//        return true;
+//    }
+
+    namespace_child_process(param);
+
+//    waitpid(child, NULL, 0);
+#else
     int childRet = 0;
     pid_t childPid = -1;
 
@@ -66,12 +89,95 @@ bool namespace_execute_cmd (const NewProcessParam* param)
         C_LOG_INFO("Leave namespace! child ret: %d", ((childRet) & 0x7F));
     }
 
+#endif
+
     return true;
 }
 
+// unshare -m -p -f
 bool namespace_enter()
 {
-    return 0;
+#define UNSHARE_PROPAGATION_DEFAULT	(MS_REC | MS_PRIVATE)
+    C_LOG_INFO("Begin enter new namespace...");
+    int ret = 0;
+    pid_t pid = 0;
+    int status = 0;
+    sigset_t sigset, oldSigset;
+    int flags = CLONE_NEWNS | CLONE_NEWPID;
+    unsigned long propagation = UNSHARE_PROPAGATION_DEFAULT;
+
+    signal(SIGCHLD, SIG_DFL);
+    ret = unshare(flags);
+    if (-1 == ret) {
+        C_LOG_ERROR("unshared failed!");
+        return false;
+    }
+
+    if (0 != sigemptyset(&sigset)
+        || 0 != sigaddset(&sigset, SIGINT)
+        || 0 != sigaddset(&sigset, SIGTERM)
+        || 0 != sigprocmask(SIG_BLOCK, &sigset, &oldSigset)) {
+        C_LOG_ERROR("sigprocmask block failed");
+        return false;
+    }
+
+    pid = fork();
+    switch (pid) {
+        case -1: {
+            C_LOG_ERROR("fork failed!");
+            return false;
+        }
+        case 0: {
+            C_LOG_VERB("[child] process");
+            if (sigprocmask(SIG_SETMASK, &oldSigset, NULL)) {
+                C_LOG_ERROR("sigprocmask restore failed");
+                return false;
+            }
+            break;
+        }
+        default: {
+            C_LOG_VERB("[parent] process");
+            break;
+        }
+    }
+
+    if (pid) {
+        C_LOG_VERB("[parent] process");
+        if (-1 == waitpid(pid, &status, 0)) {
+            C_LOG_ERROR("[parent] waitpid failed!");
+            return false;
+        }
+
+        if (WIFEXITED(status)) {
+            C_LOG_VERB("[parent] WIFEXITED!");
+            return WEXITSTATUS(status);
+        }
+
+        if (WIFSIGNALED(status)) {
+            int termsig = WTERMSIG(status);
+            if (termsig != SIGKILL && signal(termsig, SIG_DFL) == SIG_ERR) {
+                C_LOG_ERROR("[parent] signal handler reset failed.");
+                return false;
+            }
+            if (0 != sigemptyset(&sigset)
+                || 0 != sigaddset(&sigset, termsig)
+                || 0 != sigprocmask(SIG_UNBLOCK, &sigset, NULL)) {
+                C_LOG_ERROR("[parent] sigprocmask unblock failed!");
+                return false;
+            }
+            kill(getpid(), termsig);
+        }
+        C_LOG_ERROR("[parent] failure, child exit failed!");
+        exit(EXIT_FAILURE);
+    }
+
+    if ((flags & CLONE_NEWNS) && propagation) {
+        namespace_set_propagation(propagation);
+    }
+
+    C_LOG_INFO("[child] End enter the new namespace!");
+
+    return true;
 }
 
 
@@ -199,4 +305,15 @@ static bool namespace_check_params_debug (NewProcessParam* param)
 static void namespace_chroot_execute (const char* cmd, const char* mountPoint, const char* const * env)
 {
 
+}
+
+static void namespace_set_propagation (unsigned long flags)
+{
+    if (flags == 0) {
+        return;
+    }
+
+    if (mount("none", "/", NULL, flags, NULL) != 0) {
+        C_LOG_ERROR("cannot change root filesystem propagation");
+    }
 }
