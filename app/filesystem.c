@@ -412,12 +412,18 @@ bool filesystem_is_mount(const char *devPath)
     UDisksObject* udisksObj = NULL;
 
     do {
-        client = udisks_client_new_sync(NULL, NULL);
-        if (!client)    { break; }
+        GError* error = NULL;
+        client = udisks_client_new_sync(NULL, &error);
+        if (!client) {
+            C_LOG_ERROR("udisks_client_new_sync error: %s", error->message);
+            g_error_free(error);
+            break;
+        }
+
         udisksObj = getObjectFromBlockDevice(client, devPath);
-        if (!udisksObj) { break; }
+        if (!udisksObj) { C_LOG_ERROR("getObjectFromBlockDevice error"); break; }
         fs = udisks_object_get_filesystem(udisksObj);
-        if (!fs)        { break; }
+        if (!fs)        { C_LOG_ERROR("udisks_object_get_filesystem error"); break; }
 
         {
             // is mount?
@@ -570,6 +576,7 @@ static UDisksObject* getObjectFromBlockDevice(UDisksClient* client, const gchar*
     UDisksObject* cryptoBackingObject = NULL;
     const gchar* cryptoBackingDevice = NULL;
 
+    C_LOG_INFO("dev: %s", dev ? dev : "<null>");
     c_return_val_if_fail(stat(dev, &statbuf) == 0, object);
 
     block = udisks_client_get_block_for_dev (client, statbuf.st_rdev);

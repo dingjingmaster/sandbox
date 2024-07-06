@@ -51,6 +51,8 @@ bool loop_check_file_is_inuse(const char* fileName)
 
     C_UNLOCK(gsLoopDevice);
 
+    C_LOG_VERB("fileName: %s -- %s -- %s", fileName, c_file_path_format_arr(fileName), ret ? "true" : "false");
+
     return ret;
 }
 
@@ -164,20 +166,27 @@ static bool loop_info_update()
     }
 
     system("losetup -D");
-
+    errno = 0;
     FILE* fr = popen("losetup -a -O 'NAME,BACK-FILE' | tail +2 | awk -F' ' '{print $1\"\t\"$2}'", "r");
-    c_return_val_if_fail(fr, false);
+    if (C_UNLIKELY(!fr)) {
+        C_LOG_ERROR("popen error: %s", c_strerror(errno));
+        pclose(fr);
+        return false;
+    }
 
     char line[10240] = {0};
     while (true) {
         memset(line, 0, sizeof(line));
         if (!c_file_read_line_arr(fr, line, sizeof(line) - 1)) {
+            C_LOG_ERROR("c file read line arr error!");
             break;
         }
 
         c_strchug_arr(line);
         c_strchomp_arr(line);
         c_strtrim_arr(line);
+
+        C_LOG_VERB("%s", line);
 
         char** p = c_strsplit(line, "\t", -1);
         if (!p) {
@@ -193,6 +202,7 @@ static bool loop_info_update()
 
         char* loopT = c_strdup(p[0]);
         char* fileT = c_strdup(p[1]);
+        C_LOG_VERB("%s -- %s", loopT, fileT);
         if (!loopT || !fileT) {
             c_free(loopT);
             c_free(fileT);

@@ -61,9 +61,23 @@ bool namespace_execute_cmd (const NewProcessParam* param)
 //        return true;
 //    }
 
-    namespace_child_process(param);
 
-//    waitpid(child, NULL, 0);
+    int child = fork();
+    switch (child) {
+        case -1: {
+            C_LOG_ERROR("fork error!");
+            return false;
+        }
+        case 0: {
+            namespace_child_process(param);
+            exit(0);
+        }
+        default: {
+//            waitpid(child, NULL, 0);
+            break;
+        }
+    }
+
 #else
     int childRet = 0;
     pid_t childPid = -1;
@@ -193,6 +207,7 @@ static int namespace_child_process (void* udata)
     do {
         cchar* devName = NULL;
         // 检查文件是否存在
+        C_LOG_VERB("Check iso is exists");
         if (!c_file_test(param->isoFullPath, C_FILE_TEST_EXISTS)) {
             if (!filesystem_generated_iso(param->isoFullPath, param->fsSize)) {
                 c_remove(param->isoFullPath);
@@ -202,6 +217,7 @@ static int namespace_child_process (void* udata)
         }
 
         // 检查文件是否被使用
+        C_LOG_VERB("Check iso is inuse");
         if (loop_check_file_is_inuse(param->isoFullPath)) {
             devName = loop_get_device_name_by_file_name(param->isoFullPath);
             if (!devName) { return 3; }
@@ -210,7 +226,7 @@ static int namespace_child_process (void* udata)
         }
         else {
             devName = loop_get_free_device_name();
-            C_LOG_VERB("loop dev '%s'", devName);
+            C_LOG_VERB("free loop dev '%s'", devName);
             if (!devName) { return 3; }
             if (!c_file_test(devName, C_FILE_TEST_EXISTS) && !loop_mknod(devName)) {
                 C_LOG_ERROR("mknod error!");
@@ -218,6 +234,7 @@ static int namespace_child_process (void* udata)
                 return 4;
             }
             // 连接设备
+            C_LOG_VERB("connect loop dev and iso");
             if (!loop_attach_file_to_loop(param->isoFullPath, devName)) {
                 C_LOG_ERROR("attach file to loop error!");
                 c_free(devName);
@@ -226,6 +243,7 @@ static int namespace_child_process (void* udata)
         }
 
         // 修复文件系统
+        C_LOG_VERB("Fix filesystem");
         if (!filesystem_is_mount(devName)) {
             C_LOG_VERB("Filesystem is not mounted!");
             if (!filesystem_check(devName)) {
@@ -238,6 +256,7 @@ static int namespace_child_process (void* udata)
             }
         }
 
+        C_LOG_VERB("Mount filesystem");
         if (!filesystem_mount(devName, param->fsType, param->mountPoint)) {
             C_LOG_ERROR("Filesystem mount error!");
             c_free(devName);
@@ -325,6 +344,7 @@ static void namespace_chroot_execute (const char* cmd, const char* mountPoint, c
     // run command
     errno = 0;
     system(cmd);
+    C_LOG_VERB("system OK!");
     if (0 != errno) {
         C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno));
         return;
