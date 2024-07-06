@@ -710,7 +710,7 @@ terminal_options_parse (const char *working_directory,
 	options->default_fullscreen = FALSE;
 	options->default_maximize = FALSE;
 	options->execute = FALSE;
-	options->use_factory = TRUE;
+	options->use_factory = FALSE;
 	options->initial_workspace = -1;
 
 	options->env = g_strdupv (env);
