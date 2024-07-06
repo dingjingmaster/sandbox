@@ -427,7 +427,7 @@ static void sandbox_process_req (gpointer data, gpointer udata)
         case COMMAND_LINE_TYPE_E__CMD_Q_OPEN_TERMINATOR: {
             C_LOG_INFO("Open terminator");
             NewProcessParam param = {
-                .cmd = "ls",
+                .cmd = TERMINATOR,
                 .fsSize = sc->deviceInfo.isoSize,
                 .fsType = sc->deviceInfo.filesystemType,
                 .mountPoint = sc->deviceInfo.mountPoint,

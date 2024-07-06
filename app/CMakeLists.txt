@@ -51,4 +51,5 @@ target_include_directories(sandbox PUBLIC
 
 target_compile_definitions(sandbox PUBLIC
         -D_GNU_SOURCE
+        -DTERMINATOR=\"\\"sandbox-mate-terminal --disable-factory\\"\"
 )

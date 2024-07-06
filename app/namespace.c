@@ -304,7 +304,31 @@ static bool namespace_check_params_debug (NewProcessParam* param)
 
 static void namespace_chroot_execute (const char* cmd, const char* mountPoint, const char* const * env)
 {
+    C_LOG_INFO("cmd: '%s', mountpoint: '%s'", cmd ? cmd : "<null>", mountPoint ? mountPoint : "<null>")
 
+    c_return_if_fail(cmd && mountPoint);
+
+    // chdir
+    errno = 0;
+    if ( 0 != chdir(mountPoint)) {
+        C_LOG_ERROR("chdir error: %s", c_strerror(errno));
+        return;
+    }
+
+    // chroot
+    errno = 0;
+    if ( 0 != chroot(mountPoint)) {
+        C_LOG_ERROR("chroot error: %s", c_strerror(errno));
+        return;
+    }
+
+    // run command
+    errno = 0;
+    system(cmd);
+    if (0 != errno) {
+        C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno));
+        return;
+    }
 }
 
 static void namespace_set_propagation (unsigned long flags)

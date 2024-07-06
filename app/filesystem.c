@@ -891,5 +891,31 @@ static bool mount_dev (const char* mountPoint)
     }
     c_free(dev);
 
+    // pts
+    dev = c_strdup_printf("%s/dev/pts", mountPoint);
+    if (!c_file_test(dev, C_FILE_TEST_EXISTS)) {
+        errno = 0;
+        c_mkdir_with_parents(dev, 0755);
+    }
+    if (0 != mount("none", dev, "devpts", 0, NULL)) {
+        C_LOG_ERROR("proc mount failed! ");
+        c_free(dev);
+        return false;
+    }
+    c_free(dev);
+
+    // ptmx
+    dev = c_strdup_printf("%s/dev/ptmx", mountPoint);
+    if (!c_file_test(dev, C_FILE_TEST_EXISTS)) {
+        errno = 0;
+        dev_t devT = makedev(5, 2);
+        if (0 != mknod(dev, S_IFCHR | 0777, devT)) {
+            C_LOG_ERROR("mknod /dev/ptmx error: %s", strerror(errno));
+            c_free(dev);
+            return false;
+        }
+    }
+    c_free(dev);
+
     return true;
 }
