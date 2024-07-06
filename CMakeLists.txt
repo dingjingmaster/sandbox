@@ -22,12 +22,18 @@ endif ()
 
 find_package (PkgConfig)
 
+pkg_check_modules(X REQUIRED x11)
+pkg_check_modules(ATK REQUIRED atk)
 pkg_check_modules(FUSE REQUIRED fuse3)
+pkg_check_modules(DCONF REQUIRED dconf)
 pkg_check_modules(MOUNT REQUIRED mount)
+pkg_check_modules(GDK REQUIRED gdk-3.0)
 pkg_check_modules(DISK REQUIRED udisks2)
 pkg_check_modules(GLIB REQUIRED gio-2.0)
+pkg_check_modules(VTE REQUIRED vte-2.91)
 pkg_check_modules(PROTO REQUIRED libprotobuf-c)
 pkg_check_modules(CLIB REQUIRED clibrary-c-static)
 pkg_check_modules(PKEXEC REQUIRED polkit-gobject-1)
 
 add_subdirectory(app)
+add_subdirectory(3thrd)
