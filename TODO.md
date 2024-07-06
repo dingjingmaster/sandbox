@@ -1,0 +1,3 @@
+- [ ] 整合 mate-terminal
+- [ ] 整合 nemo
+- [ ] deb 打包
