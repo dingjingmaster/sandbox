@@ -441,7 +441,7 @@ static void sandbox_process_req (gpointer data, gpointer udata)
         case COMMAND_LINE_TYPE_E__CMD_Q_OPEN_FILE_MANAGER: {
             C_LOG_INFO("Open file manager");
             NewProcessParam param = {
-                .cmd = "",
+                .cmd = FILE_MANAGER,
                 .fsSize = sc->deviceInfo.isoSize,
                 .fsType = sc->deviceInfo.filesystemType,
                 .mountPoint = sc->deviceInfo.mountPoint,
