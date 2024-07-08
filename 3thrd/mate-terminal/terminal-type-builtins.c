@@ -6,7 +6,7 @@
 #include "terminal-type-builtins.h"
 /* enumerations from "/data/code/mate-terminal/buildDir/../src/terminal-profile.h" */
 
-#include "/data/code/mate-terminal/buildDir/../src/terminal-profile.h"
+#include "terminal-profile.h"
 GType
 terminal_title_mode_get_type (void)
 {

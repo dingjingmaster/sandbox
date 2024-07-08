@@ -1,0 +1,1 @@
+install(FILES sandbox.service DESTINATION /etc/systemd/system/)

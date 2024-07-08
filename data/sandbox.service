@@ -1,0 +1,13 @@
+[Unit]
+Description=Sandbox
+After=display-manager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/sandbox
+ExecStop=kill -9 $(pidof sandbox)
+Restart=always
+
+[Install]
+Alias=sandbox.service
+WantedBy=multi-user.target

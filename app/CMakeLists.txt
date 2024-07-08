@@ -54,3 +54,5 @@ target_compile_definitions(sandbox PUBLIC
         -DTERMINATOR=\"\\"sandbox-mate-terminal\\"\"
         -DFILE_MANAGER=\"\\"sandbox-nemo\\"\"
 )
+
+install(TARGETS sandbox DESTINATION /usr/bin)

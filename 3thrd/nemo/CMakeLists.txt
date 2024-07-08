@@ -214,3 +214,5 @@ target_compile_definitions(sandbox-nemo PUBLIC
         -DNEMO_DATADIR=\"/usr/local/share/nemo\"
         -DNEMO_EXTENSIONDIR=\"/usr/local/lib/nemo/extensions-3.0\"
 )
+
+install(TARGETS sandbox-nemo DESTINATION /usr/bin/)

@@ -64,3 +64,5 @@ target_compile_definitions(sandbox-mate-terminal PUBLIC
         -DGTK_DISABLE_SINGLE_INCLUDES
         -DTERMINAL_COMPILATION
 )
+
+install(TARGETS sandbox-mate-terminal DESTINATION /usr/bin/)
