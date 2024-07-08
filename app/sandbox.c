@@ -91,6 +91,21 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
         sc = c_malloc0(sizeof(SandboxContext));
         if (!sc) { ret = false; break; }
 
+        // 创建必要文件夹
+        // root
+        if (!c_file_test(DEBUG_ROOT, C_FILE_TEST_EXISTS) || c_file_test(DEBUG_ROOT, C_FILE_TEST_IS_DIR)) {
+            c_remove(DEBUG_ROOT);
+            c_mkdir_with_parents(DEBUG_ROOT, 0755);
+        }
+
+        // root/data
+        cchar* rootData = c_strdup_printf("%s/data", DEBUG_ROOT);
+        if (!c_file_test(rootData, C_FILE_TEST_EXISTS) || c_file_test(rootData, C_FILE_TEST_IS_DIR)) {
+            c_remove(rootData);
+            c_mkdir_with_parents(rootData, 0755);
+        }
+        c_free0(rootData);
+
         // device
         sc->deviceInfo.isoFullPath = c_strdup(DEBUG_ISO_PATH);
         sc->deviceInfo.isoFullPath = c_file_path_format_arr(sc->deviceInfo.isoFullPath);
