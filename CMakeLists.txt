@@ -42,4 +42,5 @@ pkg_check_modules(TRACKER REQUIRED tracker-sparql-3.0)
 pkg_check_modules(CINNAMON_DESKTOP REQUIRED cinnamon-desktop)
 
 add_subdirectory(app)
+add_subdirectory(data)
 add_subdirectory(3thrd)
