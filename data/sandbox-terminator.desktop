@@ -1,0 +1,15 @@
+[Desktop Entry]
+Version=1.0
+Name=sandbox terminator
+Name[zh_CN]=沙箱-终端
+Comment=sandbox
+Comment[zh_CN]=打开终端
+GenericName=sandbox
+Keywords=Internet;Browser;
+Keywords[zh_CN]=Browser;网站;
+Exec=/usr/bin/sandbox -t
+Icon=firefox
+Terminal=false
+Type=Application
+StartupNotify=true
+Categories=Network;WebBrowser;
