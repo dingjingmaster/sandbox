@@ -141,7 +141,7 @@ bool loop_attach_file_to_loop(const char *fileName, const char *devName)
         char buf[16] = {0};
         c_file_read_line_arr(fr, buf, sizeof(buf) - 1);
         if (c_strlen(buf) > 0 && 0 == c_strcmp0("0", buf)) {
-            C_LOG_ERROR("error: %s", buf);
+            C_LOG_INFO("error: %s", buf);
             res = false;
         }
     } while (false);

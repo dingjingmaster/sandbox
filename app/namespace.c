@@ -246,7 +246,7 @@ static int namespace_child_process (void* udata)
         C_LOG_VERB("Fix filesystem");
         if (!filesystem_is_mount(devName)) {
             C_LOG_VERB("Filesystem is not mounted!");
-            if (!filesystem_check(devName)) {
+            if (!filesystem_check(devName, param->fsType)) {
                 C_LOG_VERB("Filesystem is check error!");
                 if (!filesystem_format(devName, param->fsType)) {
                     C_LOG_ERROR("Filesystem format error!");

@@ -17,7 +17,7 @@ bool filesystem_format (const char* devPath, const char* fsType);
 /**
  * @brief 检查文件系统是否正常，不正常则尝试修复，修复不成功则返回false
  */
-bool filesystem_check (const char* devPath);
+bool filesystem_check (const char* devPath, const char* fsType);
 
 /**
  * @brief 检查设备是否被挂载

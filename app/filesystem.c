@@ -5,11 +5,14 @@
 #include "filesystem.h"
 
 //#include <fuse.h>
+#include <stdio.h>
 #include <c/clib.h>
 #include <signal.h>
+#include <mntent.h>
 #include <sys/stat.h>
 #include <libmount.h>
 #include <sys/mount.h>
+#include <ext2fs/ext2fs.h>
 #include <udisks/udisks.h>
 #include <sys/sysmacros.h>
 
@@ -286,6 +289,60 @@ bool filesystem_format(const char *devPath, const char *fsType)
     c_return_val_if_fail(devPath && fsType, false);
 
     bool formatted = false;
+
+    if ((0 == c_strcmp0(fsType, "ext2")) || (0 == c_strcmp0(fsType, "ext3")) || (0 == c_strcmp0(fsType, "ext4"))) {
+        FILE* popenFr = NULL;
+        do {
+            char* formatCmd = NULL;
+            char* cmdBuf = c_strdup_printf("mkfs.%s", fsType);
+            char* bin = c_strdup_printf("/bin/%s", cmdBuf);
+            char* usrBin = c_strdup_printf("/usr/bin/%s", cmdBuf);
+            char* sbin = c_strdup_printf("/sbin/%s", cmdBuf);
+            char* usrSbin = c_strdup_printf("/usr/sbin/%s", cmdBuf);
+
+            do {
+                if (c_file_test(bin, C_FILE_TEST_EXISTS)) {
+                    formatCmd = c_strdup_printf("yes | %s %s > /dev/null 2>&1 && $?", bin, devPath);
+                }
+                else if (c_file_test(usrBin, C_FILE_TEST_EXISTS)) {
+                    formatCmd = c_strdup_printf("yes | %s %s > /dev/null 2>&1 && $?", usrBin, devPath);
+                }
+                else if (c_file_test(sbin, C_FILE_TEST_EXISTS)) {
+                    formatCmd = c_strdup_printf("yes | %s %s > /dev/null 2>&1 && $?", sbin, devPath);
+                }
+                else if (c_file_test(usrSbin, C_FILE_TEST_EXISTS)) {
+                    formatCmd = c_strdup_printf("yes | %s %s > /dev/null 2>&1 && $?", usrSbin, devPath);
+                }
+            } while (0);
+
+            c_free(cmdBuf);
+            c_free(bin);
+            c_free(usrBin);
+            c_free(sbin);
+            c_free(usrSbin);
+
+            if (formatCmd) {
+                popenFr = popen(formatCmd, "r");
+                c_free(formatCmd);
+                if (!popenFr) {
+                    C_LOG_ERROR("popen format error!");
+                    break;
+                }
+
+                char buf[16] = {0};
+                c_file_read_line_arr(popenFr, buf, sizeof(buf) - 1);
+                if (c_strlen(buf) > 0 && 0 == c_strcmp0("0", buf)) {
+                    formatted = true;
+                }
+            }
+        } while (0);
+        if (popenFr) {
+            pclose(popenFr);
+        }
+    }
+
+    c_return_val_if_fail(formatted, true);
+
     UDisksBlock* block = NULL;
     UDisksClient* client = NULL;
     UDisksObject* udisksObj = NULL;
@@ -319,11 +376,35 @@ bool filesystem_format(const char *devPath, const char *fsType)
     return formatted;
 }
 
-bool filesystem_check(const char *devPath)
+bool filesystem_check(const char *devPath, const char* fsType)
 {
     c_return_val_if_fail(devPath, false);
 
     bool checkOK = false;
+
+    if (fsType && (0 == c_strcmp0(fsType, "ext2") || (0 == c_strcmp0(fsType, "ext3")))) {
+        ext2_filsys fs;
+        errcode_t error;
+
+        do {
+            error = ext2fs_open(devPath, EXT2_FLAG_RW, 0, 0, unix_io_manager, &fs);
+            if (error) {
+                C_LOG_ERROR("Open '%s' error: %s", devPath, c_strerror(errno));
+                break;
+            }
+
+            error = ext2fs_check_desc(fs);
+            if (error) {
+                C_LOG_ERROR("Filesystem check error: '%s'", c_strerror(errno));
+            }
+            else {
+                checkOK = true;
+            }
+            ext2fs_close(fs);
+            return checkOK;
+        } while (0);
+    }
+
     UDisksFilesystem* fs = NULL;
     UDisksClient* client = NULL;
     UDisksObject* udisksObj = NULL;
@@ -393,12 +474,6 @@ bool filesystem_mount(const char* devName, const char* fsType, const char *mount
         return false;
     }
 
-//    errno = 0;
-//    if (0 != mount("proc", "/proc", "proc", MS_NOSUID|MS_NOEXEC|MS_NODEV, NULL)) {
-//        C_LOG_ERROR("mount failed :%s", c_strerror(errno));
-//        return false;
-//    }
-
     return true;
 }
 
@@ -407,12 +482,33 @@ bool filesystem_is_mount(const char *devPath)
     c_return_val_if_fail(devPath, false);
 
     bool mountOK = false;
-    UDisksFilesystem* fs = NULL;
-    UDisksClient* client = NULL;
-    UDisksObject* udisksObj = NULL;
+
+#define ETC_MTAB "/etc/mtab"
+    if (c_file_test(ETC_MTAB, C_FILE_TEST_EXISTS)) {
+        do {
+            struct mntent* ent = NULL;
+            FILE* mtab = setmntent(ETC_MTAB, "r");
+            if (NULL == mtab) {
+                break;
+            }
+
+            while ((ent == getmntent(mtab)) != NULL) {
+                if (0 == c_strcmp0(c_file_path_format_arr(devPath),
+                                    c_file_path_format_arr(ent->mnt_fsname))) {
+                    mountOK = true;
+                    break;
+                }
+            }
+        } while (0);
+        return mountOK;
+    }
+
+    UDisksFilesystem *fs = NULL;
+    UDisksClient *client = NULL;
+    UDisksObject *udisksObj = NULL;
 
     do {
-        GError* error = NULL;
+        GError *error = NULL;
         client = udisks_client_new_sync(NULL, &error);
         if (!client) {
             C_LOG_ERROR("udisks_client_new_sync error: %s", error->message);
@@ -421,13 +517,19 @@ bool filesystem_is_mount(const char *devPath)
         }
 
         udisksObj = getObjectFromBlockDevice(client, devPath);
-        if (!udisksObj) { C_LOG_ERROR("getObjectFromBlockDevice error"); break; }
+        if (!udisksObj) {
+            C_LOG_ERROR("getObjectFromBlockDevice error");
+            break;
+        }
         fs = udisks_object_get_filesystem(udisksObj);
-        if (!fs)        { C_LOG_ERROR("udisks_object_get_filesystem error"); break; }
+        if (!fs) {
+            C_LOG_ERROR("udisks_object_get_filesystem error");
+            break;
+        }
 
         {
             // is mount?
-            const char* const* mp = udisks_filesystem_get_mount_points(fs);
+            const char *const *mp = udisks_filesystem_get_mount_points(fs);
             if (c_strv_const_length(mp) > 0) {
                 mountOK = true;
                 break;
@@ -435,9 +537,10 @@ bool filesystem_is_mount(const char *devPath)
         }
     } while (false);
 
-    if (fs)         { g_object_unref(fs); }
-    if (udisksObj)  { g_object_unref(udisksObj); }
-    if (client)     { g_object_unref(client); }
+    if (fs) { g_object_unref(fs); }
+    if (udisksObj) { g_object_unref(udisksObj); }
+    if (client) { g_object_unref(client); }
+
 
     return mountOK;
 }

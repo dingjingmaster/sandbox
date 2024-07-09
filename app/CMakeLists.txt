@@ -34,6 +34,7 @@ add_executable(sandbox main.c ${SANDBOX_SRC} ${PROTO_SRC_C})
 target_link_libraries(sandbox PUBLIC
 #        ${FUSE_LIBRARIES}
         ${GLIB_LIBRARIES}
+        ${E2FS_LIBRARIES}
         ${CLIB_LIBRARIES}
         ${DISK_LIBRARIES}
         ${MOUNT_LIBRARIES}
@@ -43,6 +44,7 @@ target_link_libraries(sandbox PUBLIC
 target_include_directories(sandbox PUBLIC
 #        ${FUSE_INCLUDE_DIRS}
         ${GLIB_INCLUDE_DIRS}
+        ${E2FS_INCLUDE_DIRS}
         ${CLIB_INCLUDE_DIRS}
         ${DISK_INCLUDE_DIRS}
         ${MOUNT_INCLUDE_DIRS}

@@ -65,6 +65,7 @@ typedef struct
     gboolean            fileManager;                // 打开文件管理器
 } CmdLine;
 
+static void     sandbox_init_env    (cchar*** env);
 static void     sandbox_req         (SandboxContext *context);
 static void     sandbox_process_req (gpointer data, gpointer udata);
 static csize    read_all_data       (GSocket* fr, char** out/*out*/);
@@ -160,6 +161,9 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
                 break;
             }
             C_LOG_INFO("sandbox change cwd");
+
+            // init environment
+            sandbox_init_env(&(sc->status.env));
 
             if (0 == c_access(sc->socket.sandboxSock, R_OK | W_OK)) {
                 c_remove (sc->socket.sandboxSock);
@@ -266,7 +270,7 @@ bool sandbox_mount_filesystem(SandboxContext *context)
     }
 
     // 检查是否需要格式化文件系统，需要则进行系统格式化
-    if (!filesystem_check(context->deviceInfo.loopDevName)) {
+    if (!filesystem_check(context->deviceInfo.loopDevName, context->deviceInfo.filesystemType)) {
         if (!filesystem_format(context->deviceInfo.loopDevName, context->deviceInfo.filesystemType)) {
             C_LOG_ERROR("device format error!");
             return false;
@@ -583,4 +587,88 @@ static csize read_all_data(GSocket* fr, char** out/*out*/)
     *out = str;
 
     return len;
+}
+
+static void sandbox_init_env (cchar*** env)
+{
+    c_return_if_fail(env);
+
+#define UPDATE_AND_SAVE_ENV(key, value, kv) \
+do {                                        \
+    c_ptr_array_add(envArr, kv);            \
+    c_setenv(key, value, true);             \
+} while (0)
+
+#define USE_DEFAULT_ENV(key, value) \
+do {                                \
+    cchar* str = c_strdup_printf("%s=%s", key, value); \
+    UPDATE_AND_SAVE_ENV(key, value, str); \
+} while (0)
+
+#define DELETE_DEFAULT_ENV(key) \
+do { \
+    c_unsetenv(key); \
+} while (0)
+
+    char** orgEnv = c_get_environ();
+    if (orgEnv) {
+        CPtrArray* envArr = c_ptr_array_new();
+        for (int i = 0; orgEnv[i]; ++i) {
+            char** arr = c_strsplit(orgEnv[i], "=", 2);
+            if (c_strv_length(arr) != 2) {
+                c_strfreev(arr);
+                continue;
+            }
+
+            const char* key = arr[0];
+            const char* value = arr[1];
+            // 保留 LC_xxx
+            if (c_str_has_prefix(key, "LC_")
+                || (0 == c_strcmp0(key, "_"))
+                || (0 == c_strcmp0(key, "PWD"))
+                || (0 == c_strcmp0(key, "HOME"))
+                || (0 == c_strcmp0(key, "LANG"))
+                || (0 == c_strcmp0(key, "USER"))
+                || (0 == c_strcmp0(key, "SHLVL"))
+                || (0 == c_strcmp0(key, "LOGNAME"))
+            ) {
+                USE_DEFAULT_ENV(key, value);
+                c_strfreev(arr);
+                continue;
+            }
+            else if (0 == c_strcmp0(key, "PATH") || c_strcmp0(key, "path")) {
+                cchar* str = c_strdup("PATH=/usr/local/bin:/usr/local/sbin/:/usr/bin/:/usr/sbin:/bin:/sbin");
+                UPDATE_AND_SAVE_ENV(key, value, str);
+                c_strfreev(arr);
+                continue;
+            }
+            else if (0 == c_strcmp0(key, "SHELL")) {
+                cchar* str = NULL;
+                if (c_file_test("/usr/bin/bash", C_FILE_TEST_EXISTS)) {
+                    str = c_strdup("SHELL=/usr/bin/bash");
+                }
+                else if (c_file_test("/bin/bash", C_FILE_TEST_EXISTS)) {
+                    str = c_strdup("SHELL=/bin/bash");
+                }
+                else {
+                    str = c_strdup_printf("%s=%s", key, value);
+                }
+                UPDATE_AND_SAVE_ENV(key, value, str);
+                c_strfreev(arr);
+            }
+            else {
+                DELETE_DEFAULT_ENV(key);
+                c_strfreev(arr);
+            }
+        }
+
+        (*env) = (char**) c_ptr_array_free(envArr, false);
+        c_free(orgEnv);
+    }
+
+#if DEBUG
+    for (int i = 0; (*env)[i]; ++i) {
+        C_LOG_DEBUG("[ENV] '%s'", (*env)[i]);
+    }
+#endif
 }
