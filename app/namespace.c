@@ -4,6 +4,7 @@
 
 #include "namespace.h"
 
+#include <pwd.h>
 #include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,7 +21,7 @@
 static int      namespace_child_process         (void* udata);
 static void     namespace_set_propagation       (unsigned long flags);
 static bool     namespace_check_params_debug    (NewProcessParam* param);
-static void     namespace_chroot_execute        (const char* cmd, const char* mountPoint, const char* const * env);
+static void     namespace_chroot_execute        (const char* cmd, const char* mountPoint, char** env);
 
 
 bool namespace_check_availed()
@@ -321,7 +322,7 @@ static bool namespace_check_params_debug (NewProcessParam* param)
     return true;
 }
 
-static void namespace_chroot_execute (const char* cmd, const char* mountPoint, const char* const * env)
+static void namespace_chroot_execute (const char* cmd, const char* mountPoint, char** env)
 {
     C_LOG_INFO("cmd: '%s', mountpoint: '%s'", cmd ? cmd : "<null>", mountPoint ? mountPoint : "<null>")
 
@@ -341,13 +342,99 @@ static void namespace_chroot_execute (const char* cmd, const char* mountPoint, c
         return;
     }
 
+    // set env
+    if (env) {
+        for (int i = 0; env[i]; ++i) {
+            char** arr = c_strsplit(env[i], "=", 2);
+            if (c_strv_length(arr) != 2) {
+                C_LOG_ERROR("error ENV %s", env[i]);
+                c_strfreev(arr);
+                continue;
+            }
+
+            char* key = arr[0];
+            char* val = arr[1];
+            C_LOG_VERB("[ENV] set %s", env[i]);
+            c_setenv(key, val, true);
+            c_strfreev(arr);
+        }
+    }
+
+    // change user
+    if (c_getenv("USER")) {
+        errno = 0;
+        do {
+            struct passwd* pwd = getpwnam(c_getenv("USER"));
+            if (!pwd) {
+                C_LOG_ERROR("get struct passwd error: %s", c_strerror(errno));
+                break;
+            }
+            if (!c_file_test(pwd->pw_dir, C_FILE_TEST_EXISTS)) {
+                errno = 0;
+                if (!c_file_test("/home", C_FILE_TEST_EXISTS)) {
+                    c_mkdir("/home", 0755);
+                }
+                if (0 != c_mkdir(pwd->pw_dir, 0700)) {
+                    C_LOG_ERROR("mkdir error: %s", c_strerror(errno));
+                }
+                chown(pwd->pw_dir, pwd->pw_uid, pwd->pw_gid);
+            }
+
+            if (pwd->pw_dir) {
+                c_setenv("HOME", pwd->pw_dir, true);
+            }
+
+            setuid(pwd->pw_uid);
+            seteuid(pwd->pw_uid);
+
+            setgid(pwd->pw_gid);
+            setegid(pwd->pw_gid);
+        } while (0);
+    }
+
+#ifdef DEBUG
+    cchar** envs = c_get_environ();
+    for (int i = 0; envs[i]; ++i) {
+        c_log_raw(C_LOG_LEVEL_VERB, "%s", envs[i]);
+    }
+#endif
+
     // run command
-    errno = 0;
-    system(cmd);
-    C_LOG_VERB("system OK!");
-    if (0 != errno) {
-        C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno));
-        return;
+#define CHECK_AND_RUN(dir)                              \
+do {                                                    \
+    char* cmdPath = c_strdup_printf("%s/%s", dir, cmd); \
+    C_LOG_VERB("Found cmd: '%s'", cmdPath);             \
+    if (c_file_test(cmdPath, C_FILE_TEST_EXISTS)) {     \
+        C_LOG_VERB("run cmd: '%s'", cmdPath);           \
+        errno = 0;                                      \
+        execvpe(cmdPath, NULL, env);                    \
+        if (0 != errno) {                               \
+            C_LOG_ERROR("execute cmd '%s' error: %s",   \
+                cmdPath, c_strerror(errno));            \
+            return;                                     \
+        }                                               \
+    }                                                   \
+    c_free(cmdPath);                                    \
+} while (0); break
+
+    if (cmd[0] == '/') {
+        C_LOG_VERB("run cmd: '%s'", cmd);
+        errno = 0;
+        execvpe(cmd, NULL, env);
+        if (0 != errno) { C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno)); return; }
+    }
+    else {
+        do {
+            CHECK_AND_RUN("/bin");
+            CHECK_AND_RUN("/usr/bin");
+            CHECK_AND_RUN("/usr/local/bin");
+
+            CHECK_AND_RUN("/sbin");
+            CHECK_AND_RUN("/usr/sbin");
+            CHECK_AND_RUN("/usr/local/sbin");
+
+            C_LOG_ERROR("Cannot found binary path");
+        } while (0);
     }
 }
 

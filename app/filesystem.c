@@ -598,6 +598,19 @@ bool filesystem_rootfs(const char *mountPoint)
         c_free(usrB);
     }
 
+    // 创建 home
+    {
+        cchar* usrB = c_strdup_printf("%s/home", mountPoint);
+        cint oldMask = umask(0);
+        if (!c_mkdir(mountPoint, 0755)) {
+            c_free(usrB);
+            umask(oldMask);
+            return false;
+        }
+        umask(oldMask);
+        c_free(usrB);
+    }
+
     // dev
     if (!mount_dev(mountPoint)) {
         C_LOG_ERROR("mount dev");
@@ -982,7 +995,6 @@ static bool mount_proc (const char* mountPoint)
 
 static bool mount_dev (const char* mountPoint)
 {
-
     cchar* dev = c_strdup_printf("%s/dev", mountPoint);
     if (!c_file_test(dev, C_FILE_TEST_EXISTS)) {
         c_mkdir_with_parents(dev, 0755);
@@ -992,12 +1004,15 @@ static bool mount_dev (const char* mountPoint)
     dev = c_strdup_printf("%s/dev/null", mountPoint);
     if (!c_file_test(dev, C_FILE_TEST_EXISTS)) {
         errno = 0;
+        cint oldMask = umask(0);
         dev_t devT = makedev(1, 3);
         if (0 != mknod(dev, S_IFCHR | 0777, devT)) {
             C_LOG_ERROR("mknod /dev/null error: %s", strerror(errno));
             c_free(dev);
+            umask(oldMask);
             return false;
         }
+        umask(oldMask);
     }
     c_free(dev);
 
@@ -1005,7 +1020,7 @@ static bool mount_dev (const char* mountPoint)
     dev = c_strdup_printf("%s/dev/pts", mountPoint);
     if (!c_file_test(dev, C_FILE_TEST_EXISTS)) {
         errno = 0;
-        c_mkdir_with_parents(dev, 0755);
+        c_mkdir_with_parents(dev, 0777);
     }
     if (0 != mount("none", dev, "devpts", 0, NULL)) {
         C_LOG_ERROR("proc mount failed! ");
@@ -1018,12 +1033,15 @@ static bool mount_dev (const char* mountPoint)
     dev = c_strdup_printf("%s/dev/ptmx", mountPoint);
     if (!c_file_test(dev, C_FILE_TEST_EXISTS)) {
         errno = 0;
+        cint oldMask = umask(0);
         dev_t devT = makedev(5, 2);
         if (0 != mknod(dev, S_IFCHR | 0777, devT)) {
             C_LOG_ERROR("mknod /dev/ptmx error: %s", strerror(errno));
             c_free(dev);
+            umask(oldMask);
             return false;
         }
+        umask(oldMask);
     }
     c_free(dev);
 

@@ -13,7 +13,7 @@ typedef struct _NewProcessParam     NewProcessParam;
 struct _NewProcessParam
 {
     const char*             cmd;
-    const char**            env;
+    char**                  env;
     cuint64                 fsSize;
     const char*             fsType;
     const char*             mountPoint;

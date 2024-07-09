@@ -65,12 +65,13 @@ typedef struct
     gboolean            fileManager;                // 打开文件管理器
 } CmdLine;
 
-static void     sandbox_init_env    (cchar*** env);
-static void     sandbox_req         (SandboxContext *context);
-static void     sandbox_process_req (gpointer data, gpointer udata);
-static csize    read_all_data       (GSocket* fr, char** out/*out*/);
-static bool     sandbox_send_cmd    (SandboxContext* context, CommandLine* cmd);
-static gboolean sandbox_new_req     (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData);
+static void     sandbox_init_env        (cchar*** env);
+static void     sandbox_req             (SandboxContext *context);
+static void     sandbox_process_req     (gpointer data, gpointer udata);
+static csize    read_all_data           (GSocket* fr, char** out/*out*/);
+static bool     sandbox_send_cmd        (SandboxContext* context, CommandLine* cmd);
+static cchar**  sandbox_get_client_env  (cchar** oldEnv, cuint32 nEF, ExtendField** ef);
+static gboolean sandbox_new_req         (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData);
 
 static CmdLine gsCmdline = {0};
 
@@ -394,6 +395,8 @@ static void sandbox_req(SandboxContext *context)
 {
     c_return_if_fail(context);
 
+    C_LOG_VERB("[Client] sand to daemon.");
+
     CommandLine cmd;
     command_line__init(&cmd);
 
@@ -415,17 +418,22 @@ static void sandbox_req(SandboxContext *context)
         return;
     }
 
-#define USE_CLIENT_ENV(constKey)                            \
-do {                                                        \
-    const char* val = c_getenv(constKey);                   \
-    if (val) {                                              \
-        ExtendField* ef = c_malloc0(sizeof(ExtendField));   \
-        if (ef) {                                           \
-            ef->key = constKey;                             \
-            ef->value = val;                                \
-            c_ptr_array_add(extendField, ef);               \
-        }                                                   \
-    }                                                       \
+    C_LOG_VERB("[Client] sand to daemon, pack env.");
+
+#define USE_CLIENT_ENV(constKey)                                \
+do {                                                            \
+    const char* val = c_getenv(constKey);                       \
+    if (val) {                                                  \
+        ExtendField* ef = c_malloc0(sizeof(ExtendField));       \
+        if (ef) {                                               \
+            ++nEF;                                              \
+            extend_field__init(ef);                             \
+            ef->key = c_strdup(constKey);                       \
+            ef->value = c_strdup(val);                          \
+            c_ptr_array_add(extendField, ef);                   \
+            C_LOG_VERB("[Client] [ENV] %s=%s", constKey, val);  \
+        }                                                       \
+    }                                                           \
 } while(0)
 
 #define FREE_EXTEND_FIELD(ef) \
@@ -434,10 +442,11 @@ C_STMT_START {                \
 } C_STMT_END
 
     // 环境变量
-    CPtrArray* extendField = c_ptr_array_new();
+    cint32 nEF = 0;
+    CPtrArray* extendField = c_ptr_array_new_null_terminated(100, c_free0, true);
     if (extendField) {
-
         USE_CLIENT_ENV("USER");
+        USE_CLIENT_ENV("HOME");
         USE_CLIENT_ENV("LOGNAME");
         USE_CLIENT_ENV("USERNAME");
 
@@ -471,14 +480,22 @@ C_STMT_START {                \
         USE_CLIENT_ENV("XDG_CURRENT_DESKTOP");
     }
 
-    cmd.extendfield = (ExtendField**) c_ptr_array_free(extendField, false);
+    C_LOG_VERB("[Client] env num: %d", nEF);
+    cmd.n_extendfield = nEF;
+    cmd.extendfield = (ExtendField**) c_ptr_array_free (extendField, false);
 
+    C_LOG_VERB("[Client] sand to daemon, pack env -- send.");
     sandbox_send_cmd(context, &cmd);
+    C_LOG_VERB("[Client] sand to daemon, pack env -- send OK.");
 
+    C_LOG_VERB("[Client] sand to daemon, pack env -- free 1.");
     for (int i = 0; cmd.extendfield[i]; ++i) {
         FREE_EXTEND_FIELD(cmd.extendfield[i]);
     }
+
+    C_LOG_VERB("[Client] sand to daemon, pack env -- free 2.");
     c_free(cmd.extendfield);
+    C_LOG_VERB("[Client] sand to daemon, pack env -- free OK!");
 }
 
 static void sandbox_process_req (gpointer data, gpointer udata)
@@ -514,10 +531,12 @@ static void sandbox_process_req (gpointer data, gpointer udata)
                 .fsType = sc->deviceInfo.filesystemType,
                 .mountPoint = sc->deviceInfo.mountPoint,
                 .isoFullPath = sc->deviceInfo.isoFullPath,
-                .env = (const cchar* const*)sc->status.env,
+                .env = sandbox_get_client_env(sc->status.env, cmd->n_extendfield, cmd->extendfield),
             };
             bool ret = namespace_execute_cmd(&param);
             C_LOG_INFO("return: %s", ret ? "true" : "false");
+
+            c_strfreev(param.env);
             break;
         }
         case COMMAND_LINE_TYPE_E__CMD_Q_OPEN_FILE_MANAGER: {
@@ -528,10 +547,12 @@ static void sandbox_process_req (gpointer data, gpointer udata)
                 .fsType = sc->deviceInfo.filesystemType,
                 .mountPoint = sc->deviceInfo.mountPoint,
                 .isoFullPath = sc->deviceInfo.isoFullPath,
-                .env = (const cchar* const*)sc->status.env,
+                .env = sandbox_get_client_env(sc->status.env, cmd->n_extendfield, cmd->extendfield),
             };
             bool ret = namespace_execute_cmd(&param);
             C_LOG_INFO("return: %s", ret ? "true" : "false");
+
+            c_strfreev(param.env);
             break;
         }
         case COMMAND_LINE_TYPE_E__CMD_Q_QUIT: {
@@ -578,34 +599,36 @@ static gboolean sandbox_new_req (GSocketService* ls, GSocketConnection* conn, GO
 static bool sandbox_send_cmd (SandboxContext* context, CommandLine* cmd)
 {
     c_return_val_if_fail(context && cmd, false);
+    C_LOG_VERB("[Client] Begin send");
 
     char* buf = NULL;
     GError* error = NULL;
 
     do {
         const cuint64 len = command_line__get_packed_size(cmd);
+        C_LOG_VERB("[Client] buffer size: %ul", len);
         buf = c_malloc0(len);
         const cuint64 lenP = command_line__pack(cmd, buf);
         if (len != lenP) {
-            printf("socket error!\n");
+            C_LOG_ERROR("[Client] socket error!\n");
             break;
         }
 
         g_socket_connect(context->socket.socket, context->socket.address, NULL, &error);
         if (error) {
-            printf("connect error: %s\n", error->message);
+            C_LOG_ERROR("[Client] connect error: %s\n", error->message);
             break;
         }
 
         g_socket_condition_wait(context->socket.socket, G_IO_OUT, NULL, &error);
         if (error) {
-            printf("send error: %s\n", error->message);
+            C_LOG_ERROR("[Client] wait error: %s\n", error->message);
             break;
         }
 
         g_socket_send_with_blocking(context->socket.socket, buf, len, true, NULL, &error);
         if (error) {
-            printf("send error: %s\n", error->message);
+            C_LOG_ERROR("[Client] send error: %s\n", error->message);
             break;
         }
     } while (false);
@@ -735,4 +758,26 @@ do { \
         C_LOG_DEBUG("[ENV] '%s'", (*env)[i]);
     }
 #endif
+}
+
+static cchar** sandbox_get_client_env (cchar** oldEnv, cuint32 nEF, ExtendField** ef)
+{
+    C_LOG_DEBUG("old env");
+
+    CPtrArray* ptr = c_ptr_array_new();
+    if (oldEnv) {
+        for (int i = 0; oldEnv[i]; ++i) {
+            c_ptr_array_add(ptr, c_strdup(oldEnv[i]));
+        }
+    }
+
+    if (nEF > 0 && ef) {
+        C_LOG_DEBUG("client env");
+        for (int i = 0; i < nEF; ++i) {
+            cchar* kv = c_strdup_printf("%s=%s", ef[i]->key, ef[i]->value);
+            c_ptr_array_add(ptr, kv);
+        }
+    }
+
+    return (cchar**) c_ptr_array_free(ptr, false);
 }
