@@ -665,6 +665,7 @@ do { \
         (*env) = (char**) c_ptr_array_free(envArr, false);
         c_free(orgEnv);
     }
+    c_strfreev(orgEnv);
 
 #if DEBUG
     for (int i = 0; (*env)[i]; ++i) {
