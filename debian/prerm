@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+#set -e
 
 systemctl stop sandbox
-#systemctl disable sandbox
+systemctl disable sandbox
