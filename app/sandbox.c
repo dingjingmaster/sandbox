@@ -415,7 +415,70 @@ static void sandbox_req(SandboxContext *context)
         return;
     }
 
+#define USE_CLIENT_ENV(constKey)                            \
+do {                                                        \
+    const char* val = c_getenv(constKey);                   \
+    if (val) {                                              \
+        ExtendField* ef = c_malloc0(sizeof(ExtendField));   \
+        if (ef) {                                           \
+            ef->key = constKey;                             \
+            ef->value = val;                                \
+            c_ptr_array_add(extendField, ef);               \
+        }                                                   \
+    }                                                       \
+} while(0)
+
+#define FREE_EXTEND_FIELD(ef) \
+C_STMT_START {                \
+    c_free (ef);              \
+} C_STMT_END
+
+    // 环境变量
+    CPtrArray* extendField = c_ptr_array_new();
+    if (extendField) {
+
+        USE_CLIENT_ENV("USER");
+        USE_CLIENT_ENV("LOGNAME");
+        USE_CLIENT_ENV("USERNAME");
+
+        USE_CLIENT_ENV("TERM");
+        USE_CLIENT_ENV("COLORTERM");
+
+        USE_CLIENT_ENV("SHLVL");
+        USE_CLIENT_ENV("DISPLAY");
+
+        USE_CLIENT_ENV("XMODIFIERS");
+        USE_CLIENT_ENV("QT_IM_MODULE");
+        USE_CLIENT_ENV("GTK_IM_MODULE");
+
+        USE_CLIENT_ENV("GDM_LANG");
+        USE_CLIENT_ENV("GDMSESSION");
+        USE_CLIENT_ENV("SESSION_MANAGER");
+        USE_CLIENT_ENV("DESKTOP_SESSION");
+
+        USE_CLIENT_ENV("LC_ALL");
+        USE_CLIENT_ENV("LC_TIME");
+        USE_CLIENT_ENV("LC_PAPER");
+        USE_CLIENT_ENV("LC_CTYPE");
+        USE_CLIENT_ENV("LC_NUMERIC");
+        USE_CLIENT_ENV("LC_MONETARY");
+        USE_CLIENT_ENV("LC_MEASUREMENT");
+
+        USE_CLIENT_ENV("XDG_MENU_PREFIX");
+        USE_CLIENT_ENV("XDG_SESSION_TYPE");
+        USE_CLIENT_ENV("XDG_SESSION_CLASS");
+        USE_CLIENT_ENV("XDG_SESSION_DESKTOP");
+        USE_CLIENT_ENV("XDG_CURRENT_DESKTOP");
+    }
+
+    cmd.extendfield = (ExtendField**) c_ptr_array_free(extendField, false);
+
     sandbox_send_cmd(context, &cmd);
+
+    for (int i = 0; cmd.extendfield[i]; ++i) {
+        FREE_EXTEND_FIELD(cmd.extendfield[i]);
+    }
+    c_free(cmd.extendfield);
 }
 
 static void sandbox_process_req (gpointer data, gpointer udata)
