@@ -131,7 +131,7 @@ file(GLOB SANDBOX_NEMO_SRC
         libnemo-private/nemo-search-engine.c
         libnemo-private/nemo-column-utilities.c
         libnemo-private/nemo-global-preferences.c
-        libnemo-private/nemo-search-engine-tracker.c
+#        libnemo-private/nemo-search-engine-tracker.c
         libnemo-private/nemo-dbus-manager.c
         libnemo-private/nemo-icon-canvas-item.c
         libnemo-private/nemo-selection-canvas-item.c
@@ -163,7 +163,7 @@ file(GLOB SANDBOX_NEMO_SRC
         libnemo-private/nemo-mime-application-chooser.c
         libnemo-private/nemo-undo-signal-handlers.c
         libnemo-private/nemo-directory-async.c
-        libnemo-private/nemo-module.c
+#        libnemo-private/nemo-module.c
         libnemo-private/nemo-undo-transaction.c
         libnemo-private/nemo-directory.c
         libnemo-private/nemo-monitor.c
@@ -183,30 +183,22 @@ file(GLOB SANDBOX_NEMO_SRC
 add_executable(sandbox-nemo nemo-main.c ${SANDBOX_NEMO_SRC})
 target_link_libraries(sandbox-nemo PUBLIC -lm
         ${X_LIBRARIES}
-        ${XML_LIBRARIES}
-        ${ATK_LIBRARIES}
-        ${VTE_LIBRARIES}
         ${GDK_LIBRARIES}
+        ${GTK_LIBRARIES}
         ${GLIB_LIBRARIES}
         ${GAIL_LIBRARIES}
-        ${TRACKER_LIBRARIES}
-        ${GMODULE_LIBRARIES}
 )
 target_include_directories(sandbox-nemo PUBLIC
         ${X_INCLUDE_DIRS}
-        ${XML_INCLUDE_DIRS}
-        ${ATK_INCLUDE_DIRS}
-        ${VTE_INCLUDE_DIRS}
         ${GDK_INCLUDE_DIRS}
+        ${GTK_INCLUDE_DIRS}
         ${GLIB_INCLUDE_DIRS}
         ${GAIL_INCLUDE_DIRS}
-        ${TRACKER_INCLUDE_DIRS}
-        ${GMODULE_INCLUDE_DIRS}
 )
 target_compile_definitions(sandbox-nemo PUBLIC
         -DLIBEXECDIR=\"/usr/local/libexec\"
         -DNEMO_DATADIR=\"/usr/local/share/nemo\"
-        -DNEMO_EXTENSIONDIR=\"/usr/local/lib/nemo/extensions-3.0\"
+#        -DNEMO_EXTENSIONDIR=\"/usr/local/lib/nemo/extensions-3.0\"
 )
 
 install(TARGETS sandbox-nemo DESTINATION /usr/bin/)

@@ -60,7 +60,7 @@
 #define NEMO_ACTION_ZOOM_NORMAL "Zoom Normal"
 #define NEMO_ACTION_SHOW_HIDDEN_FILES "Show Hidden Files"
 #define NEMO_ACTION_CLOSE "Close"
-#define NEMO_ACTION_SEARCH "Search"
+// #define NEMO_ACTION_SEARCH "Search"
 #define NEMO_ACTION_FOLDER_WINDOW "Folder Window"
 #define NEMO_ACTION_NEW_TAB "New Tab"
 

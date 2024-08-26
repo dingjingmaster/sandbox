@@ -142,7 +142,7 @@ static const struct {
 	{ XF86XK_OpenURL,	NEMO_ACTION_EDIT_LOCATION },
 	{ XF86XK_Refresh,	NEMO_ACTION_RELOAD },
 	{ XF86XK_Reload,	NEMO_ACTION_RELOAD },
-	{ XF86XK_Search,	NEMO_ACTION_SEARCH },
+	// { XF86XK_Search,	NEMO_ACTION_SEARCH },
 	{ XF86XK_Start,		NEMO_ACTION_GO_HOME },
 	{ XF86XK_Stop,		NEMO_ACTION_STOP },
 	{ XF86XK_ZoomIn,	NEMO_ACTION_ZOOM_IN },
@@ -1803,21 +1803,18 @@ nemo_window_get_panes (NemoWindow *window)
 	return window->details->panes;
 }
 
-static void
-window_set_search_action_text (NemoWindow *window,
-			       gboolean setting)
+static void window_set_search_action_text (NemoWindow *window, gboolean setting)
 {
-	GtkAction *action;
-	NemoWindowPane *pane;
-	GList *l;
+	// GtkAction *action;
+	// NemoWindowPane *pane;
+	// GList *l;
 
-	for (l = window->details->panes; l != NULL; l = l->next) {
-		pane = l->data;
-		action = gtk_action_group_get_action (pane->action_group,
-						      NEMO_ACTION_SEARCH);
+	// for (l = window->details->panes; l != NULL; l = l->next) {
+		// pane = l->data;
+		// action = gtk_action_group_get_action (pane->action_group, NEMO_ACTION_SEARCH);
 
-		gtk_action_set_is_important (action, setting);
-	}
+		// gtk_action_set_is_important (action, setting);
+	// }
 }
 
 static void

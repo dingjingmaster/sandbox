@@ -165,9 +165,10 @@ get_builtin_columns (void)
 	return columns;
 }
 
-static GList *
-get_extension_columns (void)
+static GList* get_extension_columns (void)
 {
+    return NULL;
+#if 0
 	GList *columns;
 	GList *providers;
 	GList *l;
@@ -188,6 +189,7 @@ get_extension_columns (void)
 	nemo_module_extension_list_free (providers);
 
 	return columns;
+#endif
 }
 
 static GList *

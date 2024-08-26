@@ -379,9 +379,10 @@ action_nemo_manual_callback (GtkAction *action,
 	error = NULL;
 	window = NEMO_WINDOW (user_data);
 
+    /*
 	if (g_str_equal (name, "NemoHelpSearch")) {
 		helpuri = "help:gnome-help/files-search";
-	} else if (g_str_equal (name,"NemoHelpSort")) {
+	} else */if (g_str_equal (name,"NemoHelpSort")) {
 		helpuri = "help:gnome-help/files-sort";
 	} else if (g_str_equal (name, "NemoHelpLost")) {
 		helpuri = "help:gnome-help/files-lost";
@@ -1547,11 +1548,11 @@ static const GtkToggleActionEntry main_toggle_entries[] = {
   /* tooltip */              N_("Change the default visibility of the menubar"),
                              NULL,
   /* is_active */            TRUE },
-  /* name, stock id */     { "Search", "edit-find-symbolic",
-  /* label, accelerator */   N_("_Search for Files..."), "<control>f",
-  /* tooltip */              N_("Search documents and folders"),
-			     NULL,
-  /* is_active */            FALSE },
+  // /* name, stock id */     { "Search", "edit-find-symbolic",
+  // /* label, accelerator */   N_("_Search for Files..."), "<control>f",
+  // /* tooltip */              N_("Search documents and folders"),
+			     // NULL,
+  // /* is_active */            FALSE },
   /* name, stock id */     { NEMO_ACTION_SHOW_HIDE_EXTRA_PANE, NULL,
   /* label, accelerator */   N_("E_xtra Pane"), "F3",
   /* tooltip */              N_("Open an extra folder view side-by-side"),
@@ -1752,7 +1753,6 @@ nemo_window_create_toolbar_action_group (NemoWindow *window)
                       window);
    	gtk_action_group_add_action (action_group, action);
     gtk_action_set_icon_name (GTK_ACTION (action), "view-list-symbolic");
-
    	g_object_unref (action);
 
     action = GTK_ACTION (gtk_toggle_action_new (NEMO_ACTION_COMPACT_VIEW,
@@ -1764,17 +1764,15 @@ nemo_window_create_toolbar_action_group (NemoWindow *window)
                       window);
    	gtk_action_group_add_action (action_group, action);
     gtk_action_set_icon_name (GTK_ACTION (action), "view-compact-symbolic");
-
    	g_object_unref (action);
 
- 	action = GTK_ACTION (gtk_toggle_action_new (NEMO_ACTION_SEARCH,
- 				_("Search"),_("Search documents and folders"),
- 				NULL));
+ 	// action = GTK_ACTION (gtk_toggle_action_new (NEMO_ACTION_SEARCH,
+ 				// _("Search"),_("Search documents and folders"),
+ 				// NULL));
 
-  	gtk_action_group_add_action (action_group, action);
-    gtk_action_set_icon_name (GTK_ACTION (action), "edit-find-symbolic");
-
-  	g_object_unref (action);
+  	// gtk_action_group_add_action (action_group, action);
+    // gtk_action_set_icon_name (GTK_ACTION (action), "edit-find-symbolic");
+  	// g_object_unref (action);
     
     action = GTK_ACTION (gtk_toggle_action_new (NEMO_ACTION_SHOW_THUMBNAILS,
                          _("Show Thumbnails"),
@@ -1845,7 +1843,7 @@ nemo_window_initialize_actions (NemoWindow *window)
 	GtkActionGroup *action_group;
 	const gchar *nav_state_actions[] = {
 		NEMO_ACTION_BACK, NEMO_ACTION_FORWARD, NEMO_ACTION_UP, NEMO_ACTION_RELOAD, NEMO_ACTION_COMPUTER, NEMO_ACTION_HOME, NEMO_ACTION_EDIT_LOCATION,
-		NEMO_ACTION_TOGGLE_LOCATION, NEMO_ACTION_SEARCH, NULL
+		NEMO_ACTION_TOGGLE_LOCATION, /*NEMO_ACTION_SEARCH,*/ NULL
 	};
 
 	action_group = nemo_window_get_main_action_group (window);
@@ -2000,6 +1998,8 @@ nemo_window_finalize_menus (NemoWindow *window)
 static GList *
 get_extension_menus (NemoWindow *window)
 {
+    return NULL;
+#if 0
 	NemoWindowSlot *slot;
 	GList *providers;
 	GList *items;
@@ -2024,6 +2024,7 @@ get_extension_menus (NemoWindow *window)
 	nemo_module_extension_list_free (providers);
 
 	return items;
+#endif
 }
 
 static void

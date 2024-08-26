@@ -335,8 +335,8 @@ nemo_toolbar_constructed (GObject *obj)
     self->priv->new_folder_button = toolbar_create_toolbutton (self, FALSE, NEMO_ACTION_NEW_FOLDER);
     gtk_container_add (GTK_CONTAINER (box), self->priv->new_folder_button);
 
-    self->priv->search_button = toolbar_create_toolbutton (self, TRUE, NEMO_ACTION_SEARCH);
-    gtk_container_add (GTK_CONTAINER (box), self->priv->search_button);
+    // self->priv->search_button = toolbar_create_toolbutton (self, TRUE, NEMO_ACTION_SEARCH);
+    // gtk_container_add (GTK_CONTAINER (box), self->priv->search_button);
 
     self->priv->show_thumbnails_button = toolbar_create_toolbutton (self, TRUE, NEMO_ACTION_SHOW_THUMBNAILS);
     gtk_container_add (GTK_CONTAINER (box), self->priv->show_thumbnails_button);

@@ -78,7 +78,7 @@
 #include "libnemo-private/nemo-link.h"
 #include "libnemo-private/nemo-metadata.h"
 #include "libnemo-private/nemo-recent.h"
-#include "libnemo-private/nemo-module.h"
+// #include "libnemo-private/nemo-module.h"
 #include "libnemo-private/nemo-program-choosing.h"
 #include "libnemo-private/nemo-trash-monitor.h"
 #include "libnemo-private/nemo-ui-utilities.h"
@@ -5480,6 +5480,8 @@ static GList *
 get_all_extension_menu_items (GtkWidget *window,
 			      GList *selection)
 {
+    return NULL;
+#if 0
 	GList *items;
 	GList *providers;
 	GList *l;
@@ -5501,6 +5503,7 @@ get_all_extension_menu_items (GtkWidget *window,
 	nemo_module_extension_list_free (providers);
 
 	return items;
+#endif
 }
 
 typedef struct

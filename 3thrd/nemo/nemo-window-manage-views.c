@@ -56,7 +56,7 @@
 #include "libnemo-private/nemo-file.h"
 #include "libnemo-private/nemo-global-preferences.h"
 #include "libnemo-private/nemo-metadata.h"
-#include "libnemo-private/nemo-module.h"
+// #include "libnemo-private/nemo-module.h"
 #include "libnemo-private/nemo-monitor.h"
 #include "libnemo-private/nemo-search-directory.h"
 
@@ -1315,6 +1315,7 @@ location_has_really_changed (NemoWindowSlot *slot)
 static void
 slot_add_extension_extra_widgets (NemoWindowSlot *slot)
 {
+#if 0
 	GList *providers, *l;
 	GtkWidget *widget;
 	char *uri;
@@ -1336,6 +1337,7 @@ slot_add_extension_extra_widgets (NemoWindowSlot *slot)
 	g_free (uri);
 
 	nemo_module_extension_list_free (providers);
+#endif
 }
 
 static void

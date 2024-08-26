@@ -35,64 +35,64 @@ G_DEFINE_TYPE (NemoModule, nemo_module, G_TYPE_TYPE_MODULE);
 static gboolean
 nemo_module_load (GTypeModule *gmodule)
 {
-	NemoModule *module;
-	
-	module = NEMO_MODULE (gmodule);
-	
-	module->library = g_module_open (module->path, G_MODULE_BIND_LAZY | G_MODULE_BIND_LOCAL);
+    NemoModule *module;
 
-	if (!module->library) {
-		g_warning ("%s", g_module_error ());
-		return FALSE;
-	}
+    module = NEMO_MODULE (gmodule);
 
-	if (!g_module_symbol (module->library,
-			      "nemo_module_initialize",
-			      (gpointer *)&module->initialize) ||
-	    !g_module_symbol (module->library,
-			      "nemo_module_shutdown",
-			      (gpointer *)&module->shutdown) ||
-	    !g_module_symbol (module->library,
-			      "nemo_module_list_types",
-			      (gpointer *)&module->list_types)) {
+    module->library = g_module_open (module->path, G_MODULE_BIND_LAZY | G_MODULE_BIND_LOCAL);
 
-		g_warning ("%s", g_module_error ());
-		g_module_close (module->library);
-		
-		return FALSE;
-	}
+    if (!module->library) {
+        g_warning ("%s", g_module_error ());
+        return FALSE;
+    }
 
-	module->initialize (gmodule);
-	
-	return TRUE;
+    if (!g_module_symbol (module->library,
+                  "nemo_module_initialize",
+                  (gpointer *)&module->initialize) ||
+        !g_module_symbol (module->library,
+                  "nemo_module_shutdown",
+                  (gpointer *)&module->shutdown) ||
+        !g_module_symbol (module->library,
+                  "nemo_module_list_types",
+                  (gpointer *)&module->list_types)) {
+
+        g_warning ("%s", g_module_error ());
+        g_module_close (module->library);
+
+        return FALSE;
+    }
+
+    module->initialize (gmodule);
+
+    return TRUE;
 }
 
 static void
 nemo_module_unload (GTypeModule *gmodule)
 {
-	NemoModule *module;
-	
-	module = NEMO_MODULE (gmodule);
-	
-	module->shutdown ();
-	
-	g_module_close (module->library);
-	
-	module->initialize = NULL;
-	module->shutdown = NULL;
-	module->list_types = NULL;
+    NemoModule *module;
+
+    module = NEMO_MODULE (gmodule);
+
+    module->shutdown ();
+
+    g_module_close (module->library);
+
+    module->initialize = NULL;
+    module->shutdown = NULL;
+    module->list_types = NULL;
 }
 
 static void
 nemo_module_finalize (GObject *object)
 {
-	NemoModule *module;
-	
-	module = NEMO_MODULE (object);
+    NemoModule *module;
 
-	g_free (module->path);
-	
-	G_OBJECT_CLASS (nemo_module_parent_class)->finalize (object);
+    module = NEMO_MODULE (object);
+
+    g_free (module->path);
+
+    G_OBJECT_CLASS (nemo_module_parent_class)->finalize (object);
 }
 
 static void
@@ -103,15 +103,15 @@ nemo_module_init (NemoModule *module)
 static void
 nemo_module_class_init (NemoModuleClass *class)
 {
-	G_OBJECT_CLASS (class)->finalize = nemo_module_finalize;
-	G_TYPE_MODULE_CLASS (class)->load = nemo_module_load;
-	G_TYPE_MODULE_CLASS (class)->unload = nemo_module_unload;
+    G_OBJECT_CLASS (class)->finalize = nemo_module_finalize;
+    G_TYPE_MODULE_CLASS (class)->load = nemo_module_load;
+    G_TYPE_MODULE_CLASS (class)->unload = nemo_module_unload;
 }
 
 static void
 module_object_weak_notify (gpointer user_data, GObject *object)
 {
-	module_objects = g_list_remove (module_objects, object);
+    module_objects = g_list_remove (module_objects, object);
 }
 
 static gboolean
@@ -134,16 +134,16 @@ module_is_selected (GType type)
 static void
 add_module_objects (NemoModule *module)
 {
-	const GType *types;
-	int num_types;
-	int i;
-	
-	module->list_types (&types, &num_types);
-	
-	for (i = 0; i < num_types; i++) {
-		if (types[i] == 0) { /* Work around broken extensions */
-			break;
-		}
+    const GType *types;
+    int num_types;
+    int i;
+
+    module->list_types (&types, &num_types);
+
+    for (i = 0; i < num_types; i++) {
+        if (types[i] == 0) { /* Work around broken extensions */
+            break;
+        }
         if (module_is_selected (types[i])) {
             nemo_module_add_type (types[i]);
         }
@@ -153,7 +153,7 @@ add_module_objects (NemoModule *module)
 static void
 nemo_module_load_file (const char *filename)
 {
-	NemoModule *module = NULL;
+    NemoModule *module = NULL;
 
     module = g_object_new (NEMO_TYPE_MODULE, NULL);
     module->path = g_strdup (filename);
@@ -169,94 +169,91 @@ nemo_module_load_file (const char *filename)
 static void
 load_module_dir (const char *dirname)
 {
-	GDir *dir;
-	
-	dir = g_dir_open (dirname, 0, NULL);
-	
-	if (dir) {
-		const char *name;
-		
-		while ((name = g_dir_read_name (dir))) {
-			if (g_str_has_suffix (name, "." G_MODULE_SUFFIX)) {
-				char *filename;
+    GDir *dir;
 
-				filename = g_build_filename (dirname, 
-							     name, 
-							     NULL);
+    dir = g_dir_open (dirname, 0, NULL);
+
+    if (dir) {
+        const char *name;
+
+        while ((name = g_dir_read_name (dir))) {
+            if (g_str_has_suffix (name, "." G_MODULE_SUFFIX)) {
+                char *filename;
+                filename = g_build_filename (dirname, name, NULL);
                 nemo_module_load_file (filename);
-				g_free (filename);
-			}
-		}
+                g_free (filename);
+            }
+        }
 
-		g_dir_close (dir);
-	}
+        g_dir_close (dir);
+    }
 }
 
 static void
 free_module_objects (void)
 {
-	GList *l, *next;
-	
-	for (l = module_objects; l != NULL; l = next) {
-		next = l->next;
-		g_object_unref (l->data);
-	}
-	
-	g_list_free (module_objects);
+    GList *l, *next;
+
+    for (l = module_objects; l != NULL; l = next) {
+        next = l->next;
+        g_object_unref (l->data);
+    }
+
+    g_list_free (module_objects);
 }
 
 void
 nemo_module_setup (void)
 {
-	static gboolean initialized = FALSE;
+    static gboolean initialized = FALSE;
 
-	if (!initialized) {
-		initialized = TRUE;
-		
-		load_module_dir (NEMO_EXTENSIONDIR);
+    if (!initialized) {
+        initialized = TRUE;
 
-		eel_debug_call_at_shutdown (free_module_objects);
-	}
+        // load_module_dir (NEMO_EXTENSIONDIR);
+
+        eel_debug_call_at_shutdown (free_module_objects);
+    }
 }
 
 GList *
 nemo_module_get_extensions_for_type (GType type)
 {
-	GList *l;
-	GList *ret = NULL;
-	
-	for (l = module_objects; l != NULL; l = l->next) {
-		if (G_TYPE_CHECK_INSTANCE_TYPE (G_OBJECT (l->data),
-						type)) {
-			g_object_ref (l->data);
-			ret = g_list_prepend (ret, l->data);
-		}
-	}
+    GList *l;
+    GList *ret = NULL;
 
-	return ret;	
+    for (l = module_objects; l != NULL; l = l->next) {
+        if (G_TYPE_CHECK_INSTANCE_TYPE (G_OBJECT (l->data),
+                        type)) {
+            g_object_ref (l->data);
+            ret = g_list_prepend (ret, l->data);
+        }
+    }
+
+    return ret;
 }
 
 void
 nemo_module_extension_list_free (GList *extensions)
 {
-	GList *l, *next;
-	
-	for (l = extensions; l != NULL; l = next) {
-		next = l->next;
-		g_object_unref (l->data);
-	}
-	g_list_free (extensions);
+    GList *l, *next;
+
+    for (l = extensions; l != NULL; l = next) {
+        next = l->next;
+        g_object_unref (l->data);
+    }
+    g_list_free (extensions);
 }
 
 void   
 nemo_module_add_type (GType type)
 {
-	GObject *object;
-	
-	object = g_object_new (type, NULL);
-	g_object_weak_ref (object, 
-			   (GWeakNotify)module_object_weak_notify,
-			   NULL);
+    GObject *object;
 
-	module_objects = g_list_prepend (module_objects, object);
+    object = g_object_new (type, NULL);
+    g_object_weak_ref (object,
+               (GWeakNotify)module_object_weak_notify,
+               NULL);
+
+    module_objects = g_list_prepend (module_objects, object);
 }

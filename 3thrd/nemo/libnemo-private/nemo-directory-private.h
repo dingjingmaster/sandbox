@@ -29,7 +29,7 @@
 #include "../libnemo-private/nemo-file.h"
 #include "../libnemo-private/nemo-monitor.h"
 #include "../libnemo-extension/nemo-info-provider.h"
-#include <libxml/tree.h>
+// #include <libxml/tree.h>
 
 typedef struct LinkInfoReadState LinkInfoReadState;
 typedef struct FileMonitors FileMonitors;

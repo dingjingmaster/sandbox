@@ -63,7 +63,7 @@
 #include "../libnemo-extension/nemo-file-info.h"
 #include "../libnemo-extension/nemo-extension-private.h"
 // #include <libxapp/xapp-favorites.h>
-#include <libxml/parser.h>
+// #include <libxml/parser.h>
 #include <pwd.h>
 #include <stdlib.h>
 #include <sys/time.h>
@@ -8322,8 +8322,8 @@ nemo_file_invalidate_extension_info_internal (NemoFile *file)
 	if (file->details->pending_info_providers)
 		g_list_free_full (file->details->pending_info_providers, g_object_unref);
 
-	file->details->pending_info_providers =
-		nemo_module_get_extensions_for_type (NEMO_TYPE_INFO_PROVIDER);
+	// file->details->pending_info_providers =
+		// nemo_module_get_extensions_for_type (NEMO_TYPE_INFO_PROVIDER);
 }
 
 void

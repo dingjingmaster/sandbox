@@ -794,6 +794,6 @@ nemo_image_properties_page_provider_class_init (NemoImagePropertiesPageProviderC
 void
 nemo_image_properties_page_register (void)
 {
-        nemo_module_add_type (nemo_image_properties_page_provider_get_type ());
+    // nemo_module_add_type (nemo_image_properties_page_provider_get_type ());
 }
 

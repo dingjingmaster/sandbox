@@ -382,6 +382,7 @@ menu_provider_items_updated_handler (NemoMenuProvider *provider, GtkWidget* pare
 static void
 init_menu_provider_callback (void)
 {
+#if 0
     GList *providers;
     GList *l;
 
@@ -396,13 +397,13 @@ init_menu_provider_callback (void)
     }
 
     nemo_module_extension_list_free (providers);
+#endif
 }
 
 /* end Common Startup Stuff */
 
 gboolean
-nemo_application_check_required_directory (NemoApplication *application,
-                                           gchar           *path)
+nemo_application_check_required_directory (NemoApplication *application, gchar* path)
 {
     gboolean ret;
 
@@ -565,7 +566,7 @@ nemo_application_startup (GApplication *app)
     init_gtk_accels ();
 
     /* initialize nemo modules */
-    nemo_module_setup ();
+    // nemo_module_setup ();
 
     /* attach menu-provider module callback */
     init_menu_provider_callback ();

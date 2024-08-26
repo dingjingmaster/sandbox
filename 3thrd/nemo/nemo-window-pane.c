@@ -804,9 +804,8 @@ setup_search_action (NemoWindowPane *pane)
 	GtkActionGroup *group = pane->action_group;
 	GtkAction *action;
 
-	action = gtk_action_group_get_action (group, NEMO_ACTION_SEARCH);
-	g_signal_connect (action, "activate",
-			  G_CALLBACK (action_show_hide_search_callback), pane);
+	// action = gtk_action_group_get_action (group, NEMO_ACTION_SEARCH);
+	// g_signal_connect (action, "activate", G_CALLBACK (action_show_hide_search_callback), pane);
 }
 
 static void
@@ -1201,17 +1200,15 @@ nemo_window_pane_sync_location_widgets (NemoWindowPane *pane)
     nemo_toolbar_update_for_location (NEMO_TOOLBAR (pane->tool_bar));
 }
 
-static void
-toggle_toolbar_search_button (NemoWindowPane *pane,
-                                  gboolean        active)
+static void toggle_toolbar_search_button (NemoWindowPane *pane, gboolean active)
 {
 	GtkActionGroup *group;
 	GtkAction *action;
 
-	group = pane->action_group;
-	action = gtk_action_group_get_action (group, NEMO_ACTION_SEARCH);
+	// group = pane->action_group;
+	// action = gtk_action_group_get_action (group, NEMO_ACTION_SEARCH);
 
-	gtk_toggle_action_set_active (GTK_TOGGLE_ACTION (action), active);
+	// gtk_toggle_action_set_active (GTK_TOGGLE_ACTION (action), active);
 }
 
 void

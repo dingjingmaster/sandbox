@@ -57,7 +57,7 @@
 #include "libnemo-private/nemo-link.h"
 #include "libnemo-private/nemo-metadata.h"
 #include "libnemo-private/nemo-mime-application-chooser.h"
-#include "libnemo-private/nemo-module.h"
+// #include "libnemo-private/nemo-module.h"
 #include "libnemo-private/nemo-undo-signal-handlers.h"
 #include "libnemo-private/nemo-undo.h"
 
@@ -4643,6 +4643,7 @@ create_permissions_page (NemoPropertiesWindow *window)
 static void
 append_extension_pages (NemoPropertiesWindow *window)
 {
+#if 0
     GList *providers;
     GList *p;
 
@@ -4690,6 +4691,7 @@ append_extension_pages (NemoPropertiesWindow *window)
     }
 
     nemo_module_extension_list_free (providers);
+#endif
 }
 
 static gboolean
