@@ -22,24 +22,21 @@
 
 #include "config.h"
 
-#include <errno.h>
-
 #include <glib.h>
-#include <dconf.h>
-
-#include "terminal-intl.h"
-
-#include "terminal-debug.h"
-#include "terminal-app.h"
-#include "terminal-accels.h"
-#include "terminal-screen.h"
-#include "terminal-screen-container.h"
-#include "terminal-window.h"
-#include "terminal-util.h"
-#include "profile-editor.h"
-#include "terminal-encoding.h"
+#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+
+#include "terminal-app.h"
+#include "terminal-intl.h"
+#include "terminal-util.h"
+#include "terminal-debug.h"
+#include "profile-editor.h"
+#include "terminal-accels.h"
+#include "terminal-screen.h"
+#include "terminal-window.h"
+#include "terminal-encoding.h"
+#include "terminal-screen-container.h"
 
 #ifdef HAVE_SMCLIENT
 #include "eggsmclient.h"
@@ -360,8 +357,7 @@ terminal_app_create_profile (TerminalApp *app,
 	return profile;
 }
 
-static void
-terminal_app_delete_profile (TerminalProfile *profile)
+static void terminal_app_delete_profile (TerminalProfile *profile)
 {
 	const char *profile_name;
 	char *profile_dir;
@@ -373,14 +369,16 @@ terminal_app_delete_profile (TerminalProfile *profile)
 	gsettings_remove_all_from_strv (settings_global, PROFILE_LIST_KEY, profile_name);
 
 	/* And remove the profile directory */
+#if 0
 	DConfClient *client = dconf_client_new ();
-	if (!dconf_client_write_sync (client, profile_dir, NULL, NULL, NULL, &error))
-	{
+	if (!dconf_client_write_sync (client, profile_dir, NULL, NULL, NULL, &error)) {
 		g_warning ("Failed to recursively unset %s: %s\n", profile_dir, error->message);
 		g_error_free (error);
 	}
 
 	g_object_unref (client);
+#endif
+
 	g_free (profile_dir);
 }
 

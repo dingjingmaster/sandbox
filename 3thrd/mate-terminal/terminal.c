@@ -303,10 +303,7 @@ name_acquired_cb (GDBusConnection *connection,
 	data->options = NULL;
 }
 
-static void
-name_lost_cb (GDBusConnection *connection,
-              const char *name,
-              gpointer user_data)
+static void name_lost_cb (GDBusConnection *connection, const char *name, gpointer user_data)
 {
 	OwnData *data = (OwnData *) user_data;
 	GError *error = NULL;
@@ -318,27 +315,23 @@ name_lost_cb (GDBusConnection *connection,
 	char *s;
 	gsize len;
 
-	_terminal_debug_print (TERMINAL_DEBUG_FACTORY,
-	                       "Lost the name %s on the session bus\n", name);
+	_terminal_debug_print (TERMINAL_DEBUG_FACTORY, "Lost the name %s on the session bus\n", name);
 
 	/* Couldn't get the connection? No way to continue! */
-	if (connection == NULL)
-	{
+	if (connection == NULL) {
 		data->exit_code = EXIT_FAILURE;
 		gtk_main_quit ();
 		return;
 	}
 
-	if (data->options == NULL)
-	{
+	if (data->options == NULL) {
 		/* Already handled */
 		data->exit_code = EXIT_SUCCESS;
 		gtk_main_quit ();
 		return;
 	}
 
-	_terminal_debug_print (TERMINAL_DEBUG_FACTORY,
-	                       "Forwarding arguments to existing instance\n");
+	_terminal_debug_print (TERMINAL_DEBUG_FACTORY, "Forwarding arguments to existing instance\n");
 
 	g_variant_builder_init (&builder, G_VARIANT_TYPE ("(ayayayayiay)"));
 
@@ -348,10 +341,10 @@ name_lost_cb (GDBusConnection *connection,
 
 	string = g_string_new (NULL);
 	envv = g_get_environ ();
-	for (i = 0; envv[i]; ++i)
-	{
-		if (i > 0)
+	for (i = 0; envv[i]; ++i) {
+		if (i > 0) {
 			g_string_append_c (string, '\0');
+		}
 
 		g_string_append (string, envv[i]);
 	}
@@ -359,15 +352,13 @@ name_lost_cb (GDBusConnection *connection,
 
 	len = string->len;
 	s = g_string_free (string, FALSE);
-	g_variant_builder_add (&builder, "@ay",
-	                       g_variant_new_from_data (G_VARIANT_TYPE ("ay"), s, len, TRUE, g_free, s));
+	g_variant_builder_add (&builder, "@ay", g_variant_new_from_data (G_VARIANT_TYPE ("ay"), s, len, TRUE, g_free, s));
 
 	g_variant_builder_add (&builder, "@i", g_variant_new_int32 (data->options->initial_workspace));
 
 	string = g_string_new (NULL);
 
-	for (i = 0; i < data->argc; ++i)
-	{
+	for (i = 0; i < data->argc; ++i) {
 		if (i > 0)
 			g_string_append_c (string, '\0');
 		g_string_append (string, data->argv[i]);
@@ -375,20 +366,9 @@ name_lost_cb (GDBusConnection *connection,
 
 	len = string->len;
 	s = g_string_free (string, FALSE);
-	g_variant_builder_add (&builder, "@ay",
-	                       g_variant_new_from_data (G_VARIANT_TYPE ("ay"), s, len, TRUE, g_free, s));
+	g_variant_builder_add (&builder, "@ay", g_variant_new_from_data (G_VARIANT_TYPE ("ay"), s, len, TRUE, g_free, s));
 
-	value = g_dbus_connection_call_sync (connection,
-	                                     data->factory_name,
-	                                     TERMINAL_FACTORY_SERVICE_PATH,
-	                                     TERMINAL_FACTORY_INTERFACE_NAME,
-	                                     "HandleArguments",
-	                                     g_variant_builder_end (&builder),
-	                                     G_VARIANT_TYPE ("()"),
-	                                     G_DBUS_CALL_FLAGS_NONE,
-	                                     -1,
-	                                     NULL,
-	                                     &error);
+	value = g_dbus_connection_call_sync (connection, data->factory_name, TERMINAL_FACTORY_SERVICE_PATH, TERMINAL_FACTORY_INTERFACE_NAME, "HandleArguments", g_variant_builder_end (&builder), G_VARIANT_TYPE ("()"), G_DBUS_CALL_FLAGS_NONE, -1, NULL, &error);
 	if (value == NULL)
 	{
 		g_printerr ("Failed to forward arguments: %s\n", error->message);
@@ -408,8 +388,7 @@ name_lost_cb (GDBusConnection *connection,
 	gtk_main_quit ();
 }
 
-static char *
-get_factory_name_for_display (const char *display_name)
+static char* get_factory_name_for_display (const char *display_name)
 {
 	GString *name;
 	const char *p;
@@ -417,22 +396,21 @@ get_factory_name_for_display (const char *display_name)
 	name = g_string_sized_new (strlen (TERMINAL_FACTORY_SERVICE_NAME_PREFIX) + strlen (display_name) + 1 /* NUL */);
 	g_string_append (name, TERMINAL_FACTORY_SERVICE_NAME_PREFIX);
 
-	for (p = display_name; *p; ++p)
-	{
-		if (g_ascii_isalnum (*p))
+	for (p = display_name; *p; ++p) {
+		if (g_ascii_isalnum (*p)) {
 			g_string_append_c (name, *p);
-		else
+		}
+		else {
 			g_string_append_c (name, '_');
+		}
 	}
 
-	_terminal_debug_print (TERMINAL_DEBUG_FACTORY,
-	                       "Factory name is \"%s\"\n", name->str);
+	_terminal_debug_print (TERMINAL_DEBUG_FACTORY, "Factory name is \"%s\"\n", name->str);
 
 	return g_string_free (name, FALSE);
 }
 
-static int
-get_initial_workspace (void)
+static int get_initial_workspace (void)
 {
   int ret = -1;
   GdkWindow *window;
@@ -452,8 +430,7 @@ get_initial_workspace (void)
   return ret;
 }
 
-int
-main (int argc, char **argv)
+int main (int argc, char **argv)
 {
 	int i;
 	char **argv_copy;
@@ -488,18 +465,13 @@ main (int argc, char **argv)
 	 * On failure back to /.
 	 */
 	home_dir = g_get_home_dir ();
-	if (home_dir == NULL || chdir (home_dir) < 0)
-		if (chdir ("/") < 0)
+	if (home_dir == NULL || chdir (home_dir) < 0) {
+		if (chdir ("/") < 0) {
 			g_warning ("Could not change working directory.");
+		}
+	}
 
-	options = terminal_options_parse (working_directory,
-	                                  NULL,
-	                                  startup_id,
-	                                  NULL,
-	                                  FALSE,
-	                                  FALSE,
-	                                  &argc, &argv,
-	                                  &error,
+	options = terminal_options_parse (working_directory, NULL, startup_id, NULL, FALSE, FALSE, &argc, &argv, &error,
 #ifdef HAVE_SMCLIENT
 	                                  gtk_get_option_group (TRUE),
 	                                  egg_sm_client_get_option_group (),
@@ -523,18 +495,15 @@ main (int argc, char **argv)
 	g_unsetenv ("GIO_LAUNCHED_DESKTOP_FILE_PID");
 	g_unsetenv ("GIO_LAUNCHED_DESKTOP_FILE");
 
-	if (options->startup_id == NULL)
-	{
-		options->startup_id = g_strdup_printf ("_TIME%" G_GINT64_FORMAT,
-		                                       g_get_monotonic_time () / 1000);
+	if (options->startup_id == NULL) {
+		options->startup_id = g_strdup_printf ("_TIME%" G_GINT64_FORMAT, g_get_monotonic_time () / 1000);
 	}
 
 	gdk_init (&argc, &argv);
 	const char *display_name = gdk_display_get_name (gdk_display_get_default ());
 	options->display_name = g_strdup (display_name);
 
-	if (options->use_factory)
-	{
+	if (options->use_factory) {
 		OwnData *data;
 		guint owner_id;
 
@@ -565,18 +534,15 @@ main (int argc, char **argv)
 		g_free (data);
 
 	}
-	else
-	{
+	else {
 		gtk_init(&argc, &argv);
 		terminal_app_handle_options (terminal_app_get (), options, TRUE /* allow resume */, &error);
 		terminal_options_free (options);
 
-		if (error == NULL)
-		{
+		if (error == NULL) {
 			gtk_main ();
 		}
-		else
-		{
+		else {
 			g_printerr ("Error handling options: %s\n", error->message);
 			g_error_free (error);
 			ret = EXIT_FAILURE;
