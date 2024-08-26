@@ -324,7 +324,7 @@ static bool namespace_check_params_debug (NewProcessParam* param)
 
 static void namespace_chroot_execute (const char* cmd, const char* mountPoint, char** env)
 {
-    C_LOG_INFO("cmd: '%s', mountpoint: '%s'", cmd ? cmd : "<null>", mountPoint ? mountPoint : "<null>")
+    C_LOG_INFO("cmd: '%s', mountpoint: '%s'", cmd ? cmd : "<null>", mountPoint ? mountPoint : "<null>");
 
     c_return_if_fail(cmd && mountPoint);
 
