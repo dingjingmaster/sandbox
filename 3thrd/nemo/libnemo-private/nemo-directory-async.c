@@ -37,7 +37,7 @@
 #include <libxml/parser.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <libxapp/xapp-favorites.h>
+// #include <libxapp/xapp-favorites.h>
 
 /* turn this on to see messages about each load_directory call: */
 #if 0
@@ -3315,18 +3315,18 @@ favorite_check_callback (gpointer user_data)
     nemo_file_ref (favorite_check_file);
 
     gchar *uri;
-    gboolean is_favorite;
+    // gboolean is_favorite;
 
     uri = nemo_file_get_uri (favorite_check_file);
-    is_favorite = xapp_favorites_find_by_uri (xapp_favorites_get_default (), uri) != NULL;
+    // is_favorite = xapp_favorites_find_by_uri (xapp_favorites_get_default (), uri) != NULL;
 
     favorite_check_file->details->favorite_checked = TRUE;
 
-    if (!nemo_file_is_in_favorites (favorite_check_file) && 
-        is_favorite != nemo_file_get_is_favorite (favorite_check_file)) {
-        nemo_file_set_is_favorite (favorite_check_file, is_favorite);
-        nemo_file_changed (favorite_check_file);
-    }
+    // if (!nemo_file_is_in_favorites (favorite_check_file) &&
+        // is_favorite != nemo_file_get_is_favorite (favorite_check_file)) {
+        // nemo_file_set_is_favorite (favorite_check_file, is_favorite);
+        // nemo_file_changed (favorite_check_file);
+    // }
 
     g_free (uri);
     nemo_file_unref (favorite_check_file);

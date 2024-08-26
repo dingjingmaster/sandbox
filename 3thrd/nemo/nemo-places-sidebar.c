@@ -30,7 +30,7 @@
 #include <gio/gio.h>
 #include <math.h>
 #include <cairo-gobject.h>
-#include <libxapp/xapp-favorites.h>
+// #include <libxapp/xapp-favorites.h>
 
 #include "libnemo-private/nemo-dnd.h"
 #include "libnemo-private/nemo-bookmark.h"
@@ -871,6 +871,7 @@ update_places (NemoPlacesSidebar *sidebar)
         g_free (tooltip);
     }
 
+#if 0
     if (eel_vfs_supports_uri_scheme ("favorites")) {
         gint n = xapp_favorites_get_n_favorites (xapp_favorites_get_default ());
 
@@ -886,6 +887,7 @@ update_places (NemoPlacesSidebar *sidebar)
             sidebar->bottom_bookend_uri = g_strdup (mount_uri);
         }
     }
+#endif
 
     gboolean recent_enabled;
     recent_enabled = g_settings_get_boolean (cinnamon_privacy_preferences,
@@ -4384,10 +4386,10 @@ nemo_places_sidebar_init (NemoPlacesSidebar *sidebar)
 				 G_CALLBACK (trash_state_changed_cb),
 				 sidebar, 0);
 
-    g_signal_connect_swapped (xapp_favorites_get_default (),
-                              "changed",
-                              G_CALLBACK (favorites_changed_cb),
-                              sidebar);
+    // g_signal_connect_swapped (xapp_favorites_get_default (),
+                              // "changed",
+                              // G_CALLBACK (favorites_changed_cb),
+                              // sidebar);
 }
 
 static void
@@ -4460,9 +4462,9 @@ nemo_places_sidebar_dispose (GObject *object)
                           desktop_setting_changed_callback,
                           sidebar);
 
-    g_signal_handlers_disconnect_by_func (xapp_favorites_get_default (),
-                                          favorites_changed_cb,
-                                          sidebar);
+    // g_signal_handlers_disconnect_by_func (xapp_favorites_get_default (),
+                                          // favorites_changed_cb,
+                                          // sidebar);
 
 	if (sidebar->volume_monitor != NULL) {
 		g_signal_handlers_disconnect_by_func (sidebar->volume_monitor,

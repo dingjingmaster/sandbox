@@ -187,13 +187,10 @@ target_link_libraries(sandbox-nemo PUBLIC -lm
         ${ATK_LIBRARIES}
         ${VTE_LIBRARIES}
         ${GDK_LIBRARIES}
-        ${XAPP_LIBRARIES}
         ${GLIB_LIBRARIES}
         ${GAIL_LIBRARIES}
-        ${DCONF_LIBRARIES}
         ${TRACKER_LIBRARIES}
         ${GMODULE_LIBRARIES}
-        ${CINNAMON_DESKTOP_LIBRARIES}
 )
 target_include_directories(sandbox-nemo PUBLIC
         ${X_INCLUDE_DIRS}
@@ -201,13 +198,10 @@ target_include_directories(sandbox-nemo PUBLIC
         ${ATK_INCLUDE_DIRS}
         ${VTE_INCLUDE_DIRS}
         ${GDK_INCLUDE_DIRS}
-        ${XAPP_INCLUDE_DIRS}
         ${GLIB_INCLUDE_DIRS}
         ${GAIL_INCLUDE_DIRS}
-        ${DCONF_INCLUDE_DIRS}
         ${TRACKER_INCLUDE_DIRS}
         ${GMODULE_INCLUDE_DIRS}
-        ${CINNAMON_DESKTOP_INCLUDE_DIRS}
 )
 target_compile_definitions(sandbox-nemo PUBLIC
         -DLIBEXECDIR=\"/usr/local/libexec\"

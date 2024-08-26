@@ -43,7 +43,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <signal.h>
-#include <libcinnamon-desktop/gnome-desktop-thumbnail.h>
+// #include <libcinnamon-desktop/gnome-desktop-thumbnail.h>
 
 #define DEBUG_FLAG NEMO_DEBUG_THUMBNAILS
 #include "../libnemo-private/nemo-debug.h"
@@ -120,7 +120,7 @@ static GTask *feeder_task = NULL;
 /* Causes the feeder_task to end. Only called when Nemo is shutting down. */
 GCancellable *cancellable = NULL;
 
-static GnomeDesktopThumbnailFactory *thumbnail_factory = NULL;
+// static GnomeDesktopThumbnailFactory *thumbnail_factory = NULL;
 
 static gint
 get_max_threads (void) {
@@ -198,19 +198,19 @@ free_thumbnail_info (NemoThumbnailInfo *info)
     g_free (info);
 }
 
-static GnomeDesktopThumbnailFactory *
-get_thumbnail_factory (void)
-{
-    static gsize once_init = 0;
-
-    if (g_once_init_enter (&once_init)) {
-        thumbnail_factory = gnome_desktop_thumbnail_factory_new (GNOME_DESKTOP_THUMBNAIL_SIZE_LARGE);
-
-        g_once_init_leave (&once_init, 1);
-    }
-
-    return thumbnail_factory;
-}
+// static GnomeDesktopThumbnailFactory* get_thumbnail_factory (void)
+// {
+//     static gsize once_init = 0;
+//
+//     if (g_once_init_enter (&once_init)) {
+//         // thumbnail_factory = gnome_desktop_thumbnail_factory_new (GNOME_DESKTOP_THUMBNAIL_SIZE_LARGE);
+//
+//         g_once_init_leave (&once_init, 1);
+//     }
+//
+//     return NULL;
+//     // return thumbnail_factory;
+// }
 
 static GdkPixbuf *
 nemo_get_thumbnail_frame (void)
@@ -311,9 +311,7 @@ remove_from_hash_table (NemoThumbnailInfo *info)
 }
 
 /* Thumbnail thread */
-static void
-thumbnail_thread (gpointer data,
-                  gpointer user_data)
+static void thumbnail_thread (gpointer data, gpointer user_data)
 {
     NemoThumbnailInfo *info = (NemoThumbnailInfo *) data;
     GdkPixbuf *pixbuf;
@@ -329,15 +327,14 @@ thumbnail_thread (gpointer data,
 
     time (&current_time);
 
-    /* Don't try to create a thumbnail if the file was modified recently.
-       This prevents constant re-thumbnailing of changing files. */ 
+    /**
+     * Don't try to create a thumbnail if the file was modified recently.
+     * This prevents constant re-thumbnailing of changing files. */
     if (current_time < info->original_file_mtime + RECENT_MTIME_COOLDOWN) {
-        DEBUG ("(Thumbnail Thread) Skipping for %d seconds: %s",
-               RECENT_MTIME_COOLDOWN, info->image_uri);
+        DEBUG ("(Thumbnail Thread) Skipping for %d seconds: %s", RECENT_MTIME_COOLDOWN, info->image_uri);
 
         /* Reschedule thumbnailing via a change notification */
-        g_timeout_add_seconds (RECENT_MTIME_COOLDOWN, thumbnail_thread_notify_file_changed,
-                               g_strdup (info->image_uri));
+        g_timeout_add_seconds (RECENT_MTIME_COOLDOWN, thumbnail_thread_notify_file_changed, g_strdup (info->image_uri));
         remove_from_hash_table (info);
         return;
     }
@@ -367,30 +364,27 @@ thumbnail_thread (gpointer data,
      * because of that we have to convert our path from the network URI to a local file:// URI or else any
      * thumbnailers that use %i wont generate thumbnails correctly
      */
-    pixbuf = gnome_desktop_thumbnail_factory_generate_thumbnail (thumbnail_factory,
-                                                                 image_uri,
-                                                                 info->mime_type);
+    // pixbuf = gnome_desktop_thumbnail_factory_generate_thumbnail (thumbnail_factory, image_uri, info->mime_type);
     if (free_uri) {
         g_free (image_uri);
     }
-
-    if (pixbuf) {
-        gnome_desktop_thumbnail_factory_save_thumbnail (thumbnail_factory,
-                                                        pixbuf,
-                                                        info->image_uri,
-                                                        info->original_file_mtime);
-        g_object_unref (pixbuf);
-    } else {
-        gnome_desktop_thumbnail_factory_create_failed_thumbnail (thumbnail_factory, 
-                                                                 info->image_uri,
-                                                                 info->original_file_mtime);
-    }
-
-    /* We need to call nemo_file_changed(), but I don't think that is
-       thread safe. So add an idle handler and do it from the main loop. */
-    g_idle_add_full (G_PRIORITY_HIGH_IDLE,
-                     thumbnail_thread_notify_file_changed,
-                     g_strdup (info->image_uri), NULL);
+    //
+    // if (pixbuf) {
+    //     gnome_desktop_thumbnail_factory_save_thumbnail (thumbnail_factory,
+    //                                                     pixbuf,
+    //                                                     info->image_uri,
+    //                                                     info->original_file_mtime);
+    //     g_object_unref (pixbuf);
+    // } else {
+    //     gnome_desktop_thumbnail_factory_create_failed_thumbnail (thumbnail_factory,
+    //                                                              info->image_uri,
+    //                                                              info->original_file_mtime);
+    // }
+    //
+    /**
+     * We need to call nemo_file_changed(), but I don't think that is
+     * thread safe. So add an idle handler and do it from the main loop. */
+    // g_idle_add_full (G_PRIORITY_HIGH_IDLE, thumbnail_thread_notify_file_changed, g_strdup (info->image_uri), NULL);
 
 #if DEBUG_THREADS
     g_message ("%u unprocessed (Done) (%u threads free)",
@@ -659,21 +653,19 @@ nemo_can_thumbnail_internally (NemoFile *file)
 gboolean
 nemo_can_thumbnail (NemoFile *file)
 {
-    GnomeDesktopThumbnailFactory *factory;
+    // GnomeDesktopThumbnailFactory *factory;
     g_autofree gchar *mime_type = NULL;
     g_autofree gchar *uri = NULL;
     time_t mtime;
-    gboolean res;
+    gboolean res = FALSE;
 
+    // FIXME:// DJ-
     uri = nemo_file_get_uri (file);
     mime_type = nemo_file_get_mime_type (file);
     mtime = nemo_file_get_mtime (file);
     
-    factory = get_thumbnail_factory ();
-    res = gnome_desktop_thumbnail_factory_can_thumbnail (factory,
-                                                         uri,
-                                                         mime_type,
-                                                         mtime);
+    // factory = get_thumbnail_factory ();
+    // res = gnome_desktop_thumbnail_factory_can_thumbnail (factory, uri, mime_type, mtime);
     return res;
 }
 
@@ -702,8 +694,7 @@ nemo_thumbnail_frame_image (GdkPixbuf **pixbuf)
 }
 
 void
-nemo_thumbnail_pad_top_and_bottom (GdkPixbuf **pixbuf,
-                                   gint        extra_height)
+nemo_thumbnail_pad_top_and_bottom (GdkPixbuf **pixbuf, gint extra_height)
 {
     GdkPixbuf *pixbuf_with_padding;
     GdkRectangle rect;
@@ -754,5 +745,6 @@ nemo_thumbnail_pad_top_and_bottom (GdkPixbuf **pixbuf,
 gboolean
 nemo_thumbnail_factory_check_status (void)
 {
-    return gnome_desktop_thumbnail_cache_check_permissions (get_thumbnail_factory (), TRUE);
+    return TRUE;
+    // return gnome_desktop_thumbnail_cache_check_permissions (get_thumbnail_factory (), TRUE);
 }

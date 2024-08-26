@@ -38,56 +38,56 @@
 #include "libnemo-private/nemo-progress-info.h"
 #include "libnemo-private/nemo-progress-info-manager.h"
 
-#include <libxapp/xapp-gtk-window.h>
-#include <libxapp/xapp-status-icon.h>
+// #include <libxapp/xapp-gtk-window.h>
+// #include <libxapp/xapp-status-icon.h>
 
 struct _NemoProgressUIHandlerPriv {
-	NemoProgressInfoManager *manager;
+    NemoProgressInfoManager *manager;
 
-	GtkWidget *progress_window;
-	GtkWidget *window_vbox;
+    GtkWidget *progress_window;
+    GtkWidget *window_vbox;
 
     GtkWidget *list;
 
-	guint active_infos;
+    guint active_infos;
     guint active_percent;
-	GList *infos;
+    GList *infos;
 
-	XAppStatusIcon *status_icon;
+    // XAppStatusIcon *status_icon;
     gboolean should_show_status_icon;
 };
 
 G_DEFINE_TYPE (NemoProgressUIHandler, nemo_progress_ui_handler, G_TYPE_OBJECT);
 
-static void
-status_icon_activate_cb (XAppStatusIcon        *icon,
-                         guint                  button,
-                         guint                  _time,
-                         NemoProgressUIHandler *self)
-{
-    self->priv->should_show_status_icon = FALSE;
-    xapp_status_icon_set_visible (icon, FALSE);
-    gtk_window_present (GTK_WINDOW (self->priv->progress_window));
-}
+// static void
+// status_icon_activate_cb (XAppStatusIcon        *icon,
+//                          guint                  button,
+//                          guint                  _time,
+//                          NemoProgressUIHandler *self)
+// {
+//     self->priv->should_show_status_icon = FALSE;
+//     // xapp_status_icon_set_visible (icon, FALSE);
+//     // gtk_window_present (GTK_WINDOW (self->priv->progress_window));
+// }
 
 static void
 progress_ui_handler_ensure_status_icon (NemoProgressUIHandler *self)
 {
-	XAppStatusIcon *status_icon;
+    // XAppStatusIcon *status_icon;
 
-	if (self->priv->status_icon != NULL) {
-		return;
-	}
+    // if (self->priv->status_icon != NULL) {
+    //     return;
+    // }
 
-    status_icon = xapp_status_icon_new ();
-    xapp_status_icon_set_icon_name (status_icon, "nemo-progress-0-symbolic");
-    g_signal_connect (status_icon, "activate",
-                      (GCallback) status_icon_activate_cb,
-                      self);
+    // status_icon = xapp_status_icon_new ();
+    // xapp_status_icon_set_icon_name (status_icon, "nemo-progress-0-symbolic");
+    // g_signal_connect (status_icon, "activate",
+                      // (GCallback) status_icon_activate_cb,
+                      // self);
 
-	xapp_status_icon_set_visible (status_icon, FALSE);
+    // xapp_status_icon_set_visible (status_icon, FALSE);
 
-	self->priv->status_icon = status_icon;
+    // self->priv->status_icon = status_icon;
 }
 
 static gchar *
@@ -110,27 +110,28 @@ get_icon_name_from_percent (guint pct)
 static void
 progress_ui_handler_update_status_icon (NemoProgressUIHandler *self)
 {
-	gchar *tooltip;
+    gchar *tooltip;
 
-	progress_ui_handler_ensure_status_icon (self);
+    progress_ui_handler_ensure_status_icon (self);
     gchar *launchpad_sucks = THOU_TO_STR (self->priv->active_infos);
     tooltip = g_strdup_printf (ngettext ("%1$s file operation active.  %2$d%% complete.",
                                "%1$s file operations active.  %2$d%% complete.",
                                self->priv->active_infos),
                                launchpad_sucks, self->priv->active_percent);
-	xapp_status_icon_set_tooltip_text (self->priv->status_icon, tooltip);
+    // xapp_status_icon_set_tooltip_text (self->priv->status_icon, tooltip);
     gchar *name = get_icon_name_from_percent (self->priv->active_percent);
-    xapp_status_icon_set_icon_name (self->priv->status_icon, name);
+    // xapp_status_icon_set_icon_name (self->priv->status_icon, name);
     g_free (name);
-	g_free (tooltip);
+    g_free (tooltip);
 
-	xapp_status_icon_set_visible (self->priv->status_icon, self->priv->should_show_status_icon);
+    // FIXME:// DJ-
+    // xapp_status_icon_set_visible (self->priv->status_icon, self->priv->should_show_status_icon);
 }
 
 static gboolean
 progress_window_delete_event (GtkWidget *widget,
-			      GdkEvent *event,
-			      NemoProgressUIHandler *self)
+                  GdkEvent *event,
+                  NemoProgressUIHandler *self)
 {
     gtk_widget_hide (widget);
 
@@ -194,30 +195,31 @@ progress_ui_handler_ensure_window (NemoProgressUIHandler *self)
     GtkWidget *main_box, *progress_window;
     GtkWidget *w, *frame;
 
-	if (self->priv->progress_window != NULL) {
-		return;
-	}
-	
-	progress_window = xapp_gtk_window_new (GTK_WINDOW_TOPLEVEL);
-	self->priv->progress_window = progress_window;
+    if (self->priv->progress_window != NULL) {
+        return;
+    }
 
-    gtk_window_set_type_hint (GTK_WINDOW (progress_window), GDK_WINDOW_TYPE_HINT_DIALOG);
-    gtk_window_set_resizable (GTK_WINDOW (progress_window), FALSE);
-    gtk_window_set_default_size (GTK_WINDOW (progress_window), 500, -1);
+    // progress_window = xapp_gtk_window_new (GTK_WINDOW_TOPLEVEL);
+    // self->priv->progress_window = progress_window;
 
-	gtk_window_set_title (GTK_WINDOW (progress_window),
-			      _("File Operations"));
-	gtk_window_set_wmclass (GTK_WINDOW (progress_window),
-				"file_progress", "Nemo");
-	gtk_window_set_position (GTK_WINDOW (progress_window),
-				 GTK_WIN_POS_CENTER);
-	xapp_gtk_window_set_icon_name (XAPP_GTK_WINDOW (progress_window),
-                                   "system-run");
+    // gtk_window_set_type_hint (GTK_WINDOW (progress_window), GDK_WINDOW_TYPE_HINT_DIALOG);
+    // gtk_window_set_resizable (GTK_WINDOW (progress_window), FALSE);
+    // gtk_window_set_default_size (GTK_WINDOW (progress_window), 500, -1);
 
-	main_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 2);
-	gtk_container_add (GTK_CONTAINER (progress_window),
-                       main_box);
-	self->priv->window_vbox = main_box;
+    // gtk_window_set_title (GTK_WINDOW (progress_window),
+                  // _("File Operations"));
+    // gtk_window_set_wmclass (GTK_WINDOW (progress_window),
+                // "file_progress", "Nemo");
+    // gtk_window_set_position (GTK_WINDOW (progress_window),
+                 // GTK_WIN_POS_CENTER);
+    // FIXME://DJ-
+    // xapp_gtk_window_set_icon_name (XAPP_GTK_WINDOW (progress_window),
+                                   // "system-run");
+
+    // main_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 2);
+    // gtk_container_add (GTK_CONTAINER (progress_window),
+                       // main_box);
+    // self->priv->window_vbox = main_box;
 
     frame = gtk_frame_new (NULL);
     gtk_frame_set_shadow_type (GTK_FRAME (frame), GTK_SHADOW_NONE);
@@ -233,23 +235,23 @@ progress_ui_handler_ensure_window (NemoProgressUIHandler *self)
                   "margin-bottom", 5,
                   NULL);
 
-    gtk_box_pack_start (GTK_BOX (main_box), frame, FALSE, FALSE, 0);
-    gtk_widget_show_all (main_box);
+    // gtk_box_pack_start (GTK_BOX (main_box), frame, FALSE, FALSE, 0);
+    // gtk_widget_show_all (main_box);
 
-	g_signal_connect (progress_window,
-			  "delete-event",
-			  (GCallback) progress_window_delete_event, self);
+    // g_signal_connect (progress_window,
+              // "delete-event",
+              // (GCallback) progress_window_delete_event, self);
 }
 
 static void
 progress_ui_handler_add_to_window (NemoProgressUIHandler *self,
-				   NemoProgressInfo *info)
+                   NemoProgressInfo *info)
 {
-	GtkWidget *progress;
+    GtkWidget *progress;
 
-	progress = nemo_progress_info_widget_new (info);
+    progress = nemo_progress_info_widget_new (info);
 
-	progress_ui_handler_ensure_window (self);
+    progress_ui_handler_ensure_window (self);
 
     gtk_box_pack_start (GTK_BOX (self->priv->list), progress, FALSE, FALSE, 0);
     gtk_widget_show (progress);
@@ -261,52 +263,53 @@ progress_ui_handler_add_to_window (NemoProgressUIHandler *self,
 static void
 progress_ui_handler_show_complete_notification (NemoProgressUIHandler *self)
 {
-	GNotification *complete_notification;
+    GNotification *complete_notification;
 
-	complete_notification = g_notification_new (_("File Operations"));
-	g_notification_set_body (complete_notification, _("All file operations have been successfully completed"));
-	
-	g_application_send_notification (G_APPLICATION (nemo_application_get_singleton ()), NULL, complete_notification);
-	g_object_unref (complete_notification);
+    complete_notification = g_notification_new (_("File Operations"));
+    g_notification_set_body (complete_notification, _("All file operations have been successfully completed"));
+
+    g_application_send_notification (G_APPLICATION (nemo_application_get_singleton ()), NULL, complete_notification);
+    g_object_unref (complete_notification);
 }
 
 static void
 progress_ui_handler_hide_status (NemoProgressUIHandler *self)
 {
-	if (self->priv->status_icon != NULL) {
-        self->priv->should_show_status_icon = FALSE;
-		xapp_status_icon_set_visible (self->priv->status_icon, FALSE);
-	}
+    // if (self->priv->status_icon != NULL) {
+    //     self->priv->should_show_status_icon = FALSE;
+    //     // FIXME:// DJ-
+    //     // xapp_status_icon_set_visible (self->priv->status_icon, FALSE);
+    // }
 }
 
 static void
 progress_info_finished_cb (NemoProgressInfo *info,
-			   NemoProgressUIHandler *self)
+               NemoProgressUIHandler *self)
 {
-	self->priv->active_infos--;
-	self->priv->infos = g_list_remove (self->priv->infos, info);
+    self->priv->active_infos--;
+    self->priv->infos = g_list_remove (self->priv->infos, info);
 
-	if (self->priv->active_infos > 0) {
-		if (!gtk_widget_get_visible (self->priv->progress_window)) {
-			progress_ui_handler_update_status_icon (self);
-		}
+    if (self->priv->active_infos > 0) {
+        if (!gtk_widget_get_visible (self->priv->progress_window)) {
+            progress_ui_handler_update_status_icon (self);
+        }
 
         ensure_first_separator_hidden (self);
-	} else {
-		if (gtk_widget_get_visible (self->priv->progress_window)) {
-			gtk_widget_hide (self->priv->progress_window);
-		} else {
-			progress_ui_handler_hide_status (self);
-			progress_ui_handler_show_complete_notification (self);
-		}
-	}
+    } else {
+        if (gtk_widget_get_visible (self->priv->progress_window)) {
+            gtk_widget_hide (self->priv->progress_window);
+        } else {
+            progress_ui_handler_hide_status (self);
+            progress_ui_handler_show_complete_notification (self);
+        }
+    }
 }
 
 static void
 progress_info_changed_cb (NemoProgressInfo *info,
-			   NemoProgressUIHandler *self)
-{	
-	if (g_list_length(self->priv->infos) > 0) {
+               NemoProgressUIHandler *self)
+{
+    if (g_list_length(self->priv->infos) > 0) {
         NemoProgressInfo *first_info = (NemoProgressInfo *) g_list_first(self->priv->infos)->data;
         GList *l;
         double progress = 0.0;
@@ -318,7 +321,8 @@ progress_info_changed_cb (NemoProgressInfo *info,
             int iprogress = progress * 100;
             gchar *str = g_strdup_printf (_("%d%% %s"), iprogress, nemo_progress_info_get_status(first_info));
             gtk_window_set_title (GTK_WINDOW (self->priv->progress_window), str);
-            xapp_gtk_window_set_progress (XAPP_GTK_WINDOW (self->priv->progress_window), iprogress);
+            // FIXME:// DJ-
+            // xapp_gtk_window_set_progress (XAPP_GTK_WINDOW (self->priv->progress_window), iprogress);
             g_free (str);
             self->priv->active_percent = iprogress;
             if (self->priv->should_show_status_icon) {
@@ -326,8 +330,9 @@ progress_info_changed_cb (NemoProgressInfo *info,
             }
         }
         else {
-            gtk_window_set_title (GTK_WINDOW (self->priv->progress_window), nemo_progress_info_get_status(first_info)); 
-            xapp_gtk_window_set_progress (XAPP_GTK_WINDOW (self->priv->progress_window), 0);
+            gtk_window_set_title (GTK_WINDOW (self->priv->progress_window), nemo_progress_info_get_status(first_info));
+            // FIXME:// DJ-
+            // xapp_gtk_window_set_progress (XAPP_GTK_WINDOW (self->priv->progress_window), 0);
         }
     } 
 }
@@ -341,121 +346,122 @@ progress_info_started_cb (NemoProgressUIHandler *self)
 
 static void
 handle_new_progress_info (NemoProgressUIHandler *self,
-			  NemoProgressInfo *info)
+              NemoProgressInfo *info)
 {
-	self->priv->infos = g_list_append (self->priv->infos, info);	
-	
-	g_signal_connect_after (info, "finished",
-			  G_CALLBACK (progress_info_finished_cb), self);
+    self->priv->infos = g_list_append (self->priv->infos, info);
+
+    g_signal_connect_after (info, "finished",
+              G_CALLBACK (progress_info_finished_cb), self);
 
     g_signal_connect_swapped (info, "started",
               G_CALLBACK (progress_info_started_cb), self);
-			  
-	g_signal_connect (info, "progress-changed",
-			  G_CALLBACK (progress_info_changed_cb), self);
 
-	self->priv->active_infos++;
+    g_signal_connect (info, "progress-changed",
+              G_CALLBACK (progress_info_changed_cb), self);
 
-	if (self->priv->active_infos == 1) {
-		/* this is the only active operation, present the window */
-		progress_ui_handler_add_to_window (self, info);
+    self->priv->active_infos++;
+
+    if (self->priv->active_infos == 1) {
+        /* this is the only active operation, present the window */
+        progress_ui_handler_add_to_window (self, info);
         gtk_window_present (GTK_WINDOW (self->priv->progress_window));
-		gtk_window_set_title (GTK_WINDOW (self->priv->progress_window), nemo_progress_info_get_details(info));
-        xapp_gtk_window_set_icon_name (XAPP_GTK_WINDOW (self->priv->progress_window), "system-run");
-	} else {
-		progress_ui_handler_add_to_window (self, info);
+        gtk_window_set_title (GTK_WINDOW (self->priv->progress_window), nemo_progress_info_get_details(info));
+        // FIXME:// DJ-
+        // xapp_gtk_window_set_icon_name (XAPP_GTK_WINDOW (self->priv->progress_window), "system-run");
+    } else {
+        progress_ui_handler_add_to_window (self, info);
         if (self->priv->should_show_status_icon) {
             progress_ui_handler_update_status_icon (self);
         }
         if (gtk_widget_get_visible (GTK_WIDGET (self->priv->progress_window))) {
             gtk_window_present (GTK_WINDOW (self->priv->progress_window));
         }
-	}
+    }
 }
 
 typedef struct {
-	NemoProgressInfo *info;
-	NemoProgressUIHandler *self;
+    NemoProgressInfo *info;
+    NemoProgressUIHandler *self;
 } TimeoutData;
 
 static void
 timeout_data_free (TimeoutData *data)
 {
-	g_clear_object (&data->self);
-	g_clear_object (&data->info);
+    g_clear_object (&data->self);
+    g_clear_object (&data->info);
 
-	g_slice_free (TimeoutData, data);
+    g_slice_free (TimeoutData, data);
 }
 
 static TimeoutData *
 timeout_data_new (NemoProgressUIHandler *self,
-		  NemoProgressInfo *info)
+          NemoProgressInfo *info)
 {
-	TimeoutData *retval;
+    TimeoutData *retval;
 
-	retval = g_slice_new0 (TimeoutData);
-	retval->self = g_object_ref (self);
-	retval->info = g_object_ref (info);
+    retval = g_slice_new0 (TimeoutData);
+    retval->self = g_object_ref (self);
+    retval->info = g_object_ref (info);
 
-	return retval;
+    return retval;
 }
 
 static gboolean
 new_op_queued_timeout (TimeoutData *data)
 {
-	NemoProgressInfo *info = data->info;
-	NemoProgressUIHandler *self = data->self;
+    NemoProgressInfo *info = data->info;
+    NemoProgressUIHandler *self = data->self;
 
-	if (nemo_progress_info_get_is_paused (info)) {
-		return TRUE;
-	}
+    if (nemo_progress_info_get_is_paused (info)) {
+        return TRUE;
+    }
 
-	if (!nemo_progress_info_get_is_finished (info)) {
-		handle_new_progress_info (self, info);
-	}
+    if (!nemo_progress_info_get_is_finished (info)) {
+        handle_new_progress_info (self, info);
+    }
 
-	timeout_data_free (data);
+    timeout_data_free (data);
 
-	return FALSE;
+    return FALSE;
 }
 
 static void
 release_application (NemoProgressInfo *info,
-		     NemoProgressUIHandler *self)
+             NemoProgressUIHandler *self)
 {
-	NemoApplication *app;
+    NemoApplication *app;
 
-	/* release the GApplication hold we acquired */
-	app = nemo_application_get_singleton ();
-	g_application_release (G_APPLICATION (app));
+    /* release the GApplication hold we acquired */
+    app = nemo_application_get_singleton ();
+    g_application_release (G_APPLICATION (app));
 }
 
 static void
 progress_info_queued_cb (NemoProgressInfo *info,
-			  NemoProgressUIHandler *self)
+              NemoProgressUIHandler *self)
 {
-	NemoApplication *app;
-	TimeoutData *data;
+    NemoApplication *app;
+    TimeoutData *data;
 
-	/* hold GApplication so we never quit while there's an operation pending */
-	app = nemo_application_get_singleton ();
-	g_application_hold (G_APPLICATION (app));
+    /* hold GApplication so we never quit while there's an operation pending */
+    app = nemo_application_get_singleton ();
+    g_application_hold (G_APPLICATION (app));
 
-	g_signal_connect (info, "finished",
-			  G_CALLBACK (release_application), self);
+    g_signal_connect (info, "finished",
+              G_CALLBACK (release_application), self);
 
-	data = timeout_data_new (self, info);
+    data = timeout_data_new (self, info);
 
-	/* timeout for the progress window to appear */
-	g_timeout_add_seconds (2,
-			       (GSourceFunc) new_op_queued_timeout,
-			       data);
+    /* timeout for the progress window to appear */
+    g_timeout_add_seconds (2,
+                   (GSourceFunc) new_op_queued_timeout,
+                   data);
 }
 
 static void
 new_progress_info_cb (NemoProgressInfoManager *manager,
-		      NemoProgressInfo *info,
-		      NemoProgressUIHandler *self)
+              NemoProgressInfo *info,
+              NemoProgressUIHandler *self)
 {
     g_signal_connect (info, "queued",
                       G_CALLBACK (progress_info_queued_cb), self);
@@ -464,38 +470,38 @@ new_progress_info_cb (NemoProgressInfoManager *manager,
 static void
 nemo_progress_ui_handler_dispose (GObject *obj)
 {
-	NemoProgressUIHandler *self = NEMO_PROGRESS_UI_HANDLER (obj);
+    NemoProgressUIHandler *self = NEMO_PROGRESS_UI_HANDLER (obj);
 
-	g_clear_object (&self->priv->manager);
+    g_clear_object (&self->priv->manager);
 
-	G_OBJECT_CLASS (nemo_progress_ui_handler_parent_class)->dispose (obj);
+    G_OBJECT_CLASS (nemo_progress_ui_handler_parent_class)->dispose (obj);
 }
 
 static void
 nemo_progress_ui_handler_init (NemoProgressUIHandler *self)
 {
-	self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, NEMO_TYPE_PROGRESS_UI_HANDLER,
-						  NemoProgressUIHandlerPriv);
+    self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, NEMO_TYPE_PROGRESS_UI_HANDLER,
+                          NemoProgressUIHandlerPriv);
 
-	self->priv->manager = nemo_progress_info_manager_new ();
-	g_signal_connect (self->priv->manager, "new-progress-info",
-			  G_CALLBACK (new_progress_info_cb), self);
+    self->priv->manager = nemo_progress_info_manager_new ();
+    g_signal_connect (self->priv->manager, "new-progress-info",
+              G_CALLBACK (new_progress_info_cb), self);
     self->priv->should_show_status_icon = FALSE;
 }
 
 static void
 nemo_progress_ui_handler_class_init (NemoProgressUIHandlerClass *klass)
 {
-	GObjectClass *oclass;
+    GObjectClass *oclass;
 
-	oclass = G_OBJECT_CLASS (klass);
-	oclass->dispose = nemo_progress_ui_handler_dispose;
-	
-	g_type_class_add_private (klass, sizeof (NemoProgressUIHandlerPriv));
+    oclass = G_OBJECT_CLASS (klass);
+    oclass->dispose = nemo_progress_ui_handler_dispose;
+
+    g_type_class_add_private (klass, sizeof (NemoProgressUIHandlerPriv));
 }
 
 NemoProgressUIHandler *
 nemo_progress_ui_handler_new (void)
 {
-	return g_object_new (NEMO_TYPE_PROGRESS_UI_HANDLER, NULL);
+    return g_object_new (NEMO_TYPE_PROGRESS_UI_HANDLER, NULL);
 }

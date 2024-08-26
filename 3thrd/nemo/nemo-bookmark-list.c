@@ -32,10 +32,12 @@
 #include "libnemo-private/nemo-file.h"
 #include "libnemo-private/nemo-icon-names.h"
 #define GNOME_DESKTOP_USE_UNSTABLE_API
-#include "libcinnamon-desktop/gnome-desktop-utils.h"
+// #include "libcinnamon-desktop/gnome-desktop-utils.h"
 
-#include <gio/gio.h>
+#include <pwd.h>
 #include <string.h>
+#include <gio/gio.h>
+#include <sys/types.h>
 
 #define MAX_BOOKMARK_LENGTH 80
 #define LOAD_JOB 1
@@ -61,19 +63,14 @@ static void        nemo_bookmark_list_save_file     (NemoBookmarkList *bookmarks
 
 G_DEFINE_TYPE(NemoBookmarkList, nemo_bookmark_list, G_TYPE_OBJECT);
 
-static void
-ensure_proper_file_permissions (GFile *file)
+static void ensure_proper_file_permissions (GFile *file)
 {
     if (nemo_user_is_root () && !nemo_treating_root_as_normal ()) {
-        struct passwd *pwent;
-        pwent = gnome_desktop_get_session_user_pwent ();
-
+        struct passwd* pwent = getpwuid(getuid());
         gchar *path = g_file_get_path (file);
-
         if (g_strcmp0 (pwent->pw_dir, g_get_home_dir ()) == 0) {
-            G_GNUC_UNUSED int res;
-
-            res = chown (path, pwent->pw_uid, pwent->pw_gid);
+        	G_GNUC_UNUSED int res;
+        	res = chown (path, pwent->pw_uid, pwent->pw_gid);
         }
 
         g_free (path);

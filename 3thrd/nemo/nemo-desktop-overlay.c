@@ -5,7 +5,7 @@
 #include <glib/gi18n.h>
 
 #include <math.h>
-#include <libxapp/xapp-gtk-window.h>
+// #include <libxapp/xapp-gtk-window.h>
 
 #include "nemo-desktop-overlay.h"
 #include "nemo-desktop-manager.h"
@@ -447,7 +447,7 @@ nemo_desktop_overlay_init (NemoDesktopOverlay *overlay)
 
     /* Can't set this in glade, glade uses the icon-name property.  This could be remedied
      * by watching property changes in XAppGtkWindow, but it's not that big a deal */
-    xapp_gtk_window_set_icon_name (XAPP_GTK_WINDOW (window), "preferences-desktop");
+    // xapp_gtk_window_set_icon_name (XAPP_GTK_WINDOW (window), "preferences-desktop");
 
     gtk_widget_add_events (GTK_WIDGET (window), GDK_STRUCTURE_MASK);
 

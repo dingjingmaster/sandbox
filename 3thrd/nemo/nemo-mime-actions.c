@@ -37,7 +37,7 @@
 #include <glib/gstdio.h>
 #include <string.h>
 #include <gdk/gdkx.h>
-#include <libxapp/xapp-favorites.h>
+// #include <libxapp/xapp-favorites.h>
 
 #include "libnemo-private/nemo-file-attributes.h"
 #include "libnemo-private/nemo-file.h"
@@ -1782,11 +1782,11 @@ activate_files (ActivateParameters *parameters)
 			uri = l->data;
 
             // TODO: Handle this better? - this unhandled uri is a favorite with a missing target.
-            XAppFavoriteInfo *info = xapp_favorites_find_by_uri (xapp_favorites_get_default (), uri);
+            // XAppFavoriteInfo *info = xapp_favorites_find_by_uri (xapp_favorites_get_default (), uri);
 
-            if (info != NULL) {
-                continue;
-            }
+            // if (info != NULL) {
+                // continue;
+            // }
 
 			/* this does not block */
 			application_unhandled_uri (parameters, uri);

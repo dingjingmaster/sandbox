@@ -55,7 +55,7 @@
 #include <gtk/gtk.h>
 #include <gio/gio.h>
 #include <glib.h>
-#include <libxapp/xapp-favorites.h>
+// #include <libxapp/xapp-favorites.h>
 
 #include "nemo-file-changes-queue.h"
 #include "nemo-file-private.h"
@@ -1887,11 +1887,11 @@ delete_dir (CommonJob *job, GFile *dir,
 		skip:
 			g_error_free (error);
 		} else {
-            gchar *uri = g_file_get_uri (dir);
-            if (!eel_uri_is_favorite (uri)) {
-                xapp_favorites_remove (xapp_favorites_get_default (), uri);
-            }
-            g_free (uri);
+            // gchar *uri = g_file_get_uri (dir);
+            // if (!eel_uri_is_favorite (uri)) {
+                // xapp_favorites_remove (xapp_favorites_get_default (), uri);
+            // }
+            // g_free (uri);
 
 			nemo_file_changes_queue_file_removed (dir);
 			transfer_info->num_files ++;
@@ -1927,9 +1927,9 @@ delete_file (CommonJob *job, GFile *file,
         // We need to remove from favorites explicitly only if we're deleting the file
         // in its native location, otherwise FavoriteVfsFile->file_delete will have
         // already removed it. This is the same with delete_dir and trash_file
-        if (!eel_uri_is_favorite (uri)) {
-            xapp_favorites_remove (xapp_favorites_get_default (), uri);
-        }
+        // if (!eel_uri_is_favorite (uri)) {
+            // xapp_favorites_remove (xapp_favorites_get_default (), uri);
+        // }
 
         g_free (uri);
 
@@ -2125,8 +2125,8 @@ trash_files (CommonJob *job, GList *files, guint *files_skipped)
 		} else {
             gchar *uri = g_file_get_uri (file);
             if (!eel_uri_is_favorite (uri)) {
-                XAppFavorites *favorites = xapp_favorites_get_default ();
-                xapp_favorites_remove (favorites, uri);
+                // XAppFavorites *favorites = xapp_favorites_get_default ();
+                // xapp_favorites_remove (favorites, uri);
 
                 // move-to-trash doesn't recurse, it just trashes the toplevel, and
                 // the recent backend (gvfs) takes care of the rest. If we trash a folder
@@ -2134,26 +2134,26 @@ trash_files (CommonJob *job, GList *files, guint *files_skipped)
                 // we need to explicitly remove them, or we'll have dangling entries in the
                 // favorites list.
 
-                GList *to_remove, *infos, *iter;
+                // GList *to_remove, *infos, *iter;
+                //
+                // infos = xapp_favorites_get_favorites (favorites, NULL);
+                // to_remove = NULL;
+                //
+                // for (iter = infos; iter != NULL; iter = iter->next) {
+                //     XAppFavoriteInfo *info = (XAppFavoriteInfo *) iter->data;
+                //
+                //     if (info->uri && g_str_has_prefix (info->uri, uri)) {
+                //         to_remove = g_list_prepend (to_remove, g_strdup (info->uri));
+                //     }
+                // }
 
-                infos = xapp_favorites_get_favorites (favorites, NULL);
-                to_remove = NULL;
+                // g_list_free_full (infos, (GDestroyNotify) xapp_favorite_info_free);
 
-                for (iter = infos; iter != NULL; iter = iter->next) {
-                    XAppFavoriteInfo *info = (XAppFavoriteInfo *) iter->data;
+                // for (iter = to_remove; iter != NULL; iter = iter->next) {
+                    // xapp_favorites_remove (favorites, (const gchar *) iter->data);
+                // }
 
-                    if (info->uri && g_str_has_prefix (info->uri, uri)) {
-                        to_remove = g_list_prepend (to_remove, g_strdup (info->uri));
-                    }
-                }
-
-                g_list_free_full (infos, (GDestroyNotify) xapp_favorite_info_free);
-
-                for (iter = to_remove; iter != NULL; iter = iter->next) {
-                    xapp_favorites_remove (favorites, (const gchar *) iter->data);
-                }
-
-                g_list_free_full (to_remove, g_free);
+                // g_list_free_full (to_remove, g_free);
             }
             g_free (uri);
 
@@ -4566,9 +4566,9 @@ copy_move_file (CopyMoveJob *copy_job,
             gchar *src_uri = g_file_get_uri (src);
             gchar *dest_uri = g_file_get_uri (dest);
 
-            if (!eel_uri_is_favorite (src_uri)) {
-                xapp_favorites_rename (xapp_favorites_get_default (), src_uri, dest_uri);
-            }
+            // if (!eel_uri_is_favorite (src_uri)) {
+                // xapp_favorites_rename (xapp_favorites_get_default (), src_uri, dest_uri);
+            // }
 
             g_free (src_uri);
             g_free (dest_uri);
@@ -5239,9 +5239,9 @@ move_file_prepare (CopyMoveJob *move_job,
         gchar *src_uri = g_file_get_uri (src);
         gchar *dest_uri = g_file_get_uri (dest);
 
-        if (!eel_uri_is_favorite (src_uri)) {
-            xapp_favorites_rename (xapp_favorites_get_default (), src_uri, dest_uri);
-        }
+        // if (!eel_uri_is_favorite (src_uri)) {
+            // xapp_favorites_rename (xapp_favorites_get_default (), src_uri, dest_uri);
+        // }
 
         g_free (src_uri);
         g_free (dest_uri);
