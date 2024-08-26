@@ -189,7 +189,6 @@ target_link_libraries(sandbox-nemo PUBLIC -lm
         ${GAIL_LIBRARIES}
 )
 target_include_directories(sandbox-nemo PUBLIC
-        ${X_INCLUDE_DIRS}
         ${GDK_INCLUDE_DIRS}
         ${GTK_INCLUDE_DIRS}
         ${GLIB_INCLUDE_DIRS}
@@ -198,7 +197,6 @@ target_include_directories(sandbox-nemo PUBLIC
 target_compile_definitions(sandbox-nemo PUBLIC
         -DLIBEXECDIR=\"/usr/local/libexec\"
         -DNEMO_DATADIR=\"/usr/local/share/nemo\"
-#        -DNEMO_EXTENSIONDIR=\"/usr/local/lib/nemo/extensions-3.0\"
 )
 
 install(TARGETS sandbox-nemo DESTINATION /usr/bin/)
