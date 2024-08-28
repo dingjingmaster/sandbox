@@ -7161,11 +7161,17 @@ cb_open_as_root_watch (GPid pid, gint status, gpointer user_data)
 
 static void
 open_as_admin (NemoView *view, const gchar *path) {
-    g_autoptr(GUri) uri_obj = g_uri_build (0, "admin", NULL, NULL, -1, path, NULL, NULL);
-    g_autofree gchar *uri = g_uri_to_string (uri_obj);
-    g_autoptr(GFile) location = g_file_new_for_uri (uri);
+    gchar* uri = g_strdup_printf("admin://%s", path);
+    GFile* location = g_file_new_for_uri (uri);
 
     nemo_window_slot_open_location (view->details->slot, location, 0);
+
+    if (uri) {
+        g_free(uri);
+    }
+    if (location) {
+        g_object_unref(location);
+    }
 }
 
 static void

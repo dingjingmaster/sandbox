@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.10)
 project(sandbox C)
 
 set(PROJECT_VERSION_MAJOR 0)

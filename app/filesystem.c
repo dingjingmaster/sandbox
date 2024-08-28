@@ -6,12 +6,13 @@
 
 //#include <fuse.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include <c/clib.h>
 #include <signal.h>
 #include <mntent.h>
 #include <sys/stat.h>
 #include <libmount.h>
-#include <sys/mount.h>
+#include <sys/types.h>
 #include <ext2fs/ext2fs.h>
 #include <udisks/udisks.h>
 #include <sys/sysmacros.h>

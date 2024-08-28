@@ -18,7 +18,7 @@
 // Define if libselinux is available
 #undef HAVE_SELINUX
 // Define to enable pango-1.44 fixes
-#define HAVE_PANGO_144
+//#define HAVE_PANGO_144
 
 
 
