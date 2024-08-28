@@ -1321,7 +1321,7 @@ static void
 open_in_terminal_other (const gchar *path)
 {
     gchar *argv[2];
-    argv[0] = g_settings_get_string (gnome_terminal_preferences, GNOME_DESKTOP_TERMINAL_EXEC);
+    argv[0] = "sandbox-mate-terminal"; //g_settings_get_string (gnome_terminal_preferences, GNOME_DESKTOP_TERMINAL_EXEC);
     argv[1] = NULL;
     g_spawn_async(path, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
 }

@@ -1016,17 +1016,17 @@ nemo_file_management_properties_dialog_setup (GtkBuilder  *builder,
 				thumbnail_limit_values,
 				G_N_ELEMENTS (thumbnail_limit_values));
 
-    bind_builder_bool (builder, gnome_media_handling_preferences,
-               NEMO_FILE_MANAGEMENT_PROPERTIES_AUTOMOUNT_MEDIA_WIDGET,
-               GNOME_DESKTOP_MEDIA_HANDLING_AUTOMOUNT);
+    // bind_builder_bool (builder, gnome_media_handling_preferences,
+               // NEMO_FILE_MANAGEMENT_PROPERTIES_AUTOMOUNT_MEDIA_WIDGET,
+               // GNOME_DESKTOP_MEDIA_HANDLING_AUTOMOUNT);
 
-    bind_builder_bool (builder, gnome_media_handling_preferences,
-               NEMO_FILE_MANAGEMENT_PROPERTIES_AUTOOPEN_MEDIA_WIDGET,
-               GNOME_DESKTOP_MEDIA_HANDLING_AUTOMOUNT_OPEN);
+    // bind_builder_bool (builder, gnome_media_handling_preferences,
+               // NEMO_FILE_MANAGEMENT_PROPERTIES_AUTOOPEN_MEDIA_WIDGET,
+               // GNOME_DESKTOP_MEDIA_HANDLING_AUTOMOUNT_OPEN);
 
-    bind_builder_bool_inverted (builder, gnome_media_handling_preferences,
-               NEMO_FILE_MANAGEMENT_PROPERTIES_AUTORUN_MEDIA_WIDGET,
-               GNOME_DESKTOP_MEDIA_HANDLING_AUTORUN);
+    // bind_builder_bool_inverted (builder, gnome_media_handling_preferences,
+               // NEMO_FILE_MANAGEMENT_PROPERTIES_AUTORUN_MEDIA_WIDGET,
+               // GNOME_DESKTOP_MEDIA_HANDLING_AUTORUN);
 
     bind_builder_bool (builder, nemo_preferences,
                NEMO_FILE_MANAGEMENT_PROPERTIES_DETECT_CONTENT_MEDIA_WIDGET,

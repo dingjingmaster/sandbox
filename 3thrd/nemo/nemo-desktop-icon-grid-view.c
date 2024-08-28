@@ -348,9 +348,9 @@ nemo_desktop_icon_grid_view_dispose (GObject *object)
 					      desktop_directory_changed_callback,
 					      NULL);
 
-	g_signal_handlers_disconnect_by_func (gnome_lockdown_preferences,
-					      nemo_view_update_menus,
-					      icon_view);
+	// g_signal_handlers_disconnect_by_func (gnome_lockdown_preferences,
+					      // nemo_view_update_menus,
+					      // icon_view);
 
 	G_OBJECT_CLASS (nemo_desktop_icon_grid_view_parent_class)->dispose (object);
 }
@@ -639,10 +639,10 @@ nemo_desktop_icon_grid_view_constructed (GObject *object)
 
     nemo_desktop_icon_grid_view_update_icon_container_fonts (desktop_icon_grid_view);
 
-    g_signal_connect_swapped (gnome_lockdown_preferences,
-                  "changed::" NEMO_PREFERENCES_LOCKDOWN_COMMAND_LINE,
-                  G_CALLBACK (nemo_view_update_menus),
-                  desktop_icon_grid_view);
+    // g_signal_connect_swapped (gnome_lockdown_preferences,
+                  // "changed::" NEMO_PREFERENCES_LOCKDOWN_COMMAND_LINE,
+                  // G_CALLBACK (nemo_view_update_menus),
+                  // desktop_icon_grid_view);
 }
 
 static void

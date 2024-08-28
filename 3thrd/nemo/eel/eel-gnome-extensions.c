@@ -2,7 +2,7 @@
 
 /* eel-gnome-extensions.c - implementation of new functions that operate on
                             gnome classes. Perhaps some of these should be
-  			    rolled into gnome someday.
+                  rolled into gnome someday.
 
    Copyright (C) 1999, 2000, 2001 Eazel, Inc.
 
@@ -36,15 +36,15 @@
 static char *
 prepend_terminal_to_command_line (const char *command_line)
 {
-    GSettings *settings;
+    // GSettings *settings;
     gchar *prefix = NULL;
     gchar *terminal = NULL;
     gchar *ret = NULL;
 
     g_return_val_if_fail (command_line != NULL, g_strdup (command_line));
 
-    settings = g_settings_new ("org.cinnamon.desktop.default-applications.terminal");
-    terminal = g_settings_get_string (settings, "exec");
+    // settings = g_settings_new ("org.cinnamon.desktop.default-applications.terminal");
+    // terminal = g_settings_get_string (settings, "exec");
 
     if (terminal != NULL) {
         gchar *term_path = NULL;
@@ -54,7 +54,7 @@ prepend_terminal_to_command_line (const char *command_line)
         if (term_path != NULL) {
             gchar *exec_flag = NULL;
 
-            exec_flag = g_settings_get_string (settings, "exec-arg");
+            // exec_flag = g_settings_get_string (settings, "exec-arg");
 
             if (exec_flag == NULL) {
                 prefix = g_strdup (term_path);
@@ -68,7 +68,7 @@ prepend_terminal_to_command_line (const char *command_line)
         g_free (term_path);
     }
 
-    g_object_unref (settings);
+    // g_object_unref (settings);
     g_free (terminal);
 
     if (prefix == NULL) {
@@ -78,8 +78,8 @@ prepend_terminal_to_command_line (const char *command_line)
         if (check != NULL) {
             /* Note that gnome-terminal takes -x and
              * as -e in gnome-terminal is broken we use that.
-               20201114 - There looks to be an issue with -x now with gnome-terminal
-               and -- is now the recommended option */
+             * 20201114 - There looks to be an issue with -x now with gnome-terminal
+             * and -- is now the recommended option */
             prefix = g_strdup_printf ("gnome-terminal --");
         } else {
             check = g_find_program_in_path ("nxterm");
@@ -125,20 +125,20 @@ eel_gnome_open_terminal_on_screen (const gchar *command,
 
     app = g_app_info_create_from_commandline (command_line, NULL, 0, &error);
 
-	if (app != NULL && screen != NULL) {
-		display = gdk_screen_get_display (screen);
-		ctx = gdk_display_get_app_launch_context (display);
-		gdk_app_launch_context_set_screen (ctx, screen);
+    if (app != NULL && screen != NULL) {
+        display = gdk_screen_get_display (screen);
+        ctx = gdk_display_get_app_launch_context (display);
+        gdk_app_launch_context_set_screen (ctx, screen);
 
-		g_app_info_launch (app, NULL, G_APP_LAUNCH_CONTEXT (ctx), &error);
+        g_app_info_launch (app, NULL, G_APP_LAUNCH_CONTEXT (ctx), &error);
 
-		g_object_unref (app);
-		g_object_unref (ctx);
-	}
+        g_object_unref (app);
+        g_object_unref (ctx);
+    }
 
-	if (error != NULL) {
-		g_message ("Could not start application on terminal: %s", error->message);
+    if (error != NULL) {
+        g_message ("Could not start application on terminal: %s", error->message);
 
-		g_error_free (error);
-	}
+        g_error_free (error);
+    }
 }

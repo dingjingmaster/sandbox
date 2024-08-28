@@ -323,8 +323,8 @@ eel_pop_up_context_menu (GtkMenu        *menu,
                                 NULL);
     }
 
-	g_object_ref_sink (menu);
-	g_object_unref (menu);
+    g_object_ref_sink (menu);
+    g_object_unref (menu);
 }
 
 GtkMenuItem *

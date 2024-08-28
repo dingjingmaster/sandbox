@@ -890,8 +890,8 @@ update_places (NemoPlacesSidebar *sidebar)
 #endif
 
     gboolean recent_enabled;
-    recent_enabled = g_settings_get_boolean (cinnamon_privacy_preferences,
-                                             NEMO_PREFERENCES_RECENT_ENABLED);
+    recent_enabled = TRUE; //g_settings_get_boolean (cinnamon_privacy_preferences,
+                            //                 NEMO_PREFERENCES_RECENT_ENABLED);
 
     if (recent_enabled && eel_vfs_supports_uri_scheme ("recent")) {
         mount_uri = (char *)"recent:///"; /* No need to strdup */
@@ -4377,9 +4377,9 @@ nemo_places_sidebar_init (NemoPlacesSidebar *sidebar)
 				  G_CALLBACK(desktop_setting_changed_callback),
 				  sidebar);
 
-    g_signal_connect_swapped (cinnamon_privacy_preferences, "changed::" NEMO_PREFERENCES_RECENT_ENABLED,
-                  G_CALLBACK(desktop_setting_changed_callback),
-                  sidebar);
+    // g_signal_connect_swapped (cinnamon_privacy_preferences, "changed::" NEMO_PREFERENCES_RECENT_ENABLED,
+                  // G_CALLBACK(desktop_setting_changed_callback),
+                  // sidebar);
 
 	g_signal_connect_object (nemo_trash_monitor_get (),
 				 "trash_state_changed",
@@ -4454,13 +4454,13 @@ nemo_places_sidebar_dispose (GObject *object)
 					      bookmarks_popup_menu_detach_cb,
 					      sidebar);
 
-	g_signal_handlers_disconnect_by_func (gnome_background_preferences,
-					      desktop_setting_changed_callback,
-					      sidebar);
+	// g_signal_handlers_disconnect_by_func (gnome_background_preferences,
+					      // desktop_setting_changed_callback,
+					      // sidebar);
 
-    g_signal_handlers_disconnect_by_func (cinnamon_privacy_preferences,
-                          desktop_setting_changed_callback,
-                          sidebar);
+    // g_signal_handlers_disconnect_by_func (cinnamon_privacy_preferences,
+                          // desktop_setting_changed_callback,
+                          // sidebar);
 
     // g_signal_handlers_disconnect_by_func (xapp_favorites_get_default (),
                                           // favorites_changed_cb,
