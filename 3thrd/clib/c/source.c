@@ -1302,8 +1302,8 @@ CSource* c_child_watch_source_new (CPid pid)
 #else
     // FIXME://
     child_watch_source->poll.fd = -1;
-    child_watch_source->poll.fd = (gintptr) pid;
-    child_watch_source->poll.events = G_IO_IN;
+    child_watch_source->poll.fd = (cintptr) pid;
+    child_watch_source->poll.events = C_IO_IN;
     c_source_add_poll (source, &child_watch_source->poll);
 #endif
 
@@ -2358,7 +2358,7 @@ static bool c_child_watch_check (CSource* source)
 
         if (child_exited) {
             siginfo_t child_info = { 0, };
-            if (waitid (P_PIDFD, childWatchSource->poll.fd, &child_info, WEXITED | WNOHANG) >= 0 && child_info.si_pid != 0) {
+            if (waitid (P_ALL, childWatchSource->poll.fd, &child_info, WEXITED | WNOHANG) >= 0 && child_info.si_pid != 0) {
                 childWatchSource->childStatus = siginfo_t_to_wait_status (&child_info);
                 childWatchSource->childExited = true;
             }

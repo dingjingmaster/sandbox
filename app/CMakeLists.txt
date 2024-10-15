@@ -33,7 +33,7 @@ include(${CMAKE_SOURCE_DIR}/3thrd/clib/c/c.cmake)
 
 add_executable(sandbox main.c ${SANDBOX_SRC} ${PROTO_SRC_C} ${C_SRC})
 
-target_link_libraries(sandbox PUBLIC
+target_link_libraries(sandbox PUBLIC -lpthread
 #        ${FUSE_LIBRARIES}
         ${GLIB_LIBRARIES}
         ${E2FS_LIBRARIES}
