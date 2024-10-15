@@ -2,7 +2,7 @@ Source: sandbox
 Section: utils
 Priority: optional
 Maintainer: dingjing <dingjing@live.cn>
-Build-Depends: cmake, debhelper-compat (= 13)
+Build-Depends: cmake, debhelper-compat (= 9)
 Standards-Version: 4.6.1
 Homepage: 
 Rules-Requires-Root: no
