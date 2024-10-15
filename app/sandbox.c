@@ -188,7 +188,7 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
                 break;
             }
 
-            sc->socket.worker = g_thread_pool_new (sandbox_process_req, sc, 10, true, &error);
+            sc->socket.worker = g_thread_pool_new (sandbox_process_req, sc, 10, false, &error);
             if (error) {
                 ret = false;
                 C_LOG_ERROR("g_thread_pool_new error: %s", error->message);
@@ -783,8 +783,12 @@ static cchar** sandbox_get_client_env (cchar** oldEnv, const GList* cliEnv)
         }
     }
 
-    if (keys) { c_list_free(keys); }
+    C_LOG_VERB("env merge OK!");
+
+    if (keys) { g_list_free(keys); }
     if (hash) { g_hash_table_destroy(hash); }
+
+    C_LOG_VERB("env merge ok, return!");
 
     return (cchar**) c_ptr_array_free(ptr, false);
 }

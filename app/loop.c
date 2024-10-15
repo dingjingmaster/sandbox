@@ -4,6 +4,7 @@
 
 #include "loop.h"
 
+#include <glib.h>
 #include <sys/stat.h>
 
 struct _LoopDevice
@@ -12,7 +13,7 @@ struct _LoopDevice
     CHashTable*         fileLoop;
 };
 
-C_LOCK_DEFINE(gsLoopDevice);
+G_LOCK_DEFINE(gsLoopDevice);
 static LoopDevice* gsLoopDevices = NULL;
 
 static bool loop_info_update();
@@ -26,7 +27,7 @@ void loop_debug_print()
         return;
     }
 
-    C_LOCK(gsLoopDevice);
+    G_LOCK(gsLoopDevice);
 
     printf("loop file:\n");
     const CHashTable* lf = gsLoopDevices->loopFile;
@@ -36,7 +37,7 @@ void loop_debug_print()
     const CHashTable* fl = gsLoopDevices->fileLoop;
     c_hash_table_foreach(fl, (CHFunc)debug_print, NULL);
 
-    C_UNLOCK(gsLoopDevice);
+    G_UNLOCK(gsLoopDevice);
 }
 
 bool loop_check_file_is_inuse(const char* fileName)
@@ -45,11 +46,11 @@ bool loop_check_file_is_inuse(const char* fileName)
 
     loop_info_update();
 
-    C_LOCK(gsLoopDevice);
+    G_LOCK(gsLoopDevice);
 
     bool ret = c_hash_table_contains(gsLoopDevices->fileLoop, c_file_path_format_arr(fileName));
 
-    C_UNLOCK(gsLoopDevice);
+    G_UNLOCK(gsLoopDevice);
 
     C_LOG_VERB("fileName: %s -- %s -- %s", fileName, c_file_path_format_arr(fileName), ret ? "true" : "false");
 
@@ -62,11 +63,11 @@ bool loop_check_device_is_inuse(const char* devName)
 
     loop_info_update();
 
-    C_LOCK(gsLoopDevice);
+    G_LOCK(gsLoopDevice);
 
     bool ret = c_hash_table_contains(gsLoopDevices->loopFile, c_file_path_format_arr(devName));
 
-    C_UNLOCK(gsLoopDevice);
+    G_UNLOCK(gsLoopDevice);
 
     return ret;
 }
@@ -79,16 +80,23 @@ char *loop_get_free_device_name()
 
     c_return_val_if_fail(fr, NULL);
 
-    char line[4096];
+    char line[4096] = {0};
     do {
         if (!fgets(line, sizeof(line), fr)) {
+            C_LOG_ERROR("losetup -f read line error!");
             break;
         }
+        C_LOG_VERB("Loop device line: %s", (strlen(line) > 0) ? line : "");
         c_strstrip(line);
+        C_LOG_VERB("Loop device line strip: %s", (strlen(line) > 0) ? line : "");
         char* s = c_strrstr(line, "\n");
+        C_LOG_VERB("Loop device line strrstr: %s", (strlen(s) > 0) ? s: "");
         while (s) {s[0] = '\0'; s = c_strrstr(line, "\n");};
+        C_LOG_VERB("Loop device line after strrstr: %s", (strlen(line) > 0) ? line : "");
     } while (0);
     pclose(fr);
+
+    C_LOG_VERB("Loop device: %s", (strlen(line) > 0) ? line : "");
 
     return ((strlen(line) > 0) ? c_strdup(line) : NULL);
 }
@@ -113,11 +121,11 @@ char *loop_get_device_name_by_file_name(const char *fileName)
 
     loop_info_update();
 
-    C_LOCK(gsLoopDevice);
+    G_LOCK(gsLoopDevice);
 
     char* value = c_hash_table_lookup(gsLoopDevices->fileLoop, c_file_path_format_arr(fileName));
 
-    C_UNLOCK(gsLoopDevice);
+    G_UNLOCK(gsLoopDevice);
 
     return (value ? c_strdup(value) : NULL);
 }
@@ -206,10 +214,14 @@ static bool loop_info_update()
         if (!loopT || !fileT) {
             c_free(loopT);
             c_free(fileT);
+            c_strfreev(p);
+            continue;
         }
         c_strfreev(p);
 
-        C_LOCK(gsLoopDevice);
+        C_LOG_VERB("start lock");
+        G_LOCK(gsLoopDevice);
+        C_LOG_VERB("lock OK");
         do {
             const char* loopF = c_file_path_format_arr(loopT);
             const char* fileF = c_file_path_format_arr(fileT);
@@ -228,7 +240,9 @@ static bool loop_info_update()
             char* file2 = c_strdup(fileF);
             c_hash_table_insert(gsLoopDevices->fileLoop, file2, loop2);
         } while (false);
-        C_UNLOCK(gsLoopDevice);
+        C_LOG_VERB("start unlock");
+        G_UNLOCK(gsLoopDevice);
+        C_LOG_VERB("unlock OK");
     }
     pclose(fr);
 
