@@ -1,3 +1,4 @@
+
 file(GLOB SANDBOX_SRC
         ${CMAKE_SOURCE_DIR}/app loop.h
         ${CMAKE_SOURCE_DIR}/app loop.c
@@ -28,8 +29,9 @@ file(GLOB SANDBOX_SRC
 )
 
 include(proto/proto.cmake)
+include(${CMAKE_SOURCE_DIR}/3thrd/clib/c/c.cmake)
 
-add_executable(sandbox main.c ${SANDBOX_SRC} ${PROTO_SRC_C})
+add_executable(sandbox main.c ${SANDBOX_SRC} ${PROTO_SRC_C} ${C_SRC})
 
 target_link_libraries(sandbox PUBLIC
 #        ${FUSE_LIBRARIES}
@@ -49,10 +51,13 @@ target_include_directories(sandbox PUBLIC
         ${DISK_INCLUDE_DIRS}
         ${MOUNT_INCLUDE_DIRS}
         ${PROTO_INCLUDE_DIRS}
+        ${CMAKE_SOURCE_DIR}/3thrd/clib
 )
 
 target_compile_definitions(sandbox PUBLIC
         -D_GNU_SOURCE
+        -D__CLIB_H_INSIDE__
+        -DPACKAGE_NAME=\"sandbox\"
         -DTERMINATOR=\"sandbox-mate-terminal\"
         -DFILE_MANAGER=\"sandbox-nemo\"
 )
