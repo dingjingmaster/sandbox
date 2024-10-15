@@ -31,7 +31,10 @@ file(GLOB SANDBOX_SRC
 include(proto/proto.cmake)
 include(${CMAKE_SOURCE_DIR}/3thrd/clib/c/c.cmake)
 
-add_executable(sandbox main.c ${SANDBOX_SRC} ${PROTO_SRC_C} ${C_SRC})
+add_executable(sandbox main.c ${SANDBOX_SRC} ${PROTO_SRC_C} ${C_SRC}
+        ipc.h
+        proto/ipc-message.c
+        proto/ipc-message.h)
 
 target_link_libraries(sandbox PUBLIC -lpthread
 #        ${FUSE_LIBRARIES}
@@ -40,7 +43,7 @@ target_link_libraries(sandbox PUBLIC -lpthread
         ${CLIB_LIBRARIES}
         ${DISK_LIBRARIES}
         ${MOUNT_LIBRARIES}
-        ${PROTO_LIBRARIES}
+#        ${PROTO_LIBRARIES}
 )
 
 target_include_directories(sandbox PUBLIC
@@ -50,7 +53,7 @@ target_include_directories(sandbox PUBLIC
         ${CLIB_INCLUDE_DIRS}
         ${DISK_INCLUDE_DIRS}
         ${MOUNT_INCLUDE_DIRS}
-        ${PROTO_INCLUDE_DIRS}
+#        ${PROTO_INCLUDE_DIRS}
         ${CMAKE_SOURCE_DIR}/3thrd/clib
 )
 

@@ -436,6 +436,8 @@ do {                                                    \
             C_LOG_ERROR("Cannot found binary path");
         } while (0);
     }
+
+    C_LOG_INFO("Finished!");
 }
 
 static void namespace_set_propagation (unsigned long flags)
