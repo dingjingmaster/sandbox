@@ -572,7 +572,7 @@ bool filesystem_rootfs(const char *mountPoint)
 
     // 软连接 lib64
     {
-        if (!mklink("usr/lib", "lib64")) {
+        if (!mklink("usr/lib64", "lib64")) {
             return false;
         }
     }

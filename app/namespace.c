@@ -347,14 +347,14 @@ static void namespace_chroot_execute (const char* cmd, const char* mountPoint, c
         for (int i = 0; env[i]; ++i) {
             char** arr = c_strsplit(env[i], "=", 2);
             if (c_strv_length(arr) != 2) {
-                C_LOG_ERROR("error ENV %s", env[i]);
+                // C_LOG_ERROR("error ENV %s", env[i]);
                 c_strfreev(arr);
                 continue;
             }
 
             char* key = arr[0];
             char* val = arr[1];
-            C_LOG_VERB("[ENV] set %s", env[i]);
+            C_LOG_VERB("[ENV] set %s", key);
             c_setenv(key, val, true);
             c_strfreev(arr);
         }

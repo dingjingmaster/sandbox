@@ -67,7 +67,7 @@ typedef struct
 static void     sandbox_init_env        (cchar*** env);
 static void     sandbox_req             (SandboxContext *context);
 static void     sandbox_process_req     (gpointer data, gpointer udata);
-static cchar**  sandbox_get_client_env  (cchar** oldEnv, GList* cliEnv);
+static cchar**  sandbox_get_client_env  (cchar** oldEnv, const GList* cliEnv);
 static csize    read_all_data           (GSocket* fr, char** out/*out*/);
 static bool     sandbox_send_cmd        (SandboxContext* context, const char* buf, gsize bufSize);
 static gboolean sandbox_new_req         (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData);
@@ -444,8 +444,11 @@ do {                                                            \
         USE_CLIENT_ENV("TERM");
         USE_CLIENT_ENV("COLORTERM");
 
+        USE_CLIENT_ENV("MAIL");
         USE_CLIENT_ENV("SHLVL");
         USE_CLIENT_ENV("DISPLAY");
+        USE_CLIENT_ENV("SUDO_GID");
+        USE_CLIENT_ENV("XAUTHORITY");
 
         USE_CLIENT_ENV("XMODIFIERS");
         USE_CLIENT_ENV("QT_IM_MODULE");
@@ -551,8 +554,8 @@ static void sandbox_process_req (gpointer data, gpointer udata)
 out:
     // finished!
     if (binStr) { g_free(binStr); }
-    if (conn)   { g_object_unref (conn); }
     if (cmd)    { ipc_message_data_free(&cmd); }
+    if (conn)   { g_object_unref (conn); }
 
     (void) udata;
 }
@@ -640,8 +643,8 @@ static csize read_all_data(GSocket* fr, char** out/*out*/)
         }
     }
 
-    if(error) g_error_free(error);
-    if (*out) c_free0 (*out);
+    if (error)  { g_error_free(error); }
+    if (*out)   { c_free0 (*out); }
     *out = str;
 
     return len;
@@ -732,23 +735,56 @@ do { \
 #endif
 }
 
-static cchar** sandbox_get_client_env (cchar** oldEnv, GList* cliEnv)
+static cchar** sandbox_get_client_env (cchar** oldEnv, const GList* cliEnv)
 {
     C_LOG_DEBUG("old env");
+
+    GHashTable* hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
     CPtrArray* ptr = c_ptr_array_new();
     if (oldEnv) {
         for (int i = 0; oldEnv[i]; ++i) {
-            c_ptr_array_add(ptr, c_strdup(oldEnv[i]));
+            char** arr = c_strsplit(oldEnv[i], "=", 2);
+            if (c_strv_length(arr) != 2) {
+                continue;
+            }
+            if (!g_hash_table_contains(hash, arr[0])) {
+                g_hash_table_insert(hash, g_strdup(arr[0]), g_strdup(arr[1]));
+            }
+            c_strfreev (arr);
         }
     }
 
     if (cliEnv) {
         C_LOG_DEBUG("client env");
         for (GList* env = cliEnv; env; env = env->next) {
-            c_ptr_array_add(ptr, env->data);
+            char** arr = c_strsplit(env->data, "=", 2);
+            if (c_strv_length(arr) != 2) {
+                continue;
+            }
+            if (g_hash_table_contains(hash, arr[0])) {
+                g_hash_table_replace(hash, g_strdup(arr[0]), g_strdup(arr[1]));
+            }
+            else {
+                g_hash_table_insert(hash, g_strdup(arr[0]), g_strdup(arr[1]));
+            }
+            if (arr) { c_strfreev(arr); }
         }
     }
+
+    C_LOG_VERB("client env OK!");
+
+    GList* keys = g_hash_table_get_keys(hash);
+    for (GList* env = keys; env; env = env->next) {
+        char* val = (char*) g_hash_table_lookup(hash, env->data);
+        if (val) {
+            gchar* kv = g_strdup_printf("%s=%s", env->data, val);
+            c_ptr_array_add(ptr, kv);
+        }
+    }
+
+    if (keys) { c_list_free(keys); }
+    if (hash) { g_hash_table_destroy(hash); }
 
     return (cchar**) c_ptr_array_free(ptr, false);
 }

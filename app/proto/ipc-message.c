@@ -26,7 +26,7 @@ IpcMessageData* ipc_message_data_new(void)
 
 void ipc_message_data_free(IpcMessageData** data)
 {
-    g_return_if_fail (data != NULL);
+    g_return_if_fail (data != NULL || *data == NULL);
 
     if ((*data)->ipcData) {
         g_list_free_full((*data)->ipcData, g_free);
@@ -110,9 +110,8 @@ bool ipc_message_unpack(IpcMessageData* data, const char* buf, gsize bufSize)
     for (i = 0; arr[i]; i++) {
         data->ipcData = g_list_append(data->ipcData, g_strdup(arr[i]));
     }
-    if (arr) {
-        g_strfreev(arr);
-    }
+
+    if (arr)    { g_strfreev(arr); }
 
     return true;
 }
