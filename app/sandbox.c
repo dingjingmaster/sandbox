@@ -154,6 +154,8 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
         }
         g_socket_set_blocking (sc->socket.socket, true);
 
+        C_LOG_INFO("sandbox started: '%s'", sandbox_is_first() ? "Server" : "Client");
+
         if (sandbox_is_first()) {
             bool ret = namespace_enter();
             if (!ret) {
@@ -199,6 +201,7 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
             g_signal_connect (G_SOCKET_LISTENER(sc->socket.listener), "incoming", (GCallback) sandbox_new_req, sc);
         }
         else {
+            C_LOG_VERB("[CLIENT] sandbox begin parse command line.");
             do {
                 GError* error = NULL;
                 sc->cmdLine.cmdCtx = g_option_context_new(NULL);
@@ -403,16 +406,20 @@ static void sandbox_req(SandboxContext *context)
     if (gsCmdline.terminator) {
         // 请求打开终端
         cmd.cmdtype = COMMAND_LINE_TYPE_E__CMD_Q_OPEN_TERMINATOR;
+        C_LOG_INFO("[Client] open terminator[%d]", cmd.cmdtype);
     }
     else if (gsCmdline.fileManager) {
         // 请求打开文件管理器
+        C_LOG_INFO("[Client] open file manager[%d]", cmd.cmdtype);
         cmd.cmdtype = COMMAND_LINE_TYPE_E__CMD_Q_OPEN_FILE_MANAGER;
     }
     else if (gsCmdline.quit) {
         // 关闭守护进程
+        C_LOG_INFO("[Client] quit[%d]", cmd.cmdtype);
         cmd.cmdtype = COMMAND_LINE_TYPE_E__CMD_Q_QUIT;
     }
     else {
+        C_LOG_INFO("[Client] other cmd [%d]", cmd.cmdtype);
         char* help = g_option_context_get_help(context->cmdLine.cmdCtx, true, NULL);
         printf(help);
         return;
@@ -561,7 +568,7 @@ static void sandbox_process_req (gpointer data, gpointer udata)
             break;
         }
         default: {
-            C_LOG_ERROR("Unrecognized command type!");
+            C_LOG_ERROR("Unrecognized command type: [%d]", cmd->cmdtype);
             break;
         }
     }
