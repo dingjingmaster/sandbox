@@ -1374,9 +1374,9 @@ error_exit:
 }
 
 /*
- *        Set appropriate flags for showing NTFS metafiles
- *    or files marked as hidden.
- *    Not set in ntfs_mount() to avoid breaking existing tools.
+ *  Set appropriate flags for showing NTFS metafiles
+ *  or files marked as hidden.
+ *  Not set in ntfs_mount() to avoid breaking existing tools.
  */
 
 int ntfs_set_shown_files(ntfs_volume *vol, BOOL show_sys_files, BOOL show_hid_files, BOOL hide_dot_files)

@@ -135,7 +135,7 @@
 typedef enum { WRITE_STANDARD, WRITE_BITMAP, WRITE_LOGFILE } WRITE_TYPE;
 
 #ifdef NO_NTFS_DEVICE_DEFAULT_IO_OPS
-#error "No default device io operations!  Cannot build mkntfs.  \
+#error "No default device io operations!  Cannot build.  \
 You need to run ./configure without the --disable-default-device-io-ops \
 switch if you want to be able to build the NTFS utilities."
 #endif
@@ -147,6 +147,23 @@ switch if you want to be able to build the NTFS utilities."
 #define SANDBOX_FS_MAGIC_ID         0x5246
 
 #define SANDBOX_VERSION_NEW         0x0001
+
+// check --start
+#define RETURN_FS_ERRORS_CORRECTED (1)
+#define RETURN_SYSTEM_NEEDS_REBOOT (2)
+#define RETURN_FS_ERRORS_LEFT_UNCORRECTED (4)
+#define RETURN_OPERATIONAL_ERROR (8)
+#define RETURN_USAGE_OR_SYNTAX_ERROR (16)
+#define RETURN_CANCELLED_BY_USER (32)
+/* Where did 64 go? */
+#define RETURN_SHARED_LIBRARY_ERROR (128)
+#define check_failed(FORMAT, ARGS...) \
+do { \
+    gsErrors++; \
+    ntfs_log_redirect(__FUNCTION__,__FILE__,__LINE__, \
+        NTFS_LOG_LEVEL_ERROR,NULL,FORMAT,##ARGS); \
+} while (0);
+// check -- end
 
 
 struct BITMAP_ALLOCATION
@@ -180,26 +197,41 @@ static BOOL mkntfs_initialize_rl_logfile        (void);
 static BOOL mkntfs_create_root_structures       (void);
 static BOOL mkntfs_fill_device_with_zeroes      (void);
 static int create_backup_boot_sector            (u8 *buff);
+static int mft_bitmap_get_bit                   (s64 mft_no);
+static VCN get_last_vcn                         (runlist *rl);
 static runlist * allocate_scattered_clusters    (s64 clusters);
 static ntfs_time stdinfo_time                   (MFT_RECORD *m);
 static int initialize_quota                     (MFT_RECORD *m);
 static BOOL non_resident_unnamed_data           (MFT_RECORD *m);
+static void check_volume                        (ntfs_volume *vol);
+static int reset_dirty                          (ntfs_volume *vol);
 static BOOL mkntfs_override_vol_params          (ntfs_volume *vol);
 static void deallocate_scattered_clusters       (const runlist *rl);
 static BOOL bitmap_deallocate                   (LCN lcn, s64 length);
+static int verify_mft_preliminary               (ntfs_volume *rawvol);
+static int mft_bitmap_load                      (ntfs_volume *rawvol);
 static void fs_sandbox_header_init              (EfsFileHeader* header);
+static BOOL check_file_record                   (u8 *buffer, u16 buflen);
 static BOOL append_to_bad_blocks                (unsigned long long block);
 static void bitmap_build                        (u8 *buf, LCN lcn, s64 length);
+static void verify_mft_record                   (ntfs_volume *vol, s64 mft_num);
 static int bitmap_get_and_set                   (LCN lcn, unsigned long length);
+static int assert_u32_equal                     (u32 val, u32 ok, const char *name);
+static int assert_u32_noteq                     (u32 val, u32 wrong, const char *name);
+static int assert_u32_less                      (u32 val1, u32 val2, const char *name);
+static int assert_u32_lesseq                    (u32 val1, u32 val2, const char *name);
 static int add_attr_object_id                   (MFT_RECORD *m, const GUID *object_id);
 static BOOL mkntfs_open_partition               (ntfs_volume *vol, const char* devName);
 static int initialize_secure                    (char *sds, u32 sds_size, MFT_RECORD *m);
+static void replay_log                          (ntfs_volume *vol __attribute__((unused)));
 static int make_room_for_attribute              (MFT_RECORD *m, char *pos, const u32 size);
 static uint64_t crc64                           (uint64_t crc, const byte * data, size_t size);
+static BOOL verify_boot_sector                  (struct ntfs_device *dev, ntfs_volume *rawvol);
 static int add_attr_sd                          (MFT_RECORD *m, const u8 *sd, const s64 sd_len);
 static s64 mkntfs_bitmap_write                  (struct ntfs_device *dev, s64 offset, s64 length);
 static BOOL mkntfs_parse_long                   (const char *string, const char *name, long *num);
 static int make_room_for_index_entry_in_index_block (INDEX_BLOCK *idx, INDEX_ENTRY *pos, u32 size);
+static ATTR_REC *check_attr_record              (ATTR_REC *attr_rec, MFT_RECORD *mft_rec, u16 buflen);
 static int index_obj_id_insert                  (MFT_RECORD *m, const GUID *guid, const leMFT_REF ref);
 static BOOL mkntfs_parse_llong                  (const char *string, const char *name, long long *num);
 static long long mkntfs_write                   (struct ntfs_device *dev, const void *b, long long count);
@@ -212,6 +244,7 @@ static int insert_file_link_in_dir_index        (INDEX_BLOCK *idx, leMFT_REF fil
 static int add_attr_vol_name                    (MFT_RECORD *m, const char *vol_name, const int vol_name_len __attribute__((unused)));
 static int ntfs_index_keys_compare              (u8 *key1, u8 *key2, int key1_length, int key2_length, COLLATION_RULES collation_rule);
 static int insert_index_entry_in_res_dir_index  (INDEX_ENTRY *idx, u32 idx_size, MFT_RECORD *m, ntfschar *name, u32 name_size, ATTR_TYPES type);
+static runlist *load_runlist                    (ntfs_volume *rawvol, s64 offset_to_file_record, ATTR_TYPES attr_type, u32 size_of_file_record);
 static int upgrade_to_large_index               (MFT_RECORD *m, const char *name, u32 name_len, const IGNORE_CASE_BOOL ic, INDEX_ALLOCATION **idx);
 static s64 ntfs_rlwrite                         (struct ntfs_device *dev, const runlist *rl, const u8 *val, const s64 val_len, s64 *inited_size, WRITE_TYPE write_type);
 static int add_attr_bitmap                      (MFT_RECORD *m, const char *name, const u32 name_len, const IGNORE_CASE_BOOL ic, const u8 *bitmap, const u32 bitmap_len);
@@ -253,6 +286,17 @@ static long long                                gsMftZoneEnd            = 0;    
 static long long                                gsNumBadBlocks          = 0;            /* Number of bad clusters */
 static long long*                               gsBadBlocks             = NULL;         /* Array of bad clusters */
 static struct BITMAP_ALLOCATION*                gsAllocation            = NULL;         /* 簇/块的起始地址。Head of cluster allocations */
+
+// check
+static int                                      gsErrors                = 0;
+static int                                      gsUnsupported           = 0;
+static s64                                      gsCurrentMftRecord      = 0;
+static short                                    gsBytesPerSector        = 0;
+static short                                    gsSectorsPerCluster     = 0;
+static u32                                      gsMftBitmapRecords      = 0;
+static u8*                                      gsMftBitmapBuf          = NULL;
+static runlist_element*                         gsMftRl                 = NULL;
+static runlist_element*                         gsMftBitmapRl           = NULL;
 
 // format -- start
 static struct _MkfsOpt
@@ -349,6 +393,7 @@ bool sandbox_fs_format(const char* filePath)
     const char* locale = setlocale(LC_ALL, NULL);
     if (!locale) {
         locale = setlocale(LC_CTYPE, NULL);
+        C_LOG_VERB("setlocale: '%s' error", locale ? locale : "NULL");
         return false;
     }
 
@@ -384,7 +429,7 @@ bool sandbox_fs_format(const char* filePath)
     }
 
     // version
-    gsVol->major_ver = 0;
+    gsVol->major_ver = 3;
     gsVol->minor_ver = 1;
 
     /**
@@ -612,6 +657,80 @@ done:
     mkntfs_cleanup();    /* Device is unlocked and closed here */
 
     setlocale(LC_ALL, locale);
+
+    return true;
+}
+
+bool sandbox_fs_check(const char * filePath)
+{
+    c_return_val_if_fail(filePath != NULL, false);
+
+    int ret;
+    ntfs_volume *vol;
+    ntfs_volume rawvol;
+    struct ntfs_device *dev;
+
+    dev = ntfs_device_alloc(filePath, 0, &ntfs_device_default_io_ops, NULL);
+    if (!dev) {
+        return false;
+    }
+
+    if (dev->d_ops->open(dev, O_RDONLY)) {
+        ntfs_log_perror("Error opening partition device");
+        ntfs_device_free(dev);
+        return false;
+    }
+
+    if ((ret = verify_boot_sector(dev,&rawvol))) {
+        dev->d_ops->close(dev);
+        return ret;
+    }
+    ntfs_log_verbose("Boot sector verification complete. Proceeding to $MFT");
+
+    verify_mft_preliminary(&rawvol);
+
+    /* ntfs_device_mount() expects the device to be closed. */
+    if (dev->d_ops->close(dev)) {
+        ntfs_log_perror("Failed to close the device.");
+    }
+
+    // at this point we know that the volume is valid enough for mounting.
+    /* Call ntfs_device_mount() to do the actual mount. */
+    vol = ntfs_device_mount(dev, NTFS_MNT_RDONLY);
+    if (!vol) {
+        ntfs_device_free(dev);
+        return false;
+    }
+
+    replay_log(vol);
+
+    if (vol->flags & VOLUME_IS_DIRTY) {
+        ntfs_log_warning("Volume is dirty.\n");
+    }
+
+    check_volume(vol);
+
+    if (gsErrors) {
+        ntfs_log_info("Errors found.\n");
+    }
+
+    if (gsUnsupported) {
+        ntfs_log_info("Unsupported cases found.\n");
+    }
+
+    if (!gsErrors && !gsUnsupported) {
+        reset_dirty(vol);
+    }
+
+    ntfs_umount(vol, FALSE);
+
+    if (gsErrors) {
+        return false;
+    }
+
+    if (gsUnsupported) {
+        return false;
+    }
 
     return true;
 }
@@ -3099,21 +3218,14 @@ static BOOL mkntfs_open_partition(ntfs_volume *vol, const char* devName)
     }
 
     if (!S_ISBLK(sbuf.st_mode)) {
-        ntfs_log_error("%s is not a block device.\n", vol->dev->d_name);
         if (!sbuf.st_size && !sbuf.st_blocks) {
             ntfs_log_error("You must specify the number of sectors.\n");
             goto done;
         }
-        // fixme:// DJ-
-        // opts.num_sectors = sbuf.st_blocks;
-        // opts.sector_size = 512;
-
-        ntfs_log_warning("mkntfs forced anyway.\n");
 #ifdef HAVE_LINUX_MAJOR_H
     }
     else if ((IDE_DISK_MAJOR(MAJOR(sbuf.st_rdev)) && MINOR(sbuf.st_rdev) % 64 == 0) || (SCSI_DISK_MAJOR(MAJOR(sbuf.st_rdev)) && MINOR(sbuf.st_rdev) % 16 == 0)) {
         ntfs_log_error("%s is entire device, not just one partition.\n", vol->dev->d_name);
-        ntfs_log_warning("mkntfs forced anyway.\n");
 #endif
     }
 
@@ -3125,7 +3237,7 @@ static BOOL mkntfs_open_partition(ntfs_volume *vol, const char* devName)
     }
     else if (mnt_flags & NTFS_MF_MOUNTED) {
         ntfs_log_error("%s is mounted.\n", vol->dev->d_name);
-        ntfs_log_warning("mkntfs forced anyway. Hope /etc/mtab is incorrect.\n");
+        ntfs_log_warning("format forced anyway. Hope /etc/mtab is incorrect.\n");
     }
     result = TRUE;
 
@@ -3914,11 +4026,10 @@ static int create_backup_boot_sector(u8 *buff)
     size = 512;
     if (size < opts.sectorSize)
         size = opts.sectorSize;
-    if (gsVol->dev->d_ops->seek(gsVol->dev, (opts.numSectors + 1) *
-            opts.sectorSize - size, SEEK_SET) == (off_t)-1) {
+    if (gsVol->dev->d_ops->seek(gsVol->dev, (opts.numSectors + 1) * opts.sectorSize - size, SEEK_SET) == (off_t)-1) {
         ntfs_log_perror("Seek failed");
         goto bb_err;
-            }
+    }
     if (size > 8192)
         size = 8192;
     bw = mkntfs_write(gsVol->dev, buff, size);
@@ -4512,3 +4623,579 @@ static BOOL mkntfs_create_root_structures(void)
     return TRUE;
 }
 
+static BOOL verify_boot_sector(struct ntfs_device *dev, ntfs_volume *rawvol)
+{
+    u8 buf[512] = {0};
+    NTFS_BOOT_SECTOR *ntfs_boot = (NTFS_BOOT_SECTOR *)&buf;
+
+    gsCurrentMftRecord = 9;
+
+    if (ntfs_pread(dev, 0, sizeof(buf), buf) != sizeof(buf)) {
+        check_failed("Failed to read boot sector.\n");
+        return 1;
+    }
+
+    if ((buf[0]!=0xeb) || ((buf[1]!=0x52) && (buf[1]!=0x5b)) || (buf[2]!=0x90)) {
+        check_failed("Boot sector: Bad jump.\n");
+    }
+
+    if (ntfs_boot->oem_id != magicNTFS) {
+        check_failed("Boot sector: Bad NTFS magic.\n");
+    }
+
+    gsBytesPerSector = le16_to_cpu(ntfs_boot->bpb.bytes_per_sector);
+    if (!gsBytesPerSector) {
+        check_failed("Boot sector: Bytes per sector is 0.\n");
+    }
+
+    if (gsBytesPerSector % 512) {
+        check_failed("Boot sector: Bytes per sector is not a multiple of 512.\n");
+    }
+    gsSectorsPerCluster = ntfs_boot->bpb.sectors_per_cluster;
+
+    // todo: if partition, query bios and match heads/tracks? */
+
+    // Initialize some values into rawvol. We will need those later.
+    rawvol->dev = dev;
+    ntfs_boot_sector_parse(rawvol, (NTFS_BOOT_SECTOR *)buf);
+
+    return 0;
+}
+
+static void check_volume(ntfs_volume *vol)
+{
+    s64 mft_num, nr_mft_records;
+
+    ntfs_log_warning("Unsupported: check_volume()\n");
+
+    // For each mft record, verify that it contains a valid file record.
+    nr_mft_records = vol->mft_na->initialized_size >> vol->mft_record_size_bits;
+    ntfs_log_info("Checking %lld MFT records.\n", (long long)nr_mft_records);
+
+    for (mft_num=0; mft_num < nr_mft_records; mft_num++) {
+        verify_mft_record(vol, mft_num);
+    }
+
+    // todo: Check metadata files.
+
+    // todo: Second pass on mft records. Now check the contents as well.
+    // todo: When going through runlists, build a bitmap.
+
+    // todo: cluster accounting.
+    return;
+}
+
+static int reset_dirty(ntfs_volume *vol)
+{
+    le16 flags;
+
+    if (!(vol->flags | VOLUME_IS_DIRTY))
+        return 0;
+
+    ntfs_log_verbose("Resetting dirty flag.\n");
+
+    flags = vol->flags & ~VOLUME_IS_DIRTY;
+
+    if (ntfs_volume_write_flags(vol, flags)) {
+        ntfs_log_error("Error setting volume flags.\n");
+        return -1;
+    }
+    return 0;
+}
+
+static int verify_mft_preliminary(ntfs_volume *rawvol)
+{
+    gsCurrentMftRecord = 0;
+    s64 mft_offset, mftmirr_offset;
+    int res;
+
+    ntfs_log_trace("Entering verify_mft_preliminary().\n");
+    // todo: get size_of_file_record from boot sector
+    // Load the first segment of the $MFT/DATA runlist.
+    mft_offset = rawvol->mft_lcn * rawvol->cluster_size;
+    mftmirr_offset = rawvol->mftmirr_lcn * rawvol->cluster_size;
+    gsMftRl = load_runlist(rawvol, mft_offset, AT_DATA, 1024);
+    if (!gsMftRl) {
+        check_failed("Loading $MFT runlist failed. Trying $MFTMirr.\n");
+        gsMftRl = load_runlist(rawvol, mftmirr_offset, AT_DATA, 1024);
+    }
+    if (!gsMftRl) {
+        check_failed("Loading $MFTMirr runlist failed too. Aborting.\n");
+        return RETURN_FS_ERRORS_LEFT_UNCORRECTED | RETURN_OPERATIONAL_ERROR;
+    }
+    // TODO: else { recover $MFT } // Use $MFTMirr to recover $MFT.
+    // todo: support loading the next runlist extents when ATTRIBUTE_LIST is used on $MFT.
+    // If attribute list: Gradually load mft runlist. (parse runlist from first file record, check all referenced file records, continue with the next file record). If no attribute list, just load it.
+
+    // Load the runlist of $MFT/Bitmap.
+    // todo: what about ATTRIBUTE_LIST? Can we reuse code?
+    gsMftBitmapRl = load_runlist(rawvol, mft_offset, AT_BITMAP, 1024);
+    if (!gsMftBitmapRl) {
+        check_failed("Loading $MFT/Bitmap runlist failed. Trying $MFTMirr.\n");
+        gsMftBitmapRl = load_runlist(rawvol, mftmirr_offset, AT_BITMAP, 1024);
+    }
+    if (!gsMftBitmapRl) {
+        check_failed("Loading $MFTMirr/Bitmap runlist failed too. Aborting.\n");
+        return RETURN_FS_ERRORS_LEFT_UNCORRECTED;
+        // todo: rebuild the bitmap by using the "in_use" file record flag or by filling it with 1's.
+    }
+
+    /* Load $MFT/Bitmap */
+    if ((res = mft_bitmap_load(rawvol)))
+        return res;
+    return -1; /* FIXME: Just added to fix compiler warning without thinking about what should be here.  (Yura) */
+}
+
+static void verify_mft_record(ntfs_volume *vol, s64 mft_num)
+{
+    u8 *buffer;
+    int is_used;
+
+    gsCurrentMftRecord = mft_num;
+
+    is_used = mft_bitmap_get_bit(mft_num);
+    if (is_used<0) {
+        ntfs_log_error("Error getting bit value for record %lld.\n",
+            (long long)mft_num);
+    } else if (!is_used) {
+        ntfs_log_verbose("Record %lld unused. Skipping.\n", (long long)mft_num);
+        return;
+    }
+
+    buffer = ntfs_malloc(vol->mft_record_size);
+    if (!buffer)
+        goto verify_mft_record_error;
+
+    ntfs_log_verbose("MFT record %lld\n", (long long)mft_num);
+    if (ntfs_attr_pread(vol->mft_na, mft_num*vol->mft_record_size, vol->mft_record_size, buffer) < 0) {
+        ntfs_log_perror("Couldn't read $MFT record %lld", (long long)mft_num);
+        goto verify_mft_record_error;
+    }
+
+    check_file_record(buffer, vol->mft_record_size);
+    // todo: if offset to first attribute >= 0x30, number of mft record should match.
+    // todo: Match the "record is used" with the mft bitmap.
+    // todo: if this is not base, check that the parent is a base, and is in use, and pointing to this record.
+
+    // todo: if base record: for each extent record:
+    //   todo: verify_file_record
+    //   todo: hard link count should be the number of 0x30 attributes.
+    //   todo: Order of attributes.
+    //   todo: make sure compression_unit is the same.
+
+    return;
+    verify_mft_record_error:
+
+        if (buffer)
+            free(buffer);
+    gsErrors++;
+}
+
+static void replay_log(ntfs_volume *vol __attribute__((unused)))
+{
+    // At this time, only check that the log is fully replayed.
+    ntfs_log_warning("Unsupported: replay_log()\n");
+    // todo: if logfile is clean, return success.
+}
+
+static BOOL check_file_record(u8 *buffer, u16 buflen)
+{
+    u16 usa_count, usa_ofs, attrs_offset, usa;
+    u32 bytes_in_use, bytes_allocated, i;
+    MFT_RECORD *mft_rec = (MFT_RECORD *)buffer;
+    ATTR_REC *attr_rec;
+
+    // check record magic
+    assert_u32_equal(le32_to_cpu(mft_rec->magic), le32_to_cpu(magic_FILE), "FILE record magic");
+    // todo: records 16-23 must be filled in order.
+    // todo: what to do with magic_BAAD?
+
+    // check usa_count+offset to update seq <= attrs_offset <
+    //    bytes_in_use <= bytes_allocated <= buflen.
+    usa_ofs = le16_to_cpu(mft_rec->usa_ofs);
+    usa_count = le16_to_cpu(mft_rec->usa_count);
+    attrs_offset = le16_to_cpu(mft_rec->attrs_offset);
+    bytes_in_use = le32_to_cpu(mft_rec->bytes_in_use);
+    bytes_allocated = le32_to_cpu(mft_rec->bytes_allocated);
+    if (assert_u32_lesseq(usa_ofs+usa_count, attrs_offset,
+                "usa_ofs+usa_count <= attrs_offset") ||
+            assert_u32_less(attrs_offset, bytes_in_use,
+                "attrs_offset < bytes_in_use") ||
+            assert_u32_lesseq(bytes_in_use, bytes_allocated,
+                "bytes_in_use <= bytes_allocated") ||
+            assert_u32_lesseq(bytes_allocated, buflen,
+                "bytes_allocated <= max_record_size")) {
+        return 1;
+    }
+
+
+    // We should know all the flags.
+    if (le16_to_cpu(mft_rec->flags) > 0xf) {
+        check_failed("Unknown MFT record flags (0x%x).\n", (unsigned int)le16_to_cpu(mft_rec->flags));
+    }
+    // todo: flag in_use must be on.
+
+    // Remove update seq & check it.
+    usa = *(u16*)(buffer+usa_ofs); // The value that should be at the end of every sector.
+    if (assert_u32_equal(usa_count-1, buflen/NTFS_BLOCK_SIZE, "USA length"))
+        return (1);
+    for (i=1;i<usa_count;i++) {
+        u16 *fixup = (u16*)(buffer+NTFS_BLOCK_SIZE*i-2); // the value at the end of the sector.
+        u16 saved_val = *(u16*)(buffer+usa_ofs+2*i); // the actual data value that was saved in the us array.
+
+        assert_u32_equal(*fixup, usa, "fixup");
+        *fixup = saved_val; // remove it.
+    }
+
+    attr_rec = (ATTR_REC *)(buffer + attrs_offset);
+    while ((u8*)attr_rec<=buffer+buflen-4) {
+
+        // Check attribute record. (Only what is in the buffer)
+        if (attr_rec->type==AT_END) {
+            // Done.
+            return 0;
+        }
+        if ((u8*)attr_rec>buffer+buflen-8) {
+            // not AT_END yet no room for the length field.
+            check_failed("Attribute 0x%x is not AT_END, yet no "
+                    "room for the length field.\n",
+                    (int)le32_to_cpu(attr_rec->type));
+            return 1;
+        }
+
+        attr_rec = check_attr_record(attr_rec, mft_rec, buflen);
+        if (!attr_rec)
+            return 1;
+    }
+    // If we got here, there was an overflow.
+    return 1;
+
+    // todo: an attribute should be at the offset to first attribute, and the offset should be inside the buffer. It should have the value of "next attribute id".
+    // todo: if base record, it should start with attribute 0x10.
+
+    // Highlevel check of attributes.
+    //  todo: Attributes are well-formed.
+    //  todo: Room for next attribute in the end of the previous record.
+
+    return FALSE;
+}
+
+static ATTR_REC *check_attr_record(ATTR_REC *attr_rec, MFT_RECORD *mft_rec, u16 buflen)
+{
+    u16 name_offset;
+    u16 attrs_offset = le16_to_cpu(mft_rec->attrs_offset);
+    u32 attr_type = le32_to_cpu(attr_rec->type);
+    u32 length = le32_to_cpu(attr_rec->length);
+
+    // Check that this attribute does not overflow the mft_record
+    if ((u8*)attr_rec+length >= ((u8*)mft_rec)+buflen) {
+        check_failed("Attribute (0x%x) is larger than FILE record (%lld).\n",
+                (int)attr_type, (long long)gsCurrentMftRecord);
+        return NULL;
+    }
+
+    // Attr type must be a multiple of 0x10 and 0x10<=x<=0x100.
+    if ((attr_type & ~0x0F0) && (attr_type != 0x100)) {
+        check_failed("Unknown attribute type 0x%x.\n",
+            (int)attr_type);
+        goto check_attr_record_next_attr;
+    }
+
+    if (length<24) {
+        check_failed("Attribute %lld:0x%x Length too short (%u).\n",
+            (long long)gsCurrentMftRecord, (int)attr_type,
+            (int)length);
+        goto check_attr_record_next_attr;
+    }
+
+    // If this is the first attribute:
+    // todo: instance number must be smaller than next_instance.
+    if ((u8*)attr_rec == ((u8*)mft_rec) + attrs_offset) {
+        if (!mft_rec->base_mft_record)
+            assert_u32_equal(attr_type, 0x10,
+                "First attribute type");
+        // The following not always holds.
+        // attr 0x10 becomes instance 1 and attr 0x40 becomes 0.
+        //assert_u32_equal(attr_rec->instance, 0,
+        //    "First attribute instance number");
+    } else {
+        assert_u32_noteq(attr_type, 0x10,
+            "Not-first attribute type");
+        // The following not always holds.
+        //assert_u32_noteq(attr_rec->instance, 0,
+        //    "Not-first attribute instance number");
+    }
+    //if (current_mft_record==938 || current_mft_record==1683 || current_mft_record==3152 || current_mft_record==22410)
+    //printf("Attribute %lld:0x%x instance: %u isbase:%d.\n",
+    //        current_mft_record, (int)attr_type, (int)le16_to_cpu(attr_rec->instance), (int)mft_rec->base_mft_record);
+    // todo: instance is unique.
+
+    // Check flags.
+    if (attr_rec->flags & ~(const_cpu_to_le16(0xc0ff))) {
+        check_failed("Attribute %lld:0x%x Unknown flags (0x%x).\n",
+            (long long)gsCurrentMftRecord, (int)attr_type,
+            (int)le16_to_cpu(attr_rec->flags));
+    }
+
+    if (attr_rec->non_resident>1) {
+        check_failed("Attribute %lld:0x%x Unknown non-resident "
+            "flag (0x%x).\n", (long long)gsCurrentMftRecord,
+            (int)attr_type, (int)attr_rec->non_resident);
+        goto check_attr_record_next_attr;
+    }
+
+    name_offset = le16_to_cpu(attr_rec->name_offset);
+    /*
+     * todo: name must be legal unicode.
+     * Not really, information below in urls is about filenames, but I
+     * believe it also applies to attribute names.  (Yura)
+     *  http://blogs.msdn.com/michkap/archive/2006/09/24/769540.aspx
+     *  http://blogs.msdn.com/michkap/archive/2006/09/10/748699.aspx
+     */
+
+    if (attr_rec->non_resident) {
+        // Non-Resident
+
+        // Make sure all the fields exist.
+        if (length<64) {
+            check_failed("Non-resident attribute %lld:0x%x too short (%u).\n",
+                (long long)gsCurrentMftRecord, (int)attr_type,
+                (int)length);
+            goto check_attr_record_next_attr;
+        }
+        if (attr_rec->compression_unit && (length<72)) {
+            check_failed("Compressed attribute %lld:0x%x too short (%u).\n",
+                (long long)gsCurrentMftRecord, (int)attr_type,
+                (int)length);
+            goto check_attr_record_next_attr;
+        }
+
+        // todo: name comes before mapping pairs, and after the header.
+        // todo: length==mapping_pairs_offset+length of compressed mapping pairs.
+        // todo: mapping_pairs_offset is 8-byte aligned.
+
+        // todo: lowest vcn <= highest_vcn
+        // todo: if base record -> lowest vcn==0
+        // todo: lowest_vcn!=0 -> attribute list is used.
+        // todo: lowest_vcn & highest_vcn are in the drive (0<=x<total clusters)
+        // todo: mapping pairs agree with highest_vcn.
+        // todo: compression unit == 0 or 4.
+        // todo: reserved1 == 0.
+        // todo: if not compressed nor sparse, initialized_size <= allocated_size and data_size <= allocated_size.
+        // todo: if compressed or sparse, allocated_size <= initialized_size and allocated_size <= data_size
+        // todo: if mft_no!=0 and not compressed/sparse, data_size==initialized_size.
+        // todo: if mft_no!=0 and compressed/sparse, allocated_size==initialized_size.
+        // todo: what about compressed_size if compressed?
+        // todo: attribute must not be 0x10, 0x30, 0x40, 0x60, 0x70, 0x90, 0xd0 (not sure about 0xb0, 0xe0, 0xf0)
+    } else {
+        u16 value_offset = le16_to_cpu(attr_rec->value_offset);
+        u32 value_length = le32_to_cpu(attr_rec->value_length);
+        // Resident
+        if (attr_rec->name_length) {
+            if (name_offset < 24)
+                check_failed("Resident attribute with "
+                    "name intersecting header.\n");
+            if (value_offset < name_offset +
+                    attr_rec->name_length)
+                check_failed("Named resident attribute "
+                    "with value before name.\n");
+        }
+        // if resident, length==value_length+value_offset
+        //assert_u32_equal(le32_to_cpu(attr_rec->value_length)+
+        //    value_offset, length,
+        //    "length==value_length+value_offset");
+        // if resident, length==value_length+value_offset
+        if (value_length+value_offset > length) {
+            check_failed("value_length(%d)+value_offset(%d)>length(%d) for attribute 0x%x.\n", (int)value_length, (int)value_offset, (int)length, (int)attr_type);
+            return NULL;
+        }
+
+        // Check resident_flags.
+        if (attr_rec->resident_flags>0x01) {
+            check_failed("Unknown resident flags (0x%x) for attribute 0x%x.\n", (int)attr_rec->resident_flags, (int)attr_type);
+        } else if (attr_rec->resident_flags && (attr_type!=0x30)) {
+            check_failed("Resident flags mark attribute 0x%x as indexed.\n", (int)attr_type);
+        }
+
+        // reservedR is 0.
+        assert_u32_equal(attr_rec->reservedR, 0, "Resident Reserved");
+
+        // todo: attribute must not be 0xa0 (not sure about 0xb0, 0xe0, 0xf0)
+        // todo: check content well-formness per attr_type.
+    }
+    return 0;
+check_attr_record_next_attr:
+    return (ATTR_REC *)(((u8 *)attr_rec) + length);
+}
+
+static int mft_bitmap_get_bit(s64 mft_no)
+{
+    if (mft_no >= gsMftBitmapRecords)
+        return -1;
+    return ntfs_bit_get(gsMftBitmapBuf, mft_no);
+}
+
+static int mft_bitmap_load(ntfs_volume *rawvol)
+{
+    VCN vcn;
+    u32 mft_bitmap_length;
+
+    vcn = get_last_vcn(gsMftBitmapRl);
+    if (vcn<=LCN_EINVAL) {
+        gsMftBitmapBuf = NULL;
+        /* This case should not happen, not even with on-disk errors */
+        goto error;
+    }
+
+    mft_bitmap_length = vcn * rawvol->cluster_size;
+    gsMftBitmapRecords = 8 * mft_bitmap_length * rawvol->cluster_size /
+        rawvol->mft_record_size;
+
+    gsMftBitmapBuf = (u8*)ntfs_malloc(mft_bitmap_length);
+    if (!gsMftBitmapBuf)
+        goto error;
+    if (ntfs_rl_pread(rawvol, gsMftBitmapRl, 0, mft_bitmap_length, gsMftBitmapBuf)!=mft_bitmap_length)
+        goto error;
+    return 0;
+    error:
+        gsMftBitmapRecords = 0;
+    ntfs_log_error("Could not load $MFT/Bitmap.\n");
+    return RETURN_OPERATIONAL_ERROR;
+}
+
+static VCN get_last_vcn(runlist *rl)
+{
+    VCN res;
+
+    if (!rl)
+        return LCN_EINVAL;
+
+    res = LCN_EINVAL;
+    while (rl->length) {
+        ntfs_log_verbose("vcn: %lld, length: %lld.\n", (long long)rl->vcn, (long long)rl->length);
+        if (rl->vcn<0)
+            res = rl->vcn;
+        else
+            res = rl->vcn + rl->length;
+        rl++;
+    }
+
+    return res;
+}
+
+static runlist *load_runlist(ntfs_volume *rawvol, s64 offset_to_file_record, ATTR_TYPES attr_type, u32 size_of_file_record)
+{
+    u8 *buf;
+    u16 attrs_offset;
+    u32 length;
+    ATTR_RECORD *attr_rec;
+
+    if (size_of_file_record<22) // offset to attrs_offset
+        return NULL;
+
+    buf = (u8*)ntfs_malloc(size_of_file_record);
+    if (!buf)
+        return NULL;
+
+    if (ntfs_pread(rawvol->dev, offset_to_file_record, size_of_file_record, buf) != size_of_file_record) {
+        check_failed("Failed to read file record at offset %lld (0x%llx).\n", (long long)offset_to_file_record, (long long)offset_to_file_record);
+        return NULL;
+    }
+
+    attrs_offset = le16_to_cpu(((MFT_RECORD*)buf)->attrs_offset);
+    // first attribute must be after the header.
+    if (attrs_offset<42) {
+        check_failed("First attribute must be after the header (%u).\n", (int)attrs_offset);
+    }
+    attr_rec = (ATTR_RECORD *)(buf + attrs_offset);
+    //printf("uv1.\n");
+
+    while ((u8*)attr_rec<=buf+size_of_file_record-4) {
+
+        //printf("Attr type: 0x%x.\n", attr_rec->type);
+        // Check attribute record. (Only what is in the buffer)
+        if (attr_rec->type==AT_END) {
+            check_failed("Attribute 0x%x not found in file record at offset %lld (0x%llx).\n", (int)le32_to_cpu(attr_rec->type),
+                    (long long)offset_to_file_record,
+                    (long long)offset_to_file_record);
+            return NULL;
+        }
+        if ((u8*)attr_rec>buf+size_of_file_record-8) {
+            // not AT_END yet no room for the length field.
+            check_failed("Attribute 0x%x is not AT_END, yet no room for the length field.\n", (int)le32_to_cpu(attr_rec->type));
+            return NULL;
+        }
+
+        length = le32_to_cpu(attr_rec->length);
+
+        // Check that this attribute does not overflow the mft_record
+        if ((u8*)attr_rec+length >= buf+size_of_file_record) {
+            check_failed("Attribute (0x%x) is larger than FILE record at offset %lld (0x%llx).\n",
+                    (int)le32_to_cpu(attr_rec->type),
+                    (long long)offset_to_file_record,
+                    (long long)offset_to_file_record);
+            return NULL;
+        }
+        // todo: what ATTRIBUTE_LIST (0x20)?
+
+        if (attr_rec->type==attr_type) {
+            // Eurika!
+
+            // ntfs_mapping_pairs_decompress only use two values from vol. Just fake it.
+            // todo: it will also use vol->major_ver if defined(DEBUG). But only for printing purposes.
+
+            // Assume ntfs_boot_sector_parse() was called.
+            return ntfs_mapping_pairs_decompress(rawvol, attr_rec, NULL);
+        }
+
+        attr_rec = (ATTR_RECORD*)((u8*)attr_rec+length);
+    }
+    // If we got here, there was an overflow.
+    check_failed("file record corrupted at offset %lld (0x%llx).\n", (long long)offset_to_file_record, (long long)offset_to_file_record);
+
+    return NULL;
+}
+
+static int assert_u32_equal(u32 val, u32 ok, const char *name)
+{
+    if (val!=ok) {
+        check_failed("Assertion failed for '%lld:%s'. should be 0x%x, "
+            "was 0x%x.\n", (long long)gsCurrentMftRecord, name,
+            (int)ok, (int)val);
+        //errors++;
+        return 1;
+    }
+    return 0;
+}
+
+static int assert_u32_noteq(u32 val, u32 wrong, const char *name)
+{
+    if (val==wrong) {
+        check_failed("Assertion failed for '%lld:%s'. should not be "
+            "0x%x.\n", (long long)gsCurrentMftRecord, name,
+            (int)wrong);
+        return 1;
+    }
+    return 0;
+}
+
+static int assert_u32_lesseq(u32 val1, u32 val2, const char *name)
+{
+    if (val1 > val2) {
+        check_failed("Assertion failed for '%s'. 0x%x > 0x%x\n", name, (int)val1, (int)val2);
+        //errors++;
+        return 1;
+    }
+    return 0;
+}
+
+static int assert_u32_less(u32 val1, u32 val2, const char *name)
+{
+    if (val1 >= val2) {
+        check_failed("Assertion failed for '%s'. 0x%x >= 0x%x\n",
+            name, (int)val1, (int)val2);
+        //errors++;
+        return 1;
+    }
+    return 0;
+}

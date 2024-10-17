@@ -12,7 +12,7 @@ int main (void)
         return -1;
     }
 
-    if (sandbox_fs_format(isoPath)) {
+    if (!sandbox_fs_format(isoPath)) {
         printf("format file '%s' error\n", isoPath);
         return -1;
     }
