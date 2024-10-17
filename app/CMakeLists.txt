@@ -32,15 +32,6 @@ file(GLOB SANDBOX_SRC
 
         ${CMAKE_SOURCE_DIR}/app fs/attrdef.h
         ${CMAKE_SOURCE_DIR}/app fs/attrdef.c
-
-#        ${CMAKE_SOURCE_DIR}/app/fs fs.h
-#        ${CMAKE_SOURCE_DIR}/app/fs fs.c
-
-#        ${CMAKE_SOURCE_DIR}/app/fs fs/device.h
-#        ${CMAKE_SOURCE_DIR}/app/fs fs/device.c
-#
-#        ${CMAKE_SOURCE_DIR}/app/fs fs/volume.h
-#        ${CMAKE_SOURCE_DIR}/app/fs fs/volume.c
 )
 
 include(proto/proto.cmake)

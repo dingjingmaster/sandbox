@@ -264,9 +264,82 @@ static struct _MkfsOpt
     long long           partStartSect;
     long                sectorsPerTrack;
     long                mftZoneMultiplier;
-} opts;
+} opts = {
+    .heads              = -1,
+    .sectorSize         = -1,
+    .numSectors         = -1,
+    .clusterSize        = -1,
+    .partStartSect      = -1,
+    .sectorsPerTrack    = -1,
+    .mftZoneMultiplier  = -1,
+};
 // format -- end
 
+bool sandbox_fs_generated_box(const char * absolutePath, cuint64 sizeMB)
+{
+    c_return_val_if_fail(absolutePath && (absolutePath[0] == '/') && (sizeMB > 0), false);
+
+    bool hasError = false;
+
+    cchar* dirPath = c_strdup(absolutePath);
+    if (dirPath) {
+        cchar* dir = c_strrstr(dirPath, "/");
+        if (dir) {
+            *dir = '\0';
+        }
+        C_LOG_VERB("dir: %s", dirPath);
+
+        if (!c_file_test(dirPath, C_FILE_TEST_EXISTS)) {
+            if (0 != c_mkdir_with_parents(dirPath, 0755)) {
+                C_LOG_VERB("mkdir_with_parents: '%s' error.", dirPath);
+                hasError = true;
+            }
+        }
+        c_free0(dirPath);
+    }
+    c_return_val_if_fail(!hasError, false);
+
+    int fd = open(absolutePath, O_RDWR | O_CREAT, 0600);
+    if (fd < 0) {
+        C_LOG_VERB("open: '%s' error: %s", absolutePath, c_strerror(errno));
+        return false;
+    }
+
+    if (lseek(fd, 0, SEEK_END) > 0) {
+        return true;
+    }
+
+    do {
+        cuint64 needSize = 1024 * 1024 * sizeMB;
+        off_t ret = lseek(fd, needSize - 1, SEEK_SET);
+        if (ret < 0) {
+            C_LOG_VERB("lseek: '%s' error: %s", absolutePath, c_strerror(errno));
+            hasError = true;
+            break;
+        }
+        else {
+            if (-1 == write(fd, "", 1)) {
+                C_LOG_VERB("write: '%s' error: %s", absolutePath, c_strerror(errno));
+                hasError = true;
+                break;
+            }
+            c_fsync(fd);
+        }
+    } while (0);
+
+    // 写入 andsec 加密文件头
+
+    CError* error = NULL;
+    c_close(fd, &error);
+    if (error) {
+        hasError = true;
+        C_LOG_VERB("close: '%s' error: %s", absolutePath, error->message);
+        c_error_free(error);
+    }
+    c_return_val_if_fail(!hasError, false);
+
+    return true;
+}
 
 bool sandbox_fs_format(const char* filePath)
 {

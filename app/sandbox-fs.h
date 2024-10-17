@@ -8,7 +8,8 @@
 #include "../3thrd/clib/c/macros.h"
 
 
-bool        sandbox_fs_format       (const char* filePath);
+bool        sandbox_fs_generated_box    (const char* absolutePath, cuint64 sizeMB);
+bool        sandbox_fs_format           (const char* filePath);
 
 
 #endif // sandbox_SANDBOX_FS_H
