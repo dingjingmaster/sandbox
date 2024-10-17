@@ -4,7 +4,6 @@
 
 #include "filesystem.h"
 
-//#include <fuse.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <c/clib.h>
@@ -17,7 +16,7 @@
 #include <udisks/udisks.h>
 #include <sys/sysmacros.h>
 
-#include "fs/volume.h"
+#include "../3thrd/fs/types.h"
 
 
 /**
@@ -31,196 +30,6 @@ static bool mklink          (const char* src, const char* dest);
 static bool mkbind          (const char* src, const char* dest);
 
 
-#if 0
-/**
- * @brief
- *  1. ntfs文件系统格式化： attrdef.c boot.c sd.c mkntfs.c utils.c libntfs-3g
- */
-
-#define SANDBOX_OPTION(t, p)            {t, offsetof(SandboxOption, p), 1}
-
-typedef struct _SandboxOption           SandboxOption;
-
-struct _SandboxOption
-{
-    const char*         mountPoint;     // 挂在点后续去掉
-    const char*         format;         // 格式化文件系统的位置, @note:// 后续去掉
-    unsigned int        size;           // 格式化文件系统的大小，单位是MB
-    bool                umount;         // 卸载文件系统
-    int                 showHelp;
-};
-
-/**
- * @brief 获取 loop 设备与关联文件
- */
-static const CHashTable* filesystem_loop_files ();
-
-
-/**
- * @brief 初始化文件系统
- * @details 返回指针将会保存到 `struct fuse_context` 的 `private_data` 字段。最终作为 `destroy()` 函数的传入参数
- */
-static void* sandbox_fuse_init (struct fuse_conn_info* conn, struct fuse_config* cfg);
-
-/**
- * @brief 文件系统退出时候执行的清除操作
- */
-static void sandbox_fuse_destroy (void*);
-
-/**
- * @brief 获取文件属性，类似于 `stat()`
- * @details 忽略 `st_dev` 和 `st_blksize`。如果设置了 `use_ino` 挂载参数， `st_ino` 字段将会生效，此时libfuse和kernel将使用不同的inode。
- * @return 如果 info 为空，表示文件没有被打开
- */
-static int sandbox_fuse_getattr(const char* path, struct stat* statData, struct fuse_file_info* info);
-
-/**
- * @param path
- * @param mask
- * @return
- * @TODO:
- */
-static int sandbox_fuse_access (const char* path, int mask);
-
-/**
- * @param path
- * @param statData
- * @return
- * @TODO:
- */
-static int sandbox_fuse_opendir(const char* path, struct fuse_file_info* fileInfo);
-
-/**
- * @param path
- * @param fileInfo
- * @return
- * @todo:
- */
-static int sandbox_fuse_open(const char* path, struct fuse_file_info* fileInfo);
-
-/**
- * @param path
- * @param buf
- * @param size
- * @param offset
- * @param fileInfo
- * @return
- * @note:
- */
-static int sandbox_fuse_read(const char* path, char* buf, size_t size, off_t offset, struct fuse_file_info* fileInfo);
-
-/**
- * @param path
- * @param buf
- * @param filter
- * @param offset
- * @param fileInfo
- * @return
- * @note:
- */
-static int sandbox_fuse_readdir(const char* path, void* buf, fuse_fill_dir_t filter, off_t offset, struct fuse_file_info* fileInfo, enum fuse_readdir_flags flags);
-
-/**
- * @param path
- * @param buf
- * @param size
- * @param offset
- * @param fileInfo
- * @return
- * @note:
- */
-static int sandbox_fuse_write(const char* path, const char*buf, size_t size, off_t offset, struct fuse_file_info* fileInfo);
-
-/**
- * @brief 检查权限
- * @return
- * @note 此处定制权限控制
- */
-static bool sandbox_check_access_rights();
-
-/**
- * @brief 格式化一个文件系统
- * @param key 加密密钥
- * @param path 要格式文件系统的路径
- * @param size 文件系统大小
- * @return
- */
-static bool sandbox_format_fs(const char* key, const char* path, csize size);
-
-/**
- * @brief 帮助
- * @param program
- */
-static void show_help (const char* program);
-
-/**
- * @brief 输出命令行参数解析结果
- * @param cmdline
- */
-static void show_cmd (SandboxOption* cmdline);
-
-/**
- * @brief 解析命令行参数
- * @param data
- * @param arg
- * @param key
- * @param outargs
- * @return
- */
-int sandbox_cmd_parse(void *data, const char *arg, int key, struct fuse_args *outargs);
-
-static SandboxOption gsOptions;
-static const struct fuse_opt gsOptionsSpec[] = {
-    SANDBOX_OPTION("--size", size),
-    SANDBOX_OPTION("--umount", umount),
-    SANDBOX_OPTION("--format", format),
-    SANDBOX_OPTION("--help", showHelp),
-    SANDBOX_OPTION("--mount", mountPoint),
-    FUSE_OPT_END,
-};
-static struct fuse_operations gsFuseOps = {
-    .init = sandbox_fuse_init,
-    .destroy = sandbox_fuse_destroy,
-    .open = sandbox_fuse_open,
-    .read = sandbox_fuse_read,
-    .write = sandbox_fuse_write,
-    .access = sandbox_fuse_access,
-    .getattr = sandbox_fuse_getattr,
-    .opendir = sandbox_fuse_opendir,
-    .readdir = sandbox_fuse_readdir,
-};
-
-static FSVolume*    gsVolume = NULL;
-
-
-int filesystem_main(int argc, char *argv[])
-{
-    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-
-    if (-1 == fuse_opt_parse(&args, &gsOptions, gsOptionsSpec, sandbox_cmd_parse)) {
-        C_LOG_WARNING("Invalid arguments");
-        return 1;
-    }
-
-    show_cmd(&gsOptions);
-
-    if (gsOptions.showHelp) {
-        show_help(argv[0]);
-        exit(0);
-    }
-    else if (gsOptions.format) {
-        // 格式化一个文件系统
-        sandbox_format_fs("sandbox", gsOptions.format, gsOptions.size);
-    }
-
-    int ret = fuse_main(argc, argv, &gsFuseOps, NULL);
-
-    fuse_opt_free_args(&args);
-
-    return ret;
-}
-
-#endif
 bool filesystem_generated_iso(const char *absolutePath, cuint64 sizeMB)
 {
     c_return_val_if_fail(absolutePath && (absolutePath[0] == '/') && (sizeMB > 0), false);
@@ -257,7 +66,7 @@ bool filesystem_generated_iso(const char *absolutePath, cuint64 sizeMB)
 
     do {
         cuint64 needSize = 1024 * 1024 * sizeMB;
-        int ret = lseek(fd, needSize - 1, SEEK_SET);
+        off_t ret = lseek(fd, needSize - 1, SEEK_SET);
         if (ret < 0) {
             C_LOG_VERB("lseek: '%s' error: %s", absolutePath, c_strerror(errno));
             hasError = true;
@@ -273,6 +82,8 @@ bool filesystem_generated_iso(const char *absolutePath, cuint64 sizeMB)
         }
     } while (0);
 
+    // 写入 andsec 加密文件头
+
     CError* error = NULL;
     c_close(fd, &error);
     if (error) {
@@ -287,9 +98,9 @@ bool filesystem_generated_iso(const char *absolutePath, cuint64 sizeMB)
 
 bool filesystem_format(const char *devPath, const char *fsType)
 {
-    c_return_val_if_fail(devPath && fsType, false);
-
     bool formatted = false;
+
+    c_return_val_if_fail(devPath && fsType, false);
 
     if ((0 == c_strcmp0(fsType, "ext2")) || (0 == c_strcmp0(fsType, "ext3")) || (0 == c_strcmp0(fsType, "ext4"))) {
         FILE* popenFr = NULL;
@@ -373,6 +184,7 @@ bool filesystem_format(const char *devPath, const char *fsType)
     if (block)      { g_object_unref(block); }
     if (udisksObj)  { g_object_unref(udisksObj); }
     if (client)     { g_object_unref(client); }
+
 
     return formatted;
 }
@@ -493,7 +305,7 @@ bool filesystem_is_mount(const char *devPath)
                 break;
             }
 
-            while ((ent == getmntent(mtab)) != NULL) {
+            while ((void*)(ent == getmntent(mtab)) != NULL) {
                 if (0 == c_strcmp0(c_file_path_format_arr(devPath),
                                     c_file_path_format_arr(ent->mnt_fsname))) {
                     mountOK = true;
@@ -1048,3 +860,4 @@ static bool mount_dev (const char* mountPoint)
 
     return true;
 }
+

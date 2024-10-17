@@ -23,7 +23,7 @@
 
 /* Define this to 1 if you want to enable generation of DCE compliant UUIDs.
    */
-#define ENABLE_UUID 1
+#define ENABLE_UUID 0
 
 /* Define to 1 if using internal fuse */
 #define FUSE_INTERNAL 1
@@ -35,7 +35,7 @@
 #define HAVE_BASENAME 1
 
 /* Define to 1 if you have the <byteswap.h> header file. */
-#define HAVE_BYTESWAP_H 1
+#define HAVE_BYTESWAP_H 0
 
 /* Define to 1 if you have the 'clock_gettime' function. */
 #define HAVE_CLOCK_GETTIME 1

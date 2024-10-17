@@ -23,7 +23,7 @@
 #define _NTFS_DEBUG_H
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "../config.h"
 #endif
 
 #include "logging.h"

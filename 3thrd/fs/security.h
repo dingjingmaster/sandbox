@@ -25,11 +25,11 @@
 #ifndef _NTFS_SECURITY_H
 #define _NTFS_SECURITY_H
 
-#include "types.h"
-#include "layout.h"
-#include "inode.h"
-#include "dir.h"
-#include "endians.h"
+#include "./types.h"
+#include "./layout.h"
+#include "./inode.h"
+#include "./dir.h"
+#include "./endians.h"
 
 #ifndef POSIXACLS
 #define POSIXACLS 0

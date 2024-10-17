@@ -24,7 +24,7 @@
 #define _LOGGING_H_
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "../config.h"
 #endif
 
 #ifdef HAVE_STDARG_H

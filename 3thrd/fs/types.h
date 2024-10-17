@@ -24,7 +24,7 @@
 #define _NTFS_TYPES_H
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "../config.h"
 #endif
 
 #if HAVE_STDINT_H || !HAVE_CONFIG_H

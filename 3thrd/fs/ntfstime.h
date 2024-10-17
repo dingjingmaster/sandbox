@@ -34,7 +34,7 @@
 #include <sys/time.h>
 #endif
 
-#include "types.h"
+#include "./types.h"
 
 /*
  * assume "struct timespec" is not defined if st_mtime is not defined

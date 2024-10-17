@@ -26,7 +26,7 @@
 #define _NTFS_COMPAT_H
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "../config.h"
 #endif
 #ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>

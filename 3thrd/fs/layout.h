@@ -24,9 +24,9 @@
 #ifndef _NTFS_LAYOUT_H
 #define _NTFS_LAYOUT_H
 
-#include "endians.h"
+#include "./endians.h"
 #include "support.h"
-#include "types.h"
+#include "./types.h"
 
 /* The NTFS oem_id */
 #define magicNTFS const_cpu_to_le64 (0x202020205346544e) /* "NTFS    " */

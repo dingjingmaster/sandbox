@@ -23,7 +23,7 @@
 #define _NTFS_DEVICE_IO_H
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "../config.h"
 #endif
 
 #ifndef NO_NTFS_DEVICE_DEFAULT_IO_OPS
