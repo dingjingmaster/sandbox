@@ -7,7 +7,7 @@ int main (void)
 {
     const char* isoPath = "/tmp/test-demo.iso";
 
-    if (!sandbox_fs_generated_box(isoPath, 1024)) {
+    if (!sandbox_fs_generated_box(isoPath, 10)) {
         printf("generate file '%s' error\n", isoPath);
         return -1;
     }

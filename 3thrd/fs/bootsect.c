@@ -43,6 +43,7 @@
 #include "bootsect.h"
 #include "debug.h"
 #include "logging.h"
+#include "c/log.h"
 
 /**
  * ntfs_boot_sector_is_ntfs - check if buffer contains a valid ntfs boot sector
@@ -64,22 +65,22 @@ BOOL ntfs_boot_sector_is_ntfs(NTFS_BOOT_SECTOR *b)
     BOOL ret = FALSE;
     u16 sectors_per_cluster;
 
-    ntfs_log_debug("Beginning bootsector check.\n");
+    C_LOG_VERB("Beginning bootsector check.");
 
-    ntfs_log_debug("Checking OEMid, NTFS signature.\n");
+    C_LOG_VERB("Checking OEMid, NTFS signature.");
     if (b->oem_id != const_cpu_to_le64(0x202020205346544eULL)) { /* "NTFS    " */
-        ntfs_log_error("NTFS signature is missing.\n");
+        C_LOG_WARNING("NTFS signature is missing.");
         goto not_ntfs;
     }
 
-    ntfs_log_debug("Checking bytes per sector.\n");
+    C_LOG_VERB("Checking bytes per sector.");
     if (le16_to_cpu(b->bpb.bytes_per_sector) <  256 ||
         le16_to_cpu(b->bpb.bytes_per_sector) > 4096) {
-        ntfs_log_error("Unexpected bytes per sector value (%d).\n", le16_to_cpu(b->bpb.bytes_per_sector));
+        C_LOG_WARNING("Unexpected bytes per sector value (%d).", le16_to_cpu(b->bpb.bytes_per_sector));
         goto not_ntfs;
     }
 
-    ntfs_log_debug("Checking sectors per cluster.\n");
+    C_LOG_VERB("Checking sectors per cluster.");
     switch (b->bpb.sectors_per_cluster) {
     case 1: case 2: case 4: case 8: case 16: case 32: case 64: case 128: {
         break;
@@ -87,16 +88,16 @@ BOOL ntfs_boot_sector_is_ntfs(NTFS_BOOT_SECTOR *b)
     default:
         if ((b->bpb.sectors_per_cluster < 240) || (b->bpb.sectors_per_cluster > 253)) {
             if (b->bpb.sectors_per_cluster > 128) {
-                ntfs_log_error("Unexpected sectors per cluster value (code 0x%x)\n", b->bpb.sectors_per_cluster);
+                C_LOG_WARNING("Unexpected sectors per cluster value (code 0x%x)", b->bpb.sectors_per_cluster);
             }
             else {
-                ntfs_log_error("Unexpected sectors per cluster value (%d).\n", b->bpb.sectors_per_cluster);
+                C_LOG_WARNING("Unexpected sectors per cluster value (%d).", b->bpb.sectors_per_cluster);
             }
             goto not_ntfs;
         }
     }
 
-    ntfs_log_debug("Checking cluster size.\n");
+    C_LOG_VERB("Checking cluster size.");
     if (b->bpb.sectors_per_cluster > 128) {
         sectors_per_cluster = 1 << (256 - b->bpb.sectors_per_cluster);
     }
@@ -105,38 +106,38 @@ BOOL ntfs_boot_sector_is_ntfs(NTFS_BOOT_SECTOR *b)
     }
     i = (u32)le16_to_cpu(b->bpb.bytes_per_sector) * sectors_per_cluster;
     if (i > NTFS_MAX_CLUSTER_SIZE) {
-        ntfs_log_error("Unexpected cluster size (%d).\n", i);
+        C_LOG_WARNING("Unexpected cluster size (%d).", i);
         goto not_ntfs;
     }
 
-    ntfs_log_debug("Checking reserved fields are zero.\n");
+    C_LOG_VERB("Checking reserved fields are zero.");
     if (le16_to_cpu(b->bpb.reserved_sectors) || le16_to_cpu(b->bpb.root_entries) || le16_to_cpu(b->bpb.sectors) || le16_to_cpu(b->bpb.sectors_per_fat) || le32_to_cpu(b->bpb.large_sectors) ||
         b->bpb.fats) {
-        ntfs_log_error("Reserved fields aren't zero (%d, %d, %d, %d, %d, %d).\n", le16_to_cpu(b->bpb.reserved_sectors), le16_to_cpu(b->bpb.root_entries), le16_to_cpu(b->bpb.sectors), le16_to_cpu(b->bpb.sectors_per_fat), le32_to_cpu(b->bpb.large_sectors), b->bpb.fats);
+        C_LOG_WARNING("Reserved fields aren't zero (%d, %d, %d, %d, %d, %d).", le16_to_cpu(b->bpb.reserved_sectors), le16_to_cpu(b->bpb.root_entries), le16_to_cpu(b->bpb.sectors), le16_to_cpu(b->bpb.sectors_per_fat), le32_to_cpu(b->bpb.large_sectors), b->bpb.fats);
         goto not_ntfs;
     }
 
-    ntfs_log_debug("Checking clusters per mft record.\n");
+    C_LOG_VERB("Checking clusters per mft record.");
     if ((u8)b->clusters_per_mft_record < 0xe1 || (u8)b->clusters_per_mft_record > 0xf7) {
         switch (b->clusters_per_mft_record) {
         case 1: case 2: case 4: case 8: case 0x10: case 0x20: case 0x40: {
             break;
         }
         default: {
-            ntfs_log_error("Unexpected clusters per mft record (%d).\n", b->clusters_per_mft_record);
+            C_LOG_WARNING("Unexpected clusters per mft record (%d).", b->clusters_per_mft_record);
             goto not_ntfs;
         }
         }
     }
 
-    ntfs_log_debug("Checking clusters per index block.\n");
+    C_LOG_VERB("Checking clusters per index block.");
     if ((u8)b->clusters_per_index_record < 0xe1 || (u8)b->clusters_per_index_record > 0xf7) {
         switch (b->clusters_per_index_record) {
         case 1: case 2: case 4: case 8: case 0x10: case 0x20: case 0x40: {
             break;
         }
         default: {
-            ntfs_log_error("Unexpected clusters per index record (%d).\n", b->clusters_per_index_record);
+            C_LOG_WARNING("Unexpected clusters per index record (%d).", b->clusters_per_index_record);
             goto not_ntfs;
         }
         }
@@ -144,15 +145,15 @@ BOOL ntfs_boot_sector_is_ntfs(NTFS_BOOT_SECTOR *b)
 
     /* MFT and MFTMirr may not overlap the boot sector or be the same */
     if (((s64)sle64_to_cpu(b->mft_lcn) <= 0) || ((s64)sle64_to_cpu(b->mftmirr_lcn) <= 0) || (b->mft_lcn == b->mftmirr_lcn)) {
-        ntfs_log_error("Invalid location of MFT or MFTMirr.\n");
+        C_LOG_WARNING("Invalid location of MFT or MFTMirr.");
         goto not_ntfs;
     }
 
     if (b->end_of_sector_marker != const_cpu_to_le16(0xaa55)) {
-        ntfs_log_debug("Warning: Bootsector has invalid end of sector marker.\n");
+        C_LOG_VERB("Warning: Bootsector has invalid end of sector marker.");
     }
 
-    ntfs_log_debug("Bootsector check completed successfully.\n");
+    C_LOG_VERB("Bootsector check completed successfully.");
 
     ret = TRUE;
 
@@ -188,8 +189,8 @@ int ntfs_boot_sector_parse(ntfs_volume *vol, const NTFS_BOOT_SECTOR *bs)
 
     vol->sector_size = le16_to_cpu(bs->bpb.bytes_per_sector);           // 512B
     vol->sector_size_bits = ffs(vol->sector_size) - 1;                  //
-    ntfs_log_debug("SectorSize = 0x%x\n", vol->sector_size);
-    ntfs_log_debug("SectorSizeBits = %u\n", vol->sector_size_bits);
+    C_LOG_VERB("SectorSize = 0x%x", vol->sector_size);
+    C_LOG_VERB("SectorSizeBits = %u", vol->sector_size_bits);
     /*
      * The bounds checks on mft_lcn and mft_mirr_lcn (i.e. them being
      * below or equal the number_of_clusters) really belong in the
@@ -202,23 +203,23 @@ int ntfs_boot_sector_parse(ntfs_volume *vol, const NTFS_BOOT_SECTOR *bs)
         sectors_per_cluster = bs->bpb.sectors_per_cluster;              // 8
     }
 
-    ntfs_log_debug("SectorsPerCluster = 0x%x\n", sectors_per_cluster);
+    C_LOG_VERB("SectorsPerCluster = 0x%x", sectors_per_cluster);
     if (sectors_per_cluster & (sectors_per_cluster - 1)) {
-        ntfs_log_error("sectors_per_cluster (%d) is not a power of 2.\n", sectors_per_cluster);
+        C_LOG_WARNING("sectors_per_cluster (%d) is not a power of 2.", sectors_per_cluster);
         return -1;
     }
 
     sectors = sle64_to_cpu(bs->number_of_sectors);                      // 100MB -- 204799 ==> (204799 / 2 / 1024) = 99MB
-    ntfs_log_debug("NumberOfSectors = %lld\n", (long long)sectors);
+    C_LOG_VERB("NumberOfSectors = %lld", (long long)sectors);
     if (!sectors) {
-        ntfs_log_error("Volume size is set to zero.\n");
+        C_LOG_WARNING("Volume size is set to zero.");
         return -1;
     }
 
     // 最后一个扇区
     if (vol->dev->d_ops->seek(vol->dev, (sectors - 1) << vol->sector_size_bits, SEEK_SET) == -1) {
         ntfs_log_perror("Failed to read last sector (%lld)", (long long)(sectors - 1));
-        ntfs_log_error("%s", last_sector_error);
+        C_LOG_WARNING("%s", last_sector_error);
         return -1;
     }
 
@@ -226,16 +227,16 @@ int ntfs_boot_sector_parse(ntfs_volume *vol, const NTFS_BOOT_SECTOR *bs)
 
     vol->mft_lcn = sle64_to_cpu(bs->mft_lcn);                           // 4
     vol->mftmirr_lcn = sle64_to_cpu(bs->mftmirr_lcn);                   // 12799
-    ntfs_log_debug("MFT LCN = %lld\n", (long long)vol->mft_lcn);
-    ntfs_log_debug("MFTMirr LCN = %lld\n", (long long)vol->mftmirr_lcn);
+    C_LOG_VERB("MFT LCN = %lld", (long long)vol->mft_lcn);
+    C_LOG_VERB("MFTMirr LCN = %lld", (long long)vol->mftmirr_lcn);
     if ((vol->mft_lcn < 0 || vol->mft_lcn > vol->nr_clusters) || (vol->mftmirr_lcn < 0 || vol->mftmirr_lcn > vol->nr_clusters)) {
-        ntfs_log_error("$MFT LCN (%lld) or $MFTMirr LCN (%lld) is greater than the number of clusters (%lld).\n", (long long)vol->mft_lcn, (long long)vol->mftmirr_lcn, (long long)vol->nr_clusters);
+        C_LOG_WARNING("$MFT LCN (%lld) or $MFTMirr LCN (%lld) is greater than the number of clusters (%lld).", (long long)vol->mft_lcn, (long long)vol->mftmirr_lcn, (long long)vol->nr_clusters);
         return -1;
     }
 
     vol->cluster_size = sectors_per_cluster * vol->sector_size;         // 每块 sectors 数量 x sector大小 8 * 512B = 4KiB
     if (vol->cluster_size & (vol->cluster_size - 1)) {
-        ntfs_log_error("cluster_size (%d) is not a power of 2.\n", vol->cluster_size);
+        C_LOG_WARNING("cluster_size (%d) is not a power of 2.", vol->cluster_size);
         return -1;
     }
     vol->cluster_size_bits = ffs(vol->cluster_size) - 1;                // 12 ==> 4096
@@ -248,9 +249,9 @@ int ntfs_boot_sector_parse(ntfs_volume *vol, const NTFS_BOOT_SECTOR *bs)
      * 需要获取每个mft记录的集群，如果它是负的，则处理它。然后计算mft_record_size。值0x80是非法的，因此signed char实际上是可以的!
      */
     c = bs->clusters_per_mft_record;                                    // 1KiB
-    ntfs_log_debug("ClusterSize = 0x%x\n", (unsigned)vol->cluster_size);
-    ntfs_log_debug("ClusterSizeBits = %u\n", vol->cluster_size_bits);
-    ntfs_log_debug("ClustersPerMftRecord = 0x%x\n", c);
+    C_LOG_VERB("ClusterSize = 0x%x", (unsigned)vol->cluster_size);
+    C_LOG_VERB("ClusterSizeBits = %u", vol->cluster_size_bits);
+    C_LOG_VERB("ClustersPerMftRecord = 0x%x", c);
     /*
      * When clusters_per_mft_record is negative, it means that it is to
      * be taken to be the negative base 2 logarithm of the mft_record_size
@@ -265,16 +266,16 @@ int ntfs_boot_sector_parse(ntfs_volume *vol, const NTFS_BOOT_SECTOR *bs)
     }
 
     if (vol->mft_record_size & (vol->mft_record_size - 1)) {
-        ntfs_log_error("mft_record_size (%d) is not a power of 2.\n", vol->mft_record_size);
+        C_LOG_WARNING("mft_record_size (%d) is not a power of 2.", vol->mft_record_size);
         return -1;
     }
     vol->mft_record_size_bits = ffs(vol->mft_record_size) - 1;          // 10
-    ntfs_log_debug("MftRecordSize = 0x%x\n", (unsigned)vol->mft_record_size);
-    ntfs_log_debug("MftRecordSizeBits = %u\n", vol->mft_record_size_bits);
+    C_LOG_VERB("MftRecordSize = 0x%x", (unsigned)vol->mft_record_size);
+    C_LOG_VERB("MftRecordSizeBits = %u", vol->mft_record_size_bits);
 
     /* Same as above for INDX record. */
     c = bs->clusters_per_index_record;                                  // 1
-    ntfs_log_debug("ClustersPerINDXRecord = 0x%x\n", c);
+    C_LOG_VERB("ClustersPerINDXRecord = 0x%x", c);
     if (c < 0) {
         vol->indx_record_size = 1 << -c;
     }
@@ -282,8 +283,8 @@ int ntfs_boot_sector_parse(ntfs_volume *vol, const NTFS_BOOT_SECTOR *bs)
         vol->indx_record_size = c << vol->cluster_size_bits;            // 1 << 12, 4KiB
     }
     vol->indx_record_size_bits = ffs(vol->indx_record_size) - 1;        // 12
-    ntfs_log_debug("INDXRecordSize = 0x%x\n", (unsigned)vol->indx_record_size);
-    ntfs_log_debug("INDXRecordSizeBits = %u\n", vol->indx_record_size_bits);
+    C_LOG_VERB("INDXRecordSize = 0x%x", (unsigned)vol->indx_record_size);
+    C_LOG_VERB("INDXRecordSizeBits = %u", vol->indx_record_size_bits);
 
     /**
      * Work out the size of the MFT mirror in number of mft records. If the

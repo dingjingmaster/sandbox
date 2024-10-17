@@ -78,6 +78,7 @@
 #include "device.h"
 #include "logging.h"
 #include "misc.h"
+#include "c/log.h"
 
 #if defined(linux) && defined(_IO) && !defined(BLKGETSIZE)
 #define BLKGETSIZE    _IO(0x12,96)  /* Get device size in 512-byte blocks. */
@@ -207,25 +208,29 @@ s64 ntfs_pread(struct ntfs_device *dev, const s64 pos, s64 count, void *b)
     s64 br, total;
     struct ntfs_device_operations *dops;
 
-    ntfs_log_trace("pos %lld, count %lld\n",(long long)pos,(long long)count);
+    C_LOG_VERB("pos %lld, count %lld",(long long)pos,(long long)count);
 
     if (!b || count < 0 || pos < 0) {
         errno = EINVAL;
+        C_LOG_WARNING("read error!");
         return -1;
     }
-    if (!count)
+    if (!count) {
         return 0;
+    }
 
     dops = dev->d_ops;
 
     for (total = 0; count; count -= br, total += br) {
         br = dops->pread(dev, (char*)b + total, count, pos + total);
         /* If everything ok, continue. */
-        if (br > 0)
+        if (br > 0) {
             continue;
+        }
         /* If EOF or error return number of bytes read. */
-        if (!br || total)
+        if (!br || total) {
             return total;
+        }
         /* Nothing read and error, return error status. */
         return br;
     }
@@ -257,7 +262,7 @@ s64 ntfs_pwrite(struct ntfs_device *dev, const s64 pos, s64 count, const void *b
     s64 written, total, ret = -1;
     struct ntfs_device_operations *dops;
 
-    ntfs_log_trace("pos %lld, count %lld\n",(long long)pos,(long long)count);
+    C_LOG_VERB("pos %lld, count %lld",(long long)pos,(long long)count);
 
     if (!b || count < 0 || pos < 0) {
         errno = EINVAL;
@@ -545,7 +550,7 @@ s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
     {
         u64 size;
         if (dev->d_ops->ioctl(dev, BLKGETSIZE64, &size) >= 0) {
-            ntfs_log_debug("BLKGETSIZE64 nr bytes = %llu (0x%llx)\n", (unsigned long long)size, (unsigned long long)size);
+            C_LOG_VERB("BLKGETSIZE64 nr bytes = %llu (0x%llx)", (unsigned long long)size, (unsigned long long)size);
             return (s64)size / block_size;
         }
     }
@@ -554,7 +559,7 @@ s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
     {
         unsigned long size;
         if (dev->d_ops->ioctl(dev, BLKGETSIZE, &size) >= 0) {
-            ntfs_log_debug("BLKGETSIZE nr 512 byte blocks = %lu (0x%lx)\n", size, size);
+            C_LOG_VERB("BLKGETSIZE nr 512 byte blocks = %lu (0x%lx)", size, size);
             return (s64)size * 512 / block_size;
         }
     }
@@ -563,7 +568,7 @@ s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
     {
         struct floppy_struct this_floppy;
         if (dev->d_ops->ioctl(dev, FDGETPRM, &this_floppy) >= 0) {
-            ntfs_log_debug("FDGETPRM nr 512 byte blocks = %lu (0x%lx)\n", (unsigned long)this_floppy.size, (unsigned long)this_floppy.size);
+            C_LOG_VERB("FDGETPRM nr 512 byte blocks = %lu (0x%lx)", (unsigned long)this_floppy.size, (unsigned long)this_floppy.size);
             return (s64)this_floppy.size * 512 / block_size;
         }
     }
@@ -574,7 +579,7 @@ s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
         off_t size;
 
         if (dev->d_ops->ioctl(dev, DIOCGMEDIASIZE, &size) >= 0) {
-            ntfs_log_debug("DIOCGMEDIASIZE nr bytes = %llu (0x%llx)\n",
+            C_LOG_VERB("DIOCGMEDIASIZE nr bytes = %llu (0x%llx)",
                     (unsigned long long)size,
                     (unsigned long long)size);
             return (s64)size / block_size;
@@ -591,7 +596,7 @@ s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
         if (sector_size >= 0 && dev->d_ops->ioctl(dev,
             DKIOCGETBLOCKCOUNT, &blocks) >= 0)
         {
-            ntfs_log_debug("DKIOCGETBLOCKCOUNT nr blocks = %llu (0x%llx)\n",
+            C_LOG_VERB("DKIOCGETBLOCKCOUNT nr blocks = %llu (0x%llx)",
                 (unsigned long long) blocks,
                 (unsigned long long) blocks);
             return blocks * sector_size / block_size;
@@ -640,7 +645,7 @@ s64 ntfs_device_partition_start_sector_get(struct ntfs_device *dev)
         struct hd_geometry geo;
 
         if (!dev->d_ops->ioctl(dev, HDIO_GETGEO, &geo)) {
-            ntfs_log_debug("HDIO_GETGEO start_sect = %lu (0x%lx)\n", geo.start, geo.start);
+            C_LOG_VERB("HDIO_GETGEO start_sect = %lu (0x%lx)", geo.start, geo.start);
             return geo.start;
         }
     }
@@ -750,8 +755,8 @@ end_hd:
         hd_free_hd_data(hddata);
         free(hddata);
         if (done) {
-            ntfs_log_debug("EDD/BIOD legacy heads = %u, sectors "
-                    "per track = %u\n", dev->d_heads,
+            C_LOG_VERB("EDD/BIOD legacy heads = %u, sectors "
+                    "per track = %u", dev->d_heads,
                     dev->d_sectors_per_track);
             return 0;
         }
@@ -777,7 +782,7 @@ skip_hd:
         if (!dev->d_ops->ioctl(dev, HDIO_GETGEO, &geo)) {
             dev->d_heads = geo.heads;
             dev->d_sectors_per_track = geo.sectors; // 每个磁道包含的扇区数
-            ntfs_log_debug("HDIO_GETGEO heads = %u, sectors per track = %u\n", dev->d_heads, dev->d_sectors_per_track);
+            C_LOG_VERB("HDIO_GETGEO heads = %u, sectors per track = %u", dev->d_heads, dev->d_sectors_per_track);
             return 0;
         }
         err = errno;
@@ -870,9 +875,8 @@ int ntfs_device_sector_size_get(struct ntfs_device *dev)
 #ifdef BLKSSZGET
     {
         int sect_size = 0;
-
         if (!dev->d_ops->ioctl(dev, BLKSSZGET, &sect_size)) {
-            ntfs_log_debug("BLKSSZGET sector size = %d bytes\n", sect_size);
+            C_LOG_VERB("BLKSSZGET sector size = %d bytes", sect_size);
             return sect_size;
         }
     }
@@ -882,7 +886,7 @@ int ntfs_device_sector_size_get(struct ntfs_device *dev)
         size_t sect_size = 0;
 
         if (!dev->d_ops->ioctl(dev, DIOCGSECTORSIZE, &sect_size)) {
-            ntfs_log_debug("DIOCGSECTORSIZE sector size = %d bytes\n",
+            C_LOG_VERB("DIOCGSECTORSIZE sector size = %d bytes",
                     (int) sect_size);
             return sect_size;
         }
@@ -893,7 +897,7 @@ int ntfs_device_sector_size_get(struct ntfs_device *dev)
         uint32_t sect_size = 0;
 
         if (!dev->d_ops->ioctl(dev, DKIOCGETBLOCKSIZE, &sect_size)) {
-            ntfs_log_debug("DKIOCGETBLOCKSIZE sector size = %d bytes\n",
+            C_LOG_VERB("DKIOCGETBLOCKSIZE sector size = %d bytes",
                     (int) sect_size);
             return sect_size;
         }
@@ -927,7 +931,7 @@ int ntfs_device_block_size_set(struct ntfs_device *dev, int block_size __attribu
     {
         size_t s_block_size = block_size;
         if (!dev->d_ops->ioctl(dev, BLKBSZSET, &s_block_size)) {
-            ntfs_log_debug("Used BLKBSZSET to set block size to %d bytes.\n", block_size);
+            C_LOG_VERB("Used BLKBSZSET to set block size to %d bytes.", block_size);
             return 0;
         }
         /* If not a block device, pretend it was successful. */
