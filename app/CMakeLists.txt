@@ -37,8 +37,9 @@ file(GLOB SANDBOX_SRC
 include(proto/proto.cmake)
 include(${CMAKE_SOURCE_DIR}/3thrd/clib/c/c.cmake)
 include(${CMAKE_SOURCE_DIR}/3thrd/fs/libsandbox-fs.cmake)
+include(${CMAKE_SOURCE_DIR}/3thrd/fuse-lite/libfuse-lite.cmake)
 
-add_executable(sandbox main.c ${SANDBOX_SRC} ${PROTO_SRC_C} ${C_SRC} ${SANDBOX_FS_SRC})
+add_executable(sandbox main.c ${SANDBOX_SRC} ${PROTO_SRC_C} ${C_SRC} ${SANDBOX_FS_SRC} ${FUSE_LITE_SRC})
 
 target_link_libraries(sandbox PUBLIC -lpthread
         ${GLIB_LIBRARIES}
@@ -61,6 +62,7 @@ target_compile_definitions(sandbox PUBLIC
         -D_GNU_SOURCE
         -DHAVE_CONFIG_H
         -D__CLIB_H_INSIDE__
+        -D_FILE_OFFSET_BITS=64
         -DPACKAGE_NAME=\"sandbox\"
         -DTERMINATOR=\"sandbox-mate-terminal\"
         -DFILE_MANAGER=\"sandbox-nemo\"

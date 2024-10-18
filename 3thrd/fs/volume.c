@@ -1659,8 +1659,7 @@ exit:
  *
  * On error return -1 with errno set to the error code.
  */
-int ntfs_check_if_mounted(const char *file __attribute__((unused)),
-        unsigned long *mnt_flags)
+int ntfs_check_if_mounted(const char *file __attribute__((unused)), unsigned long *mnt_flags)
 {
     *mnt_flags = 0;
 #if defined(HAVE_MNTENT_H) || (defined(__sun) && defined (__SVR4))

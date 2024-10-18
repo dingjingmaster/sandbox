@@ -6,7 +6,7 @@
     See the file COPYING.LIB
 */
 
-#include "config.h"
+#include "../config.h"
 #include "fuse_opt.h"
 
 #include <stdio.h>
@@ -31,8 +31,12 @@ void fuse_opt_free_args(struct fuse_args *args)
     if (args) {
         if (args->argv && args->allocated) {
             int i;
-            for (i = 0; i < args->argc; i++)
-                free(args->argv[i]);
+            for (i = 0; i < args->argc; i++) {
+                if (args->argv[i]) {
+                    free(args->argv[i]);
+                    args->argv[i] = NULL;
+                }
+            }
             free(args->argv);
         }
         args->argc = 0;
@@ -49,20 +53,24 @@ static int alloc_failed(void)
 
 int fuse_opt_add_arg(struct fuse_args *args, const char *arg)
 {
-    char **newargv;
-    char *newarg;
+    char **newargv = NULL;
+    char *newarg = NULL;
 
-    assert(!args->argv || args->allocated);
+    // assert(!args->argv || args->allocated);
 
-    newargv = realloc(args->argv, (args->argc + 2) * sizeof(char *));
-    newarg = newargv ? strdup(arg) : NULL;
-    if (!newargv || !newarg)
-        return alloc_failed();
+    newargv = realloc(args->argv, (args->argc + 1) * sizeof(char*));
+    if (arg) {
+        newarg = newargv ? strdup(arg) : NULL;
+        if (!newargv || !newarg) {
+            return alloc_failed();
+        }
+    }
 
     args->argv = newargv;
-    args->allocated = 1;
-    args->argv[args->argc++] = newarg;
-    args->argv[args->argc] = NULL;
+    args->allocated = 0;
+    // args->argv[args->argc++] = newarg;
+    // args->argv[args->argc] = NULL;
+
     return 0;
 }
 

@@ -11,7 +11,7 @@
 #define _GNU_SOURCE
 #endif /* __SOLARIS__ */
 
-#include "config.h"
+#include "../config.h"
 #include "fuse_i.h"
 #include "fuse_lowlevel.h"
 #include "fuse_opt.h"
