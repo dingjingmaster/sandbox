@@ -13,6 +13,7 @@ bool        sandbox_fs_format           (const char* devPath);
 bool        sandbox_fs_check            (const char* devPath);
 bool        sandbox_fs_resize           (const char* devPath, cuint64 sizeMB);
 bool        sandbox_fs_mount            (const char* devPath, const char* mountPoint);
+bool        sandbox_fs_unmount          (void);
 
 
 

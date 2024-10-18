@@ -973,6 +973,7 @@ const struct DEFOPTION optionlist[] = {
 	{ (const char*)NULL, 0, 0 } /* end marker */
 } ;
 
+static struct fuse *fh = NULL;
 
 bool sandbox_fs_generated_box(const char * absolutePath, cuint64 sizeMB)
 {
@@ -1518,7 +1519,6 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 
     int err = 0;
     struct stat sbuf;
-    struct fuse *fh = NULL;
     unsigned long existing_mount;
     const char *failed_secure = NULL;
     const char *permissions_mode = NULL;
@@ -1759,6 +1759,17 @@ err2:
     }
 
     return err == 0;
+}
+
+bool sandbox_fs_unmount()
+{
+    g_return_val_if_fail(fh, false);
+
+    if (fh) {
+        fuse_exit(fh);
+    }
+
+    return true;
 }
 
 
