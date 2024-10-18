@@ -1519,13 +1519,13 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
     int err = 0;
     struct stat sbuf;
     struct fuse *fh = NULL;
-    char *parsed_options = NULL;
     unsigned long existing_mount;
     const char *failed_secure = NULL;
     const char *permissions_mode = NULL;
 #if !(defined(__sun) && defined (__SVR4))
     fuse_fstype fstype = FSTYPE_UNKNOWN;
 #endif
+    char* parsed_options = g_strdup_printf("allow_other,nonempty,relatime,fsname=%s", devPath);
 
     // 创建新的进程/线程，执行挂载操作
     if (ntfs_fuse_init()) {
@@ -1555,14 +1555,19 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 
     ctx->security.uid = 0;
     ctx->security.gid = 0;
-    // FIXME:// uid, gid
+    if (!stat(devPath, &sbuf)) {
+        /* collect owner of mount point, useful for default mapping */
+        ctx->security.uid = sbuf.st_uid;
+        ctx->security.gid = sbuf.st_gid;
+   }
 
 #if defined(linux) || defined(__uClinux__)
     fstype = get_fuse_fstype();
 
     err = NTFS_VOLUME_NO_PRIVILEGE;
-    if (restore_privs())
+    if (restore_privs()) {
         goto err_out;
+    }
 
     if (fstype == FSTYPE_NONE || fstype == FSTYPE_UNKNOWN) {
         fstype = load_fuse_module();
@@ -1575,7 +1580,7 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 #endif
 
     if (stat(devPath, &sbuf)) {
-        ntfs_log_perror("Failed to access '%s'", devPath);
+        C_LOG_WARNING("Failed to access '%s'", devPath);
         err = NTFS_VOLUME_NO_PRIVILEGE;
         goto err_out;
     }
@@ -1627,11 +1632,7 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 #ifdef HAVE_SETXATTR	/* extended attributes interface required */
 	ctx->vol->efs_raw = ctx->efs_raw;
 #endif /* HAVE_SETXATTR */
-	if (!ntfs_build_mapping(&ctx->security,ctx->usermap_path,
-		(ctx->vol->secure_flags
-			& ((1 << SECURITY_DEFAULT) | (1 << SECURITY_ACL)))
-		&& !ctx->inherit
-		&& !(ctx->vol->secure_flags & (1 << SECURITY_WANTED)))) {
+	if (!ntfs_build_mapping(&ctx->security,ctx->usermap_path, (ctx->vol->secure_flags & ((1 << SECURITY_DEFAULT) | (1 << SECURITY_ACL))) && !ctx->inherit && !(ctx->vol->secure_flags & (1 << SECURITY_WANTED)))) {
 #if POSIXACLS
 		/* use basic permissions if requested */
 		if (ctx->vol->secure_flags & (1 << SECURITY_DEFAULT))
@@ -1647,8 +1648,7 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 		}
 #else /* POSIXACLS */
 #if KERNELPERMS
-		if (!(ctx->vol->secure_flags
-			& ((1 << SECURITY_DEFAULT) | (1 << SECURITY_ACL)))) {
+		if (!(ctx->vol->secure_flags & ((1 << SECURITY_DEFAULT) | (1 << SECURITY_ACL)))) {
 			/*
 			 * No explicit option but user mapping found
 			 * force default security
@@ -1670,8 +1670,7 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 		/* same ownership/permissions for all files */
 		ctx->security.mapping[MAPUSERS] = (struct MAPPING*)NULL;
 		ctx->security.mapping[MAPGROUPS] = (struct MAPPING*)NULL;
-		if ((ctx->vol->secure_flags & (1 << SECURITY_WANTED))
-		   && !(ctx->vol->secure_flags & (1 << SECURITY_DEFAULT))) {
+		if ((ctx->vol->secure_flags & (1 << SECURITY_WANTED)) && !(ctx->vol->secure_flags & (1 << SECURITY_DEFAULT))) {
 			ctx->vol->secure_flags |= (1 << SECURITY_DEFAULT);
 			if (ntfs_strinsert(&parsed_options, ",default_permissions")) {
 				err = NTFS_VOLUME_SYNTAX_ERROR;
@@ -1681,24 +1680,26 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 		if (ctx->vol->secure_flags & (1 << SECURITY_DEFAULT)) {
 			ctx->vol->secure_flags |= (1 << SECURITY_RAW);
 			permissions_mode = "Global ownership and permissions enforced";
-		} else {
+		}
+        else {
 			ctx->vol->secure_flags &= ~(1 << SECURITY_RAW);
 			permissions_mode = "Ownership and permissions disabled";
 		}
 	}
-	if (ctx->usermap_path)
+	if (ctx->usermap_path) {
 		free (ctx->usermap_path);
+	}
 
 #if defined(HAVE_SETXATTR) && defined(XATTR_MAPPINGS)
-	xattr_mapping = ntfs_xattr_build_mapping(ctx->vol,
-				ctx->xattrmap_path);
+	xattr_mapping = ntfs_xattr_build_mapping(ctx->vol, ctx->xattrmap_path);
 	ctx->vol->xattr_mapping = xattr_mapping;
 	/*
 	 * Errors are logged, do not refuse mounting, it would be
 	 * too difficult to fix the unmountable mapping file.
 	 */
-	if (ctx->xattrmap_path)
+	if (ctx->xattrmap_path) {
 		free(ctx->xattrmap_path);
+	}
 #endif /* defined(HAVE_SETXATTR) && defined(XATTR_MAPPINGS) */
 
 #ifndef DISABLE_PLUGINS
@@ -1713,6 +1714,7 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 	}
 
 	ctx->mounted = TRUE;
+    C_LOG_VERB("mounted!");
 
 #if defined(linux) || defined(__uClinux__)
 	if (S_ISBLK(sbuf.st_mode) && (fstype == FSTYPE_FUSE)) {
@@ -1720,14 +1722,15 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 	}
 #endif
 	setup_logging(parsed_options);
-	if (failed_secure)
-	        ntfs_log_info("%s\n",failed_secure);
-	if (permissions_mode)
-	        ntfs_log_info("%s, configuration type %d\n",permissions_mode,
-			4 + POSIXACLS*6 - KERNELPERMS*3 + CACHEING);
-	if ((ctx->vol->secure_flags & (1 << SECURITY_RAW))
-	    && !ctx->uid && ctx->gid)
-		ntfs_log_error("Warning : using problematic uid==0 and gid!=0\n");
+	if (failed_secure) {
+	    C_LOG_WARNING("%s",failed_secure);
+	}
+	if (permissions_mode) {
+	    C_LOG_WARNING("%s, configuration type %d", permissions_mode, 4 + POSIXACLS*6 - KERNELPERMS*3 + CACHEING);
+	}
+	if ((ctx->vol->secure_flags & (1 << SECURITY_RAW)) && !ctx->uid && ctx->gid) {
+		C_LOG_WARNING("Warning : using problematic uid==0 and gid!=0");
+	}
 
 	fuse_loop(fh);
 
@@ -1735,10 +1738,12 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 
 	fuse_unmount(mountPoint, ctx->fc);
 	fuse_destroy(fh);
+
 err_out:
 	ntfs_mount_error(devPath, mountPoint, err);
-	if (ctx->abs_mnt_point)
+	if (ctx->abs_mnt_point) {
 		free(ctx->abs_mnt_point);
+	}
 #if defined(HAVE_SETXATTR) && defined(XATTR_MAPPINGS)
 	ntfs_xattr_free_mapping(xattr_mapping);
 #endif /* defined(HAVE_SETXATTR) && defined(XATTR_MAPPINGS) */
@@ -1749,7 +1754,9 @@ err2:
 #endif /* DISABLE_PLUGINS */
 
 	free(ctx);
-	free(parsed_options);
+    if (parsed_options) {
+	    free(parsed_options);
+    }
 
     return err == 0;
 }
@@ -9721,13 +9728,13 @@ static int ntfs_open(const char *device)
     }
 
     if (ntfs_volume_get_free_space(ctx->vol)) {
-        ntfs_log_perror("Failed to read NTFS $Bitmap");
+        C_LOG_WARNING("Failed to read NTFS $Bitmap");
         goto err_out;
     }
 
     ctx->vol->free_mft_records = ntfs_get_nr_free_mft_records(ctx->vol);
     if (ctx->vol->free_mft_records < 0) {
-        ntfs_log_perror("Failed to calculate free MFT records");
+        C_LOG_WARNING("Failed to calculate free MFT records");
         goto err_out;
     }
 
@@ -9966,34 +9973,30 @@ static struct fuse *mount_fuse(char *parsed_options, const char* mountPoint)
         return NULL;
     }
 
-    if (fuse_opt_add_arg(&args, "") == -1) {
+    if (fuse_opt_add_arg(&args, "andsec-sandbox") == -1) {
         goto err;
     }
     if (ctx->ro) {
         char buf[128];
-        int len;
-
-        len = snprintf(buf, sizeof(buf), "-ouse_ino,kernel_cache"
-                ",attr_timeout=%d,entry_timeout=%d",
-                (int)TIMEOUT_RO, (int)TIMEOUT_RO);
-        if ((len < 0)
-            || (len >= (int)sizeof(buf))
-            || (fuse_opt_add_arg(&args, buf) == -1))
+        int len = snprintf(buf, sizeof(buf), "-ouse_ino,kernel_cache,attr_timeout=%d,entry_timeout=%d", (int)TIMEOUT_RO, (int)TIMEOUT_RO);
+        if ((len < 0) || (len >= (int)sizeof(buf)) || (fuse_opt_add_arg(&args, buf) == -1)) {
             goto err;
+        }
     } else {
 #if !CACHEING
         if (fuse_opt_add_arg(&args, "-ouse_ino,kernel_cache"
                 ",attr_timeout=0") == -1)
             goto err;
 #else
-        if (fuse_opt_add_arg(&args, "-ouse_ino,kernel_cache"
-                ",attr_timeout=1") == -1)
+        if (fuse_opt_add_arg(&args, "-ouse_ino,kernel_cache,attr_timeout=1") == -1)
             goto err;
 #endif
     }
-    if (ctx->debug)
-        if (fuse_opt_add_arg(&args, "-odebug") == -1)
+    if (ctx->debug) {
+        if (fuse_opt_add_arg(&args, "-odebug") == -1) {
             goto err;
+        }
+    }
 
     fh = fuse_new(ctx->fc, &args , &ntfs_3g_ops, sizeof(ntfs_3g_ops), NULL);
     if (!fh)
@@ -10688,7 +10691,7 @@ static int ntfs_fuse_read(const char *org_path, char *buf, size_t size, off_t of
 	while (size > 0) {
 		s64 ret = ntfs_attr_pread(na, offset, size, buf + total);
 		if (ret != (s64)size)
-			ntfs_log_perror("ntfs_attr_pread error reading '%s' at "
+			C_LOG_WARNING("ntfs_attr_pread error reading '%s' at "
 				"offset %lld: %lld <> %lld", org_path,
 				(long long)offset, (long long)size, (long long)ret);
 		if (ret <= 0 || ret > (s64)size) {
@@ -12090,7 +12093,7 @@ static int ntfs_fuse_filler(ntfs_fuse_fill_context_t *fill_ctx, const ntfschar *
 		return 0;
 
 	if ((filenamelen = ntfs_ucstombs(name, name_len, &filename, 0)) < 0) {
-		ntfs_log_perror("Filename decoding failed (inode %llu)",
+		C_LOG_WARNING("Filename decoding failed (inode %llu)",
 				(unsigned long long)MREF(mref));
 		return -1;
 	}
@@ -12227,6 +12230,8 @@ static void ntfs_close(void)
 
 static void setup_logging(char *parsed_options)
 {
+#if 0
+    // fixme:// 这里应该去掉 daemon 这个操作
     if (!ctx->no_detach) {
         if (daemon(0, ctx->debug)) {
             C_LOG_WARNING("Failed to daemonize.");
@@ -12239,18 +12244,9 @@ static void setup_logging(char *parsed_options)
 #endif
         }
     }
+#endif
 
     ctx->seccache = (struct PERMISSIONS_CACHE*)NULL;
-
-    // if (strcmp(opts.arg_device,opts.device))
-    //     ntfs_log_info("Requested device %s canonicalized as %s\n",
-    //             opts.arg_device,opts.device);
-    // ntfs_log_info("Mounted %s (%s, label \"%s\", NTFS %d.%d)\n",
-    //         opts.device, (ctx->ro) ? "Read-Only" : "Read-Write",
-    //         ctx->vol->vol_name, ctx->vol->major_ver,
-    //         ctx->vol->minor_ver);
-    // ntfs_log_info("Cmdline options: %s\n", opts.options ? opts.options : "");
-    // ntfs_log_info("Mount options: %s\n", parsed_options);
 }
 
 static int restore_privs(void)
@@ -12370,7 +12366,7 @@ const struct plugin_operations *select_reparse_plugin(ntfs_fuse_context_t *ctx, 
             } else {
                 errno = ELIBACC;
                 if (!(ctx->errors_logged & ERR_PLUGIN)) {
-                    ntfs_log_perror(
+                    C_LOG_WARNING(
                         "Could not load plugin %s",
                         name);
                     ntfs_log_error("Hint %s\n",dlerror());
@@ -13168,7 +13164,7 @@ static int ntfs_fuse_safe_rename(const char *old_path, const char *new_path, con
     restore:
         if (ntfs_fuse_link(tmp, new_path)) {
             err:
-                    ntfs_log_perror("Rename failed. Existing file '%s' was renamed "
+                    C_LOG_WARNING("Rename failed. Existing file '%s' was renamed "
                             "to '%s'", new_path, tmp);
         } else {
             cleanup:
@@ -13179,7 +13175,7 @@ static int ntfs_fuse_safe_rename(const char *old_path, const char *new_path, con
                      * is multithreaded)
                      */
                     if (ntfs_fuse_unlink(tmp) < 0)
-                        ntfs_log_perror("Rename failed. Existing file '%s' still present as '%s'", new_path, tmp);
+                        C_LOG_WARNING("Rename failed. Existing file '%s' still present as '%s'", new_path, tmp);
         }
     return 	ret;
 }
@@ -13385,7 +13381,7 @@ static struct fuse_chan *try_fuse_mount(const char* mountPoint, char *parsed_opt
     struct fuse_args margs = FUSE_ARGS_INIT(0, NULL);
 
     /* The fuse_mount() options get modified, so we always rebuild it */
-    if (fuse_opt_add_arg(&margs, "sandbox") == -1 || fuse_opt_add_arg(&margs, "-o") == -1) { // || fuse_opt_add_arg(&margs, parsed_options) == -1) {
+    if (fuse_opt_add_arg(&margs, "sandbox") == -1 || fuse_opt_add_arg(&margs, "-o") == -1 || fuse_opt_add_arg(&margs, parsed_options) == -1) {
         ntfs_log_error("Failed to set FUSE options.\n");
         goto free_args;
     }
@@ -13414,13 +13410,13 @@ int ntfs_strappend(char **dest, const char *append)
 
     if (strappend_is_large(size_dest) || strappend_is_large(size_append)) {
         errno = EOVERFLOW;
-        ntfs_log_perror("Too large input buffer");
+        C_LOG_WARNING("Too large input buffer");
         return -1;
     }
 
     p = (char*)realloc(*dest, size_dest + size_append + 1);
     if (!p) {
-        ntfs_log_perror("Memory realloction failed");
+        C_LOG_WARNING("Memory realloction failed");
         return -1;
     }
 

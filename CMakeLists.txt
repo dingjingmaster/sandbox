@@ -23,6 +23,7 @@ endif ()
 find_package (PkgConfig)
 
 pkg_check_modules(X REQUIRED x11)
+pkg_check_modules(FUSE REQUIRED fuse)
 pkg_check_modules(E2FS REQUIRED ext2fs)
 pkg_check_modules(MOUNT REQUIRED mount)
 pkg_check_modules(GDK REQUIRED gdk-3.0)

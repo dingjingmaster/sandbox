@@ -56,20 +56,18 @@ int fuse_opt_add_arg(struct fuse_args *args, const char *arg)
     char **newargv = NULL;
     char *newarg = NULL;
 
-    // assert(!args->argv || args->allocated);
+    assert(!args->argv || args->allocated);
 
-    newargv = realloc(args->argv, (args->argc + 1) * sizeof(char*));
-    if (arg) {
-        newarg = newargv ? strdup(arg) : NULL;
-        if (!newargv || !newarg) {
-            return alloc_failed();
-        }
+    newargv = realloc(args->argv, (args->argc + 2) * sizeof(char*));
+    newarg = newargv ? strdup(arg) : NULL;
+    if (!newargv || !newarg) {
+        return alloc_failed();
     }
 
     args->argv = newargv;
-    args->allocated = 0;
-    // args->argv[args->argc++] = newarg;
-    // args->argv[args->argc] = NULL;
+    args->allocated = 1;
+    args->argv[args->argc++] = newarg;
+    args->argv[args->argc] = NULL;
 
     return 0;
 }

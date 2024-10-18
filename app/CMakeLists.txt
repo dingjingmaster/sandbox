@@ -37,15 +37,15 @@ file(GLOB SANDBOX_SRC
 include(proto/proto.cmake)
 include(${CMAKE_SOURCE_DIR}/3thrd/clib/c/c.cmake)
 include(${CMAKE_SOURCE_DIR}/3thrd/fs/libsandbox-fs.cmake)
-include(${CMAKE_SOURCE_DIR}/3thrd/fuse-lite/libfuse-lite.cmake)
 
-add_executable(sandbox main.c ${SANDBOX_SRC} ${PROTO_SRC_C} ${C_SRC} ${SANDBOX_FS_SRC} ${FUSE_LITE_SRC})
+add_executable(sandbox main.c ${SANDBOX_SRC} ${PROTO_SRC_C} ${C_SRC} ${SANDBOX_FS_SRC})
 
 target_link_libraries(sandbox PUBLIC -lpthread
         ${GLIB_LIBRARIES}
         ${E2FS_LIBRARIES}
         ${CLIB_LIBRARIES}
         ${DISK_LIBRARIES}
+        ${FUSE_LIBRARIES}
         ${MOUNT_LIBRARIES}
 )
 
@@ -54,6 +54,7 @@ target_include_directories(sandbox PUBLIC
         ${E2FS_INCLUDE_DIRS}
         ${CLIB_INCLUDE_DIRS}
         ${DISK_INCLUDE_DIRS}
+        ${FUSE_INCLUDE_DIRS}
         ${MOUNT_INCLUDE_DIRS}
         ${CMAKE_SOURCE_DIR}/3thrd/clib
 )

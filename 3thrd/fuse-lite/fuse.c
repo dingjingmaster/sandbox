@@ -2836,10 +2836,12 @@ struct fuse_session *fuse_get_session(struct fuse *f)
 
 int fuse_loop(struct fuse *f)
 {
-    if (f)
+    if (f) {
         return fuse_session_loop(f->se);
-    else
+    }
+    else {
         return -1;
+    }
 }
 
 void fuse_exit(struct fuse *f)

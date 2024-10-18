@@ -75,6 +75,7 @@
 #include "realpath.h"
 #include "misc.h"
 #include "security.h"
+#include "c/log.h"
 
 const char *ntfs_home = 
 "News, support and information:  https://github.com/tuxera/ntfs-3g/\n";
@@ -264,7 +265,7 @@ static int ntfs_mft_load(ntfs_volume *vol)
     vol->mft_ni = ntfs_inode_allocate(vol);
     mb = ntfs_malloc(vol->mft_record_size);
     if (!vol->mft_ni || !mb) {
-        ntfs_log_perror("Error allocating memory for $MFT");
+        C_LOG_WARNING("Error allocating memory for $MFT");
         goto error_exit;
     }
     vol->mft_ni->mft_no = 0;
@@ -277,7 +278,7 @@ static int ntfs_mft_load(ntfs_volume *vol)
         if (l != -1) {
             errno = EIO;
         }
-        ntfs_log_perror("Error reading $MFT");
+        C_LOG_WARNING("Error reading $MFT");
         goto error_exit;
     }
 
@@ -334,7 +335,7 @@ mft_has_no_attr_list:
     /* Get an ntfs attribute for $MFT/$DATA and set it up, too. */
     vol->mft_na = ntfs_attr_open(vol->mft_ni, AT_DATA, AT_UNNAMED, 0);
     if (!vol->mft_na) {
-        ntfs_log_perror("Failed to open ntfs attribute");
+        C_LOG_WARNING("Failed to open ntfs attribute");
         goto error_exit;
     }
     /* Read all extents from the $DATA attribute in $MFT. */
@@ -367,12 +368,12 @@ mft_has_no_attr_list:
          */
         nrl = ntfs_mapping_pairs_decompress(vol, a, vol->mft_na->rl);
         if (!nrl) {
-            ntfs_log_perror("ntfs_mapping_pairs_decompress() failed");
+            C_LOG_WARNING("ntfs_mapping_pairs_decompress() failed");
             goto error_exit;
         }
         /* Make sure $DATA is the MFT itself */
         if (nrl->lcn != vol->mft_lcn) {
-            ntfs_log_perror("The MFT is not self-contained");
+            C_LOG_WARNING("The MFT is not self-contained");
             goto error_exit;
         }
         vol->mft_na->rl = nrl;
@@ -415,7 +416,7 @@ mft_has_no_attr_list:
      */
     vol->mftbmp_na = ntfs_attr_open(vol->mft_ni, AT_BITMAP, AT_UNNAMED, 0);
     if (!vol->mftbmp_na) {
-        ntfs_log_perror("Failed to open $MFT/$BITMAP");
+        C_LOG_WARNING("Failed to open $MFT/$BITMAP");
         goto error_exit;
     }
     return 0;
@@ -454,18 +455,18 @@ static int ntfs_mftmirr_load(ntfs_volume *vol)
 
     vol->mftmirr_ni = ntfs_inode_open(vol, FILE_MFTMirr);
     if (!vol->mftmirr_ni) {
-        ntfs_log_perror("Failed to open inode $MFTMirr");
+        C_LOG_WARNING("Failed to open inode $MFTMirr");
         return -1;
     }
 
     vol->mftmirr_na = ntfs_attr_open(vol->mftmirr_ni, AT_DATA, AT_UNNAMED, 0);
     if (!vol->mftmirr_na) {
-        ntfs_log_perror("Failed to open $MFTMirr/$DATA");
+        C_LOG_WARNING("Failed to open $MFTMirr/$DATA");
         goto error_exit;
     }
 
     if (ntfs_attr_map_runlist(vol->mftmirr_na, 0) < 0) {
-        ntfs_log_perror("Failed to map runlist of $MFTMirr/$DATA");
+        C_LOG_WARNING("Failed to map runlist of $MFTMirr/$DATA");
         goto error_exit;
     }
     if (vol->mftmirr_na->rl->lcn != vol->mftmirr_lcn) {
@@ -511,7 +512,7 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
 
     if (!dev || !dev->d_ops || !dev->d_name) {
         errno = EINVAL;
-        ntfs_log_perror("%s: dev = %p", __FUNCTION__, dev);
+        C_LOG_WARNING("%s: dev = %p", __FUNCTION__, dev);
         return NULL;
     }
 
@@ -556,7 +557,7 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
     if ((dev->d_ops->open)(dev, NVolReadOnly(vol) ? O_RDONLY: O_RDWR)) {
         if (!NVolReadOnly(vol) && (errno == EROFS)) {
             if ((dev->d_ops->open)(dev, O_RDONLY)) {
-                ntfs_log_perror("Error opening read-only '%s'", dev->d_name);
+                C_LOG_WARNING("Error opening read-only '%s'", dev->d_name);
                 goto error_exit;
             }
             else {
@@ -565,7 +566,7 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
             }
         }
         else {
-            ntfs_log_perror("Error opening '%s'", dev->d_name);
+            C_LOG_WARNING("Error opening '%s'", dev->d_name);
             goto error_exit;
         }
     }
@@ -584,7 +585,7 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
             ntfs_log_error("Failed to read bootsector (size=0)\n");
         }
         else {
-            ntfs_log_perror("Error reading bootsector");
+            C_LOG_WARNING("Error reading bootsector");
         }
         goto error_exit;
     }
@@ -666,13 +667,13 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
 
     /* Need to setup $MFT so we can use the library read functions. */
     if (ntfs_mft_load(vol) < 0) {
-        ntfs_log_perror("Failed to load $MFT");
+        C_LOG_WARNING("Failed to load $MFT");
         goto error_exit;
     }
 
     /* Need to setup $MFTMirr so we can use the write functions, too. */
     if (ntfs_mftmirr_load(vol) < 0) {
-        ntfs_log_perror("Failed to load $MFTMirr");
+        C_LOG_WARNING("Failed to load $MFTMirr");
         goto error_exit;
     }
 
@@ -704,14 +705,14 @@ static int ntfs_volume_check_logfile(ntfs_volume *vol)
 
     ni = ntfs_inode_open(vol, FILE_LogFile);
     if (!ni) {
-        ntfs_log_perror("Failed to open inode FILE_LogFile");
+        C_LOG_WARNING("Failed to open inode FILE_LogFile");
         errno = EIO;
         return -1;
     }
 
     na = ntfs_attr_open(ni, AT_DATA, AT_UNNAMED, 0);
     if (!na) {
-        ntfs_log_perror("Failed to open $FILE_LogFile/$DATA");
+        C_LOG_WARNING("Failed to open $FILE_LogFile/$DATA");
         err = EIO;
         goto out;
     }
@@ -777,7 +778,7 @@ static ntfs_inode *ntfs_hiberfile_open(ntfs_volume *vol)
 
     unicode_len = ntfs_mbstoucs(hiberfile, &unicode);
     if (unicode_len < 0) {
-        ntfs_log_perror("Couldn't convert 'hiberfil.sys' to Unicode");
+        C_LOG_WARNING("Couldn't convert 'hiberfil.sys' to Unicode");
         goto out;
     }
 
@@ -833,13 +834,13 @@ int ntfs_volume_check_hiberfile(ntfs_volume *vol, int verbose)
 
     na = ntfs_attr_open(ni, AT_DATA, AT_UNNAMED, 0);
     if (!na) {
-        ntfs_log_perror("Failed to open hiberfil.sys data attribute");
+        C_LOG_WARNING("Failed to open hiberfil.sys data attribute");
         goto out;
     }
 
     bytes_read = ntfs_attr_pread(na, 0, NTFS_HIBERFILE_HEADER_SIZE, buf);
     if (bytes_read == -1) {
-        ntfs_log_perror("Failed to read hiberfil.sys");
+        C_LOG_WARNING("Failed to read hiberfil.sys");
         goto out;
     }
     if (bytes_read < NTFS_HIBERFILE_HEADER_SIZE) {
@@ -895,7 +896,7 @@ static int fix_txf_data(ntfs_volume *vol)
     ntfs_log_debug("Loading root directory\n");
     ni = ntfs_inode_open(vol, FILE_root);
     if (!ni) {
-        ntfs_log_perror("Failed to open root directory");
+        C_LOG_WARNING("Failed to open root directory");
         res = -1;
     } else {
         /* Get the $TXF_DATA attribute */
@@ -926,7 +927,7 @@ static int fix_txf_data(ntfs_volume *vol)
             ntfs_attr_close(na);
         }
         if (ntfs_inode_close(ni)) {
-            ntfs_log_perror("Failed to close root");
+            C_LOG_WARNING("Failed to close root");
             res = -1;
         }
     }
@@ -989,7 +990,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     l = ntfs_attr_mst_pread(vol->mft_na, 0, vol->mftmirr_size, vol->mft_record_size, m);
     if (l != vol->mftmirr_size) {
         if (l == -1) {
-            ntfs_log_perror("Failed to read $MFT");
+            C_LOG_WARNING("Failed to read $MFT");
         }
         else {
             ntfs_log_error("Failed to read $MFT, unexpected length (%lld != %d).\n", (long long)l, vol->mftmirr_size);
@@ -1008,7 +1009,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     l = ntfs_attr_mst_pread(vol->mftmirr_na, 0, vol->mftmirr_size, vol->mft_record_size, m2);
     if (l != vol->mftmirr_size) {
         if (l == -1) {
-            ntfs_log_perror("Failed to read $MFTMirr");
+            C_LOG_WARNING("Failed to read $MFTMirr");
             goto error_exit;
         }
         vol->mftmirr_size = l;
@@ -1021,7 +1022,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
         }
     }
 
-    ntfs_log_debug("Comparing $MFTMirr to $MFT...\n");
+    C_LOG_VERB("Comparing $MFTMirr to $MFT...\n");
 
     /* Windows 10 does not update the full $MFTMirr any more */
     for (i = 0; (i < vol->mftmirr_size) && (i < FILE_first_user); ++i) {
@@ -1042,11 +1043,11 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
         mrec = (MFT_RECORD*)(m + i * vol->mft_record_size);
         if (mrec->flags & MFT_RECORD_IN_USE) {
             if (ntfs_is_baad_record(mrec->magic)) {
-                ntfs_log_error("$MFT error: Incomplete multi sector transfer detected in '%s'.\n", s);
+                C_LOG_WARNING("$MFT error: Incomplete multi sector transfer detected in '%s'.", s);
                 goto io_error_exit;
             }
             if (!ntfs_is_mft_record(mrec->magic)) {
-                ntfs_log_error("$MFT error: Invalid mft record for '%s'.\n", s);
+                C_LOG_WARNING("$MFT error: Invalid mft record for '%s'.", s);
                 goto io_error_exit;
             }
         }
@@ -1054,17 +1055,17 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
         mrec2 = (MFT_RECORD*)(m2 + i * vol->mft_record_size);
         if (mrec2->flags & MFT_RECORD_IN_USE) {
             if (ntfs_is_baad_record(mrec2->magic)) {
-                ntfs_log_error("$MFTMirr error: Incomplete multi sector transfer detected in '%s'.\n", s);
+                C_LOG_WARNING("$MFTMirr error: Incomplete multi sector transfer detected in '%s'.", s);
                 goto io_error_exit;
             }
             if (!ntfs_is_mft_record(mrec2->magic)) {
-                ntfs_log_error("$MFTMirr error: Invalid mft record for '%s'.\n", s);
+                C_LOG_WARNING("$MFTMirr error: Invalid mft record for '%s'.", s);
                 goto io_error_exit;
             }
         }
         record_size = ntfs_mft_record_get_data_size(mrec);
         if ((record_size <= sizeof(MFT_RECORD)) || (record_size > vol->mft_record_size) || memcmp(mrec, mrec2, record_size)) {
-            ntfs_log_error("$MFTMirr does not match $MFT (record %d).\n", i);
+            C_LOG_WARNING("$MFTMirr does not match $MFT (record %d).", i);
             goto io_error_exit;
         }
     }
@@ -1074,16 +1075,16 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     m = m2 = NULL;
 
     /* Now load the bitmap from $Bitmap. */
-    ntfs_log_debug("Loading $Bitmap...\n");
+    C_LOG_VERB("Loading $Bitmap...");
     vol->lcnbmp_ni = ntfs_inode_open(vol, FILE_Bitmap);
     if (!vol->lcnbmp_ni) {
-        ntfs_log_perror("Failed to open inode FILE_Bitmap");
+        C_LOG_WARNING("Failed to open inode FILE_Bitmap");
         goto error_exit;
     }
 
     vol->lcnbmp_na = ntfs_attr_open(vol->lcnbmp_ni, AT_DATA, AT_UNNAMED, 0);
     if (!vol->lcnbmp_na) {
-        ntfs_log_perror("Failed to open ntfs attribute");
+        C_LOG_WARNING("Failed to open ntfs attribute");
         goto error_exit;
     }
 
@@ -1096,14 +1097,14 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     ntfs_log_debug("Loading $UpCase...\n");
     ni = ntfs_inode_open(vol, FILE_UpCase);
     if (!ni) {
-        ntfs_log_perror("Failed to open inode FILE_UpCase");
+        C_LOG_WARNING("Failed to open inode FILE_UpCase");
         goto error_exit;
     }
 
     /* Get an ntfs attribute for $UpCase/$DATA. */
     na = ntfs_attr_open(ni, AT_DATA, AT_UNNAMED, 0);
     if (!na) {
-        ntfs_log_perror("Failed to open ntfs attribute");
+        C_LOG_WARNING("Failed to open ntfs attribute");
         ntfs_inode_close(ni);
         goto error_exit;
     }
@@ -1139,7 +1140,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     /* Done with the $UpCase mft record. */
     ntfs_attr_close(na);
     if (ntfs_inode_close(ni)) {
-        ntfs_log_perror("Failed to close $UpCase");
+        C_LOG_WARNING("Failed to close $UpCase");
         goto error_exit;
     }
 
@@ -1161,7 +1162,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     ntfs_log_debug("Loading $Volume...\n");
     vol->vol_ni = ntfs_inode_open(vol, FILE_Volume);
     if (!vol->vol_ni) {
-        ntfs_log_perror("Failed to open inode FILE_Volume");
+        C_LOG_WARNING("Failed to open inode FILE_Volume");
         goto error_exit;
     }
 
@@ -1173,7 +1174,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
 
     /* Find the $VOLUME_INFORMATION attribute. */
     if (ntfs_attr_lookup(AT_VOLUME_INFORMATION, AT_UNNAMED, 0, 0, 0, NULL, 0, ctx)) {
-        ntfs_log_perror("$VOLUME_INFORMATION attribute not found in $Volume");
+        C_LOG_WARNING("$VOLUME_INFORMATION attribute not found in $Volume");
         goto error_exit;
     }
     a = ctx->attr;
@@ -1208,7 +1209,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     ntfs_attr_reinit_search_ctx(ctx);
     if (ntfs_attr_lookup(AT_VOLUME_NAME, AT_UNNAMED, 0, 0, 0, NULL, 0, ctx)) {
         if (errno != ENOENT) {
-            ntfs_log_perror("Failed to lookup of $VOLUME_NAME in $Volume failed");
+            C_LOG_WARNING("Failed to lookup of $VOLUME_NAME in $Volume failed");
             goto error_exit;
         }
         /*
@@ -1241,7 +1242,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
          */
         vol->vol_name = NULL;
         if (ntfs_ucstombs(vname, u, &vol->vol_name, 0) == -1) {
-            ntfs_log_perror("Volume name could not be converted to current locale");
+            C_LOG_WARNING("Volume name could not be converted to current locale");
             ntfs_log_debug("Forcing name into ASCII by replacing non-ASCII characters with underscores.\n");
             vol->vol_name = ntfs_malloc(u + 1);
             if (!vol->vol_name) {
@@ -1265,14 +1266,14 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     ntfs_log_debug("Loading $AttrDef...\n");
     ni = ntfs_inode_open(vol, FILE_AttrDef);
     if (!ni) {
-        ntfs_log_perror("Failed to open $AttrDef");
+        C_LOG_WARNING("Failed to open $AttrDef");
         goto error_exit;
     }
 
     /* Get an ntfs attribute for $AttrDef/$DATA. */
     na = ntfs_attr_open(ni, AT_DATA, AT_UNNAMED, 0);
     if (!na) {
-        ntfs_log_perror("Failed to open ntfs attribute");
+        C_LOG_WARNING("Failed to open ntfs attribute");
         goto error_exit;
     }
 
@@ -1299,7 +1300,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     /* Done with the $AttrDef mft record. */
     ntfs_attr_close(na);
     if (ntfs_inode_close(ni)) {
-        ntfs_log_perror("Failed to close $AttrDef");
+        C_LOG_WARNING("Failed to close $AttrDef");
         goto error_exit;
     }
 
@@ -1738,14 +1739,14 @@ int ntfs_logfile_reset(ntfs_volume *vol)
 
     ni = ntfs_inode_open(vol, FILE_LogFile);
     if (!ni) {
-        ntfs_log_perror("Failed to open inode FILE_LogFile");
+        C_LOG_WARNING("Failed to open inode FILE_LogFile");
         return -1;
     }
 
     na = ntfs_attr_open(ni, AT_DATA, AT_UNNAMED, 0);
     if (!na) {
         eo = errno;
-        ntfs_log_perror("Failed to open $FILE_LogFile/$DATA");
+        C_LOG_WARNING("Failed to open $FILE_LogFile/$DATA");
         goto error_exit;
     }
 
@@ -1923,7 +1924,7 @@ int ntfs_volume_get_free_space(ntfs_volume *vol)
     ret = -1; /* default return */
     vol->free_clusters = ntfs_attr_get_free_bits(vol->lcnbmp_na);
     if (vol->free_clusters < 0) {
-        ntfs_log_perror("Failed to read NTFS $Bitmap");
+        C_LOG_WARNING("Failed to read NTFS $Bitmap");
     } else {
         na = vol->mftbmp_na;
         vol->free_mft_records = ntfs_attr_get_free_bits(na);
@@ -1932,7 +1933,7 @@ int ntfs_volume_get_free_space(ntfs_volume *vol)
             vol->free_mft_records += (na->allocated_size - na->data_size) << 3;
 
         if (vol->free_mft_records < 0)
-            ntfs_log_perror("Failed to calculate free MFT records");
+            C_LOG_WARNING("Failed to calculate free MFT records");
         else {
             NVolSetFreeSpaceKnown(vol);
             ret = 0;
@@ -1978,7 +1979,7 @@ int ntfs_volume_rename(ntfs_volume *vol, const ntfschar *label, int label_len)
     if (!na) {
         if (errno != ENOENT) {
             err = errno;
-            ntfs_log_perror("Lookup of $VOLUME_NAME attribute "
+            C_LOG_WARNING("Lookup of $VOLUME_NAME attribute "
                 "failed");
             goto err_out;
         }
@@ -1988,7 +1989,7 @@ int ntfs_volume_rename(ntfs_volume *vol, const ntfschar *label, int label_len)
             (const u8*) label, label_len))
         {
             err = errno;
-            ntfs_log_perror("Encountered error while adding "
+            C_LOG_WARNING("Encountered error while adding "
                 "$VOLUME_NAME attribute");
             goto err_out;
         }
@@ -2006,7 +2007,7 @@ int ntfs_volume_rename(ntfs_volume *vol, const ntfschar *label, int label_len)
         if (na->data_size != label_len) {
             if (ntfs_attr_truncate(na, label_len)) {
                 err = errno;
-                ntfs_log_perror("Error resizing resident "
+                C_LOG_WARNING("Error resizing resident "
                     "attribute");
                 goto err_out;
             }
@@ -2016,7 +2017,7 @@ int ntfs_volume_rename(ntfs_volume *vol, const ntfschar *label, int label_len)
             written = ntfs_attr_pwrite(na, 0, label_len, label);
             if (written == -1) {
                 err = errno;
-                ntfs_log_perror("Error when writing "
+                C_LOG_WARNING("Error when writing "
                     "$VOLUME_NAME data");
                 goto err_out;
             }
@@ -2030,11 +2031,10 @@ int ntfs_volume_rename(ntfs_volume *vol, const ntfschar *label, int label_len)
         }
     }
 
-    new_vol_name_len =
-        ntfs_ucstombs(label, label_len, &new_vol_name, 0);
+    new_vol_name_len = ntfs_ucstombs(label, label_len, &new_vol_name, 0);
     if (new_vol_name_len == -1) {
         err = errno;
-        ntfs_log_perror("Error while decoding new volume name");
+        C_LOG_WARNING("Error while decoding new volume name");
         goto err_out;
     }
 
