@@ -8,7 +8,7 @@ int main (void)
 {
     const char* isoPath = "/tmp/test-demo.iso";
 
-    if (!sandbox_fs_resize(isoPath, 20)) {
+    if (!sandbox_fs_resize(isoPath, 30)) {
         printf("sandbox_fs_resize() failed\n");
         return -1;
     }

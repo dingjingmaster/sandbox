@@ -238,19 +238,19 @@ struct DELAYED
 
 typedef struct {
     ntfs_volume *vol;
-    ntfs_inode *ni;		     /* inode being processed */
-    s64 new_volume_size;	     /* in clusters; 0 = --info w/o --size */
-    MFT_REF mref;                /* mft reference */
-    MFT_RECORD *mrec;            /* mft record */
-    ntfs_attr_search_ctx *ctx;   /* inode attribute being processed */
-    u64 relocations;	     /* num of clusters to relocate */
-    s64 inuse;		     /* num of clusters in use */
-    runlist mftmir_rl;	     /* $MFTMirr AT_DATA's new position */
-    s64 mftmir_old;		     /* $MFTMirr AT_DATA's old LCN */
-    int dirty_inode;	     /* some inode data got relocated */
-    int shrink;		     /* shrink = 1, enlarge = 0 */
-    s64 badclusters;	     /* num of physically dead clusters */
-    VCN mft_highest_vcn;	     /* used for relocating the $MFT */
+    ntfs_inode *ni;		            /* inode being processed */
+    s64 new_volume_size;	        /* in clusters; 0 = --info w/o --size */
+    MFT_REF mref;                   /* mft reference */
+    MFT_RECORD *mrec;               /* mft record */
+    ntfs_attr_search_ctx *ctx;      /* inode attribute being processed */
+    u64 relocations;	            /* num of clusters to relocate */
+    s64 inuse;		                /* num of clusters in use */
+    runlist mftmir_rl;	            /* $MFTMirr AT_DATA's new position */
+    s64 mftmir_old;		            /* $MFTMirr AT_DATA's old LCN */
+    int dirty_inode;	            /* some inode data got relocated */
+    int shrink;		                /* shrink = 1, 缩小 enlarge = 0 */
+    s64 badclusters;	            /* num of physically dead clusters */
+    VCN mft_highest_vcn;	        /* used for relocating the $MFT */
     runlist_element *new_mft_start; /* new first run for $MFT:$DATA */
     struct DELAYED *delayed_runlists; /* runlists to process later */
     struct progress_bar progress;
@@ -262,7 +262,7 @@ typedef struct {
     struct llcn_t last_sparse;
     struct llcn_t last_compressed;
     struct llcn_t last_lcn;
-    s64 last_unsupp;	     /* last unsupported cluster */
+    s64 last_unsupp;	            /* last unsupported cluster */
     enum mirror_source mirr_from;
 } ntfs_resize_t;
 
@@ -304,6 +304,7 @@ static VCN get_last_vcn                         (runlist *rl);
 static void rl_fixup                            (runlist **rl);
 static runlist * allocate_scattered_clusters    (s64 clusters);
 static int64_t align_4096                       (int64_t value);
+static int64_t align_1024                       (int64_t value);
 static ntfs_time stdinfo_time                   (MFT_RECORD *m);
 static int initialize_quota                     (MFT_RECORD *m);
 static BOOL non_resident_unnamed_data           (MFT_RECORD *m);
@@ -949,8 +950,8 @@ bool sandbox_fs_resize(const char * filePath, cuint64 sizeMB)
     int64_t newSize = sizeMB * 1024 * 1024;
     newSize = align_4096(newSize);
     if (st.st_size >= newSize) {
-        C_LOG_ERROR("Unable to reduce device size.");
-        return false;
+        C_LOG_ERROR("Unable to reduce device size. old: %ul, new: %ul", st.st_size, newSize);
+        return true;
     }
 
     if (0 != access(filePath, R_OK | W_OK)) {
@@ -965,7 +966,8 @@ bool sandbox_fs_resize(const char * filePath, cuint64 sizeMB)
         return false;
     }
 
-    int64_t size = sizeMB * 1024 * 1024 - st.st_size;
+#if 1
+    int64_t size = newSize - st.st_size;
     size = align_4096(size);
     if (lseek(fd, size - 1, SEEK_END) >= 0) {
         if (write(fd, "", 1) >= 0) {
@@ -980,6 +982,7 @@ bool sandbox_fs_resize(const char * filePath, cuint64 sizeMB)
         C_LOG_ERROR("Failed to resize device to %lld bytes", size + st.st_size);
         return false;
     }
+#endif
 
     close(fd);
 
@@ -993,7 +996,9 @@ bool sandbox_fs_resize(const char * filePath, cuint64 sizeMB)
     }
 
     s64 device_size = ntfs_device_size_get(vol->dev, vol->sector_size);
+    C_LOG_VERB("device size: %ul, sector size: %ul", device_size, vol->sector_size);
     device_size *= vol->sector_size;
+    C_LOG_VERB("device size: %ul", device_size);
     if (device_size <= 0) {
         C_LOG_WARNING("Couldn't get device size (%lld)!", (long long)device_size);
         return false;
@@ -1001,12 +1006,7 @@ bool sandbox_fs_resize(const char * filePath, cuint64 sizeMB)
     }
 
     resize.vol = vol;
-    resize.new_volume_size = newSize;
-
-    if (newSize < vol->nr_clusters) {
-        resize.shrink = 1;
-    }
-
+    resize.new_volume_size = newSize / vol->cluster_size;
     resize.badclusters = check_bad_sectors(vol);
 
     ntfsck_t fsck;
@@ -1245,7 +1245,6 @@ static BOOL bitmap_allocate(LCN lcn, s64 length)
     }
     return (done);
 }
-
 
 static BOOL bitmap_deallocate(LCN lcn, s64 length)
 {
@@ -5512,13 +5511,22 @@ static int assert_u32_less(u32 val1, u32 val2, const char *name)
     return 0;
 }
 
+static int64_t align_1024 (int64_t value)
+{
+    if (0 == (value % 1024)) {
+        return value;
+    }
+
+    return (1024 * (value / 1024 - 1));
+}
+
 static int64_t align_4096 (int64_t value)
 {
     if (0 == (value % 4096)) {
         return value;
     }
 
-    return (4096 * (value + 4096 - 1));
+    return (4096 * (value / 4096 - 1));
 }
 
 static int expand_to_beginning(const char* devPath)
