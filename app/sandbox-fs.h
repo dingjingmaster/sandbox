@@ -12,7 +12,7 @@ typedef struct _SandboxFs               SandboxFs;
 SandboxFs*  sandbox_fs_init             (const char* devPath, const char* mountPoint);          // ok
 bool        sandbox_fs_set_dev_name     (SandboxFs* sandboxFs, const char* devName);            // ok
 bool        sandbox_fs_set_mount_point  (SandboxFs* sandboxFs, const char* mountPoint);         // ok
-bool        sandbox_fs_generated_box    (SandboxFs* sandboxFs, cuint64 sizeMB);                 // ok
+bool        sandbox_fs_generated_box    (const SandboxFs* sandboxFs, cuint64 sizeMB);           // ok
 bool        sandbox_fs_format           (SandboxFs* sandboxFs);
 bool        sandbox_fs_check            (const SandboxFs* sandboxFs);                           // ok
 bool        sandbox_fs_resize           (SandboxFs* sandboxFs, cuint64 sizeMB);                 // ok
