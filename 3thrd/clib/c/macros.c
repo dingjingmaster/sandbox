@@ -714,10 +714,10 @@ bool c_close (cint fd, CError** error)
 
         if (errsv == EBADF) {
             if (fd >= 0) {
-                C_LOG_ERROR_CONSOLE("g_close(fd:%d) failed with EBADF. The tracking of file descriptors got messed up", fd);
+                C_LOG_ERROR_CONSOLE("c_close(fd:%d) failed with EBADF. The tracking of file descriptors got messed up", fd);
             }
             else {
-                C_LOG_ERROR_CONSOLE("g_close(fd:%d) failed with EBADF. This is not a valid file descriptor", fd);
+                C_LOG_ERROR_CONSOLE("c_close(fd:%d) failed with EBADF. This is not a valid file descriptor", fd);
             }
         }
         errno = errsv;

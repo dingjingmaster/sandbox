@@ -1,21 +1,29 @@
 //
 // Created by dingjing on 10/17/24.
 //
+#include <glib.h>
+
 #include "../app/sandbox-fs.h"
 
 int main (void)
 {
     const char* isoPath = "/tmp/test-demo.iso";
 
-    if (!sandbox_fs_generated_box(isoPath, 10)) {
+    SandboxFs* fs = sandbox_fs_init(isoPath, -1);
+    g_return_val_if_fail(fs, -1);
+
+    bool hasErr = false;
+    if (!sandbox_fs_generated_box(fs, 10)) {
+        hasErr = true;
         printf("generate file '%s' error\n", isoPath);
-        return -1;
     }
+    g_return_val_if_fail(hasErr, -1);
 
-    if (!sandbox_fs_format(isoPath)) {
+    if (!sandbox_fs_format(fs)) {
+        hasErr = true;
         printf("format file '%s' error\n", isoPath);
-        return -1;
     }
+    g_return_val_if_fail(hasErr, -1);
 
-    return 0;
+    return !hasErr;
 }

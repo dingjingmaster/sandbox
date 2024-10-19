@@ -7,14 +7,18 @@
 
 #include "../3thrd/clib/c/macros.h"
 
+typedef struct _SandboxFs               SandboxFs;
 
-bool        sandbox_fs_generated_box    (const char* devPath, cuint64 sizeMB);
-bool        sandbox_fs_format           (const char* devPath);
-bool        sandbox_fs_check            (const char* devPath);
-bool        sandbox_fs_resize           (const char* devPath, cuint64 sizeMB);
-bool        sandbox_fs_mount            (const char* devPath, const char* mountPoint);
-bool        sandbox_fs_unmount          (void);
-
+SandboxFs*  sandbox_fs_init             (const char* devPath, const char* mountPoint);          // ok
+bool        sandbox_fs_set_dev_name     (SandboxFs* sandboxFs, const char* devName);            // ok
+bool        sandbox_fs_set_mount_point  (SandboxFs* sandboxFs, const char* mountPoint);         // ok
+bool        sandbox_fs_generated_box    (SandboxFs* sandboxFs, cuint64 sizeMB);                 // ok
+bool        sandbox_fs_format           (SandboxFs* sandboxFs);
+bool        sandbox_fs_check            (const SandboxFs* sandboxFs);                           // ok
+bool        sandbox_fs_resize           (SandboxFs* sandboxFs, cuint64 sizeMB);                 // ok
+bool        sandbox_fs_mount            (SandboxFs* sandboxFs);                                 //
+bool        sandbox_fs_unmount          (SandboxFs* sandboxFs);                                 //
+void        sandbox_fs_destroy          (SandboxFs** sandboxFs);                                // ok
 
 
 #endif // sandbox_SANDBOX_FS_H

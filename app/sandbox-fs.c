@@ -509,6 +509,13 @@ struct DEFOPTION
     int flags;
 };
 
+struct _SandboxFs
+{
+    char*                       dev;
+    char*                       mountPoint;
+};
+
+
 static int drop_privs                           (void);
 static void ntfs_close                          (void);
 static int restore_privs                        (void);
@@ -975,15 +982,70 @@ const struct DEFOPTION optionlist[] = {
 
 static struct fuse *fh = NULL;
 
-bool sandbox_fs_generated_box(const char * absolutePath, cuint64 sizeMB)
+SandboxFs* sandbox_fs_init(const char* devPath, const char* mountPoint)
 {
-    c_return_val_if_fail(absolutePath && (absolutePath[0] == '/') && (sizeMB > 0), false);
+    SandboxFs * sfs = g_malloc0 (sizeof(SandboxFs));
+    if (!sfs) {
+        C_LOG_WARNING("sandbox malloc error.");
+        return NULL;
+    }
+
+    if (devPath) {
+        sfs->dev = g_strdup (devPath);
+    }
+
+    if (mountPoint) {
+        sfs->mountPoint = g_strdup (mountPoint);
+    }
+
+    return sfs;
+}
+
+bool sandbox_fs_set_dev_name(SandboxFs* sandboxFs, const char* devName)
+{
+    g_return_val_if_fail(sandboxFs && devName, false);
+
+    if (devName) {
+        if (sandboxFs->dev) {
+            g_free(sandboxFs->dev);
+            sandboxFs->dev = NULL;
+        }
+        sandboxFs->dev = g_strdup (devName);
+        if (!sandboxFs->dev) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool sandbox_fs_set_mount_point(SandboxFs * sandboxFs, const char * mountPoint)
+{
+    g_return_val_if_fail(sandboxFs && mountPoint, false);
+
+    if (mountPoint) {
+        if (sandboxFs->mountPoint) {
+            g_free(sandboxFs->mountPoint);
+            sandboxFs->mountPoint = NULL;
+        }
+        sandboxFs->mountPoint = g_strdup (mountPoint);
+        if (!sandboxFs->mountPoint) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool sandbox_fs_generated_box (SandboxFs* sandboxFs, cuint64 sizeMB)
+{
+    c_return_val_if_fail(sandboxFs && sandboxFs->dev && (sandboxFs->dev[0] == '/') && (sizeMB > 0), false);
 
     bool hasError = false;
 
-    cchar* dirPath = c_strdup(absolutePath);
+    char* dirPath = g_strdup(sandboxFs->dev);
     if (dirPath) {
-        cchar* dir = c_strrstr(dirPath, "/");
+        char* dir = c_strrstr(dirPath, "/");
         if (dir) {
             *dir = '\0';
         }
@@ -999,42 +1061,46 @@ bool sandbox_fs_generated_box(const char * absolutePath, cuint64 sizeMB)
     }
     c_return_val_if_fail(!hasError, false);
 
-    int fd = open(absolutePath, O_RDWR | O_CREAT, 0600);
+    errno = 0;
+    int fd = open(sandboxFs->dev, O_RDWR | O_CREAT, 0600);
     if (fd < 0) {
-        C_LOG_VERB("open: '%s' error: %s", absolutePath, c_strerror(errno));
+        C_LOG_VERB("open: '%s' error: %s", sandboxFs->dev, c_strerror(errno));
         return false;
     }
 
-    if (lseek(fd, 0, SEEK_END) > 0) {
-        return true;
-    }
-
     do {
-        cuint64 needSize = 1024 * 1024 * sizeMB;
-        needSize = align_4096(needSize);
-        off_t ret = lseek(fd, needSize - 1, SEEK_SET);
-        if (ret < 0) {
-            C_LOG_VERB("lseek: '%s' error: %s", absolutePath, c_strerror(errno));
-            hasError = true;
+        if (lseek(fd, 0, SEEK_END) > 0) {
             break;
         }
-        else {
+
+        do {
+            cuint64 needSize = 1024 * 1024 * sizeMB;
+            needSize = align_4096(needSize);
+            errno = 0;
+            off_t ret = lseek(fd, needSize - 1, SEEK_SET);
+            if (ret < 0) {
+                C_LOG_VERB("lseek: '%s' error: %s", sandboxFs->dev, c_strerror(errno));
+                hasError = true;
+                break;
+            }
+
             if (-1 == write(fd, "", 1)) {
-                C_LOG_VERB("write: '%s' error: %s", absolutePath, c_strerror(errno));
+                C_LOG_VERB("write: '%s' error: %s", sandboxFs->dev, c_strerror(errno));
                 hasError = true;
                 break;
             }
             c_fsync(fd);
-        }
+        } while (0);
     } while (0);
 
     // 写入 andsec 加密文件头
 
+    // close
     CError* error = NULL;
     c_close(fd, &error);
     if (error) {
         hasError = true;
-        C_LOG_VERB("close: '%s' error: %s", absolutePath, error->message);
+        C_LOG_VERB("close: '%s' error: %s", sandboxFs->dev, error->message);
         c_error_free(error);
     }
     c_return_val_if_fail(!hasError, false);
@@ -1042,9 +1108,9 @@ bool sandbox_fs_generated_box(const char * absolutePath, cuint64 sizeMB)
     return true;
 }
 
-bool sandbox_fs_format(const char* filePath)
+bool sandbox_fs_format(SandboxFs* sandboxFs)
 {
-    c_return_val_if_fail(filePath, false);
+    c_return_val_if_fail(sandboxFs && sandboxFs->dev, false);
 
     // set locale
     const char* locale = setlocale(LC_ALL, NULL);
@@ -1120,7 +1186,7 @@ bool sandbox_fs_format(const char* filePath)
     memcpy(gsVol->attrdef, attrdef_ntfs3x_array, sizeof(attrdef_ntfs3x_array));
     gsVol->attrdef_len = sizeof(attrdef_ntfs3x_array);
 
-    if (!mkntfs_open_partition(gsVol, filePath)) {
+    if (!mkntfs_open_partition(gsVol, sandboxFs->dev)) {
         goto done;
     }
 
@@ -1318,16 +1384,16 @@ done:
     return true;
 }
 
-bool sandbox_fs_check(const char * filePath)
+bool sandbox_fs_check(const SandboxFs* sandboxFs)
 {
-    c_return_val_if_fail(filePath != NULL, false);
+    c_return_val_if_fail(sandboxFs != NULL && sandboxFs->dev, false);
 
     int ret;
     ntfs_volume *vol;
     ntfs_volume rawvol;
     struct ntfs_device *dev;
 
-    dev = ntfs_device_alloc(filePath, 0, &ntfs_device_default_io_ops, NULL);
+    dev = ntfs_device_alloc(sandboxFs->dev, 0, &ntfs_device_default_io_ops, NULL);
     if (!dev) {
         return false;
     }
@@ -1392,16 +1458,16 @@ bool sandbox_fs_check(const char * filePath)
     return true;
 }
 
-bool sandbox_fs_resize(const char * filePath, cuint64 sizeMB)
+bool sandbox_fs_resize(SandboxFs* sandboxFs, cuint64 sizeMB)
 {
-    c_return_val_if_fail(filePath != NULL, false);
+    c_return_val_if_fail(sandboxFs && sandboxFs->dev, false);
 
-    // 扩大设备容量
+    bool hasError = false;
     struct stat st;
 
     errno = 0;
-    if (0 != stat(filePath, &st)) {
-        C_LOG_ERROR("Failed to stat '%s', error: %s", filePath, strerror(errno));
+    if (0 != stat(sandboxFs->dev, &st)) {
+        C_LOG_ERROR("Failed to stat '%s', error: %s", sandboxFs->dev, strerror(errno));
         return false;
     }
 
@@ -1412,96 +1478,99 @@ bool sandbox_fs_resize(const char * filePath, cuint64 sizeMB)
         return true;
     }
 
-    if (0 != access(filePath, R_OK | W_OK)) {
-        C_LOG_ERROR("Box '%s' not exists, or unable to write.", filePath);
+    if (0 != access(sandboxFs->dev, R_OK | W_OK)) {
+        C_LOG_ERROR("Box '%s' not exists, or unable to write.", sandboxFs->dev);
         return false;
     }
 
     errno = 0;
-    int fd = open(filePath, O_RDONLY|O_WRONLY);
+    int fd = open(sandboxFs->dev, O_RDONLY|O_WRONLY);
     if (fd < 0) {
-        C_LOG_ERROR("Failed to open '%s', error: %s", filePath, strerror(errno));
+        C_LOG_ERROR("Failed to open '%s', error: %s", sandboxFs->dev, strerror(errno));
         return false;
     }
 
-#if 1
-    int64_t size = newSize - st.st_size;
-    size = align_4096(size);
-    if (lseek(fd, size - 1, SEEK_END) >= 0) {
-        if (write(fd, "", 1) >= 0) {
-            C_LOG_INFO("Successfully resized device to %lld bytes", size + st.st_size);
+    do {
+        int64_t size = newSize - st.st_size;
+        size = align_4096(size);
+        if (lseek(fd, size - 1, SEEK_END) >= 0) {
+            if (write(fd, "", 1) >= 0) {
+                C_LOG_INFO("Successfully resized device to %lld bytes", size + st.st_size);
+            }
+            else {
+                hasError = true;
+                C_LOG_WARNING("Failed to resize device to %lld bytes", size + st.st_size);
+                break;
+            }
         }
         else {
-            C_LOG_WARNING("Failed to resize device to %lld bytes", size + st.st_size);
-            return false;
+            hasError = true;
+            C_LOG_ERROR("Failed to resize device to %lld bytes", size + st.st_size);
+            break;
         }
-    }
-    else {
-        C_LOG_ERROR("Failed to resize device to %lld bytes", size + st.st_size);
-        return false;
-    }
-#endif
+    } while (0);
 
-    close(fd);
+    if (fd >= 0) {
+        close(fd);
+    }
+    g_return_val_if_fail(!hasError, false);
 
     // check
     ntfs_resize_t resize;
     memset(&resize, 0, sizeof(resize));
-    ntfs_volume* vol = mount_volume(filePath);
+    ntfs_volume* vol = mount_volume(sandboxFs->dev);
     if (NULL == vol) {
-        C_LOG_WARNING("Fail to mount volume: %s", filePath);
+        C_LOG_WARNING("Fail to mount volume: %s", sandboxFs->dev);
         return false;
     }
 
-    s64 device_size = ntfs_device_size_get(vol->dev, vol->sector_size);
-    C_LOG_VERB("device size: %ul, sector size: %ul", device_size, vol->sector_size);
-    device_size *= vol->sector_size;
-    C_LOG_VERB("device size: %ul", device_size);
-    if (device_size <= 0) {
-        C_LOG_WARNING("Couldn't get device size (%lld)!", (long long)device_size);
-        return false;
-        goto end;
-    }
+    do {
+        s64 device_size = ntfs_device_size_get(vol->dev, vol->sector_size);
+        C_LOG_VERB("device size: %ul, sector size: %ul", device_size, vol->sector_size);
+        device_size *= vol->sector_size;
+        C_LOG_VERB("device size: %ul", device_size);
+        if (device_size <= 0) {
+            hasError = true;
+            C_LOG_WARNING("Couldn't get device size (%lld)!", (long long)device_size);
+            break;
+        }
 
-    resize.vol = vol;
-    resize.new_volume_size = newSize / vol->cluster_size;
-    resize.badclusters = check_bad_sectors(vol);
+        resize.vol = vol;
+        resize.new_volume_size = newSize / vol->cluster_size;
+        resize.badclusters = check_bad_sectors(vol);
 
-    ntfsck_t fsck;
-    memset(&fsck, 0, sizeof(fsck));
-    NVolSetNoFixupWarn(vol);
-    check_cluster_allocation(vol, &fsck);
+        ntfsck_t fsck;
+        memset(&fsck, 0, sizeof(fsck));
+        NVolSetNoFixupWarn(vol);
+        check_cluster_allocation(vol, &fsck);
+        print_disk_usage(vol, fsck.inuse);
 
-    print_disk_usage(vol, fsck.inuse);
+        resize.inuse = fsck.inuse;
+        resize.lcn_bitmap = fsck.lcn_bitmap;
+        resize.mirr_from = MIRR_OLD;
 
-    resize.inuse = fsck.inuse;
-    resize.lcn_bitmap = fsck.lcn_bitmap;
-    resize.mirr_from = MIRR_OLD;
+        set_resize_constraints(&resize);
+        set_disk_usage_constraint(&resize);
+        check_resize_constraints(&resize);
+        prepare_volume_fixup(vol);
 
-    set_resize_constraints(&resize);
-    set_disk_usage_constraint(&resize);
-    check_resize_constraints(&resize);
-    prepare_volume_fixup(vol);
+        if (resize.relocations) {
+            relocate_inodes(&resize);
+        }
 
-    if (resize.relocations) {
-        relocate_inodes(&resize);
-    }
+        truncate_badclust_file(&resize);
+        truncate_bitmap_file(&resize);
+        delayed_updates(&resize);
+        update_bootsector(&resize);
+        C_LOG_VERB("fs resize syncing device ...");
 
-    truncate_badclust_file(&resize);
-    truncate_bitmap_file(&resize);
-    delayed_updates(&resize);
-    update_bootsector(&resize);
+        if (vol->dev->d_ops->sync(vol->dev) == -1) {
+            C_LOG_WARNING("resize fsync");
+            break;
+        }
+        C_LOG_VERB("Successfully resized sandboxFS on device '%s'.", vol->dev->d_name);
+    } while (false);
 
-    C_LOG_VERB("fs resize syncing device ...");
-
-    if (vol->dev->d_ops->sync(vol->dev) == -1) {
-        C_LOG_WARNING("resize fsync");
-        goto end;
-    }
-
-    printf("Successfully resized NTFS on device '%s'.\n", vol->dev->d_name);
-
-end:
     if (resize.lcn_bitmap.bm) {
         free(resize.lcn_bitmap.bm);
     }
@@ -1510,12 +1579,12 @@ end:
         ntfs_umount(vol,0);
     }
 
-    return true;
+    return (!hasError && true);
 }
 
-bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
+bool sandbox_fs_mount(SandboxFs* sandboxFs)
 {
-    g_return_val_if_fail(devPath != NULL && NULL != mountPoint, false);
+    g_return_val_if_fail(sandboxFs && sandboxFs->dev && sandboxFs->mountPoint, false);
 
     int err = 0;
     struct stat sbuf;
@@ -1525,7 +1594,7 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 #if !(defined(__sun) && defined (__SVR4))
     fuse_fstype fstype = FSTYPE_UNKNOWN;
 #endif
-    char* parsed_options = g_strdup_printf("allow_other,nonempty,relatime,fsname=%s", devPath);
+    char* parsed_options = g_strdup_printf("allow_other,nonempty,relatime,fsname=%s", sandboxFs->dev);
 
     // 创建新的进程/线程，执行挂载操作
     if (ntfs_fuse_init()) {
@@ -1535,19 +1604,17 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
     }
 
     // check is mounted
-    if (!ntfs_check_if_mounted(devPath, &existing_mount)
-        && (existing_mount & NTFS_MF_MOUNTED)
-        && (!(existing_mount & NTFS_MF_READONLY) || !ctx->ro)) {
+    if (!ntfs_check_if_mounted(sandboxFs->dev, &existing_mount) && (existing_mount & NTFS_MF_MOUNTED) && (!(existing_mount & NTFS_MF_READONLY) || !ctx->ro)) {
         err = NTFS_VOLUME_LOCKED;
         goto err_out;
     }
 
-    if (mountPoint[0] != '/') {
-        C_LOG_WARNING("Mount point '%s' is not absolute path.", mountPoint);
+    if (sandboxFs->dev[0] != '/') {
+        C_LOG_WARNING("Mount point '%s' is not absolute path.", sandboxFs->dev);
         goto err_out;
     }
 
-    ctx->abs_mnt_point = strdup(mountPoint);
+    ctx->abs_mnt_point = strdup(sandboxFs->dev);
     if (!ctx->abs_mnt_point) {
         C_LOG_ERROR("strdup failed");
         goto err_out;
@@ -1555,7 +1622,7 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 
     ctx->security.uid = 0;
     ctx->security.gid = 0;
-    if (!stat(devPath, &sbuf)) {
+    if (!stat(sandboxFs->dev, &sbuf)) {
         /* collect owner of mount point, useful for default mapping */
         ctx->security.uid = sbuf.st_uid;
         ctx->security.gid = sbuf.st_gid;
@@ -1579,8 +1646,8 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
     }
 #endif
 
-    if (stat(devPath, &sbuf)) {
-        C_LOG_WARNING("Failed to access '%s'", devPath);
+    if (stat(sandboxFs->dev, &sbuf)) {
+        C_LOG_WARNING("Failed to access '%s'", sandboxFs->dev);
         err = NTFS_VOLUME_NO_PRIVILEGE;
         goto err_out;
     }
@@ -1600,7 +1667,7 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
     }
 #endif
 
-    err = ntfs_open(devPath);
+    err = ntfs_open(sandboxFs->dev);
     if (err) {
         goto err_out;
     }
@@ -1612,7 +1679,7 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
         if (ntfs_strinsert(&parsed_options, ",ro")) {
             goto err_out;
         }
-        ntfs_log_info("Could not mount read-write, trying read-only\n");
+        C_LOG_VERB("Could not mount read-write, trying read-only");
     }
     else {
         if (ctx->rw && ntfs_strinsert(&parsed_options, ",rw")) {
@@ -1707,7 +1774,7 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 #endif /* DISABLE_PLUGINS */
 
     C_LOG_VERB("parsed options: %s", parsed_options ? parsed_options : "null");
-	fh = mount_fuse(parsed_options, mountPoint);
+	fh = mount_fuse(parsed_options, sandboxFs->dev);
 	if (!fh) {
 		err = NTFS_VOLUME_FUSE_ERROR;
 		goto err_out;
@@ -1736,11 +1803,11 @@ bool sandbox_fs_mount(const char * devPath, const char * mountPoint)
 
 	err = 0;
 
-	fuse_unmount(mountPoint, ctx->fc);
+	fuse_unmount(sandboxFs->dev, ctx->fc);
 	fuse_destroy(fh);
 
 err_out:
-	ntfs_mount_error(devPath, mountPoint, err);
+	ntfs_mount_error(sandboxFs->dev, sandboxFs->mountPoint, err);
 	if (ctx->abs_mnt_point) {
 		free(ctx->abs_mnt_point);
 	}
@@ -1761,15 +1828,33 @@ err2:
     return err == 0;
 }
 
-bool sandbox_fs_unmount()
+bool sandbox_fs_unmount(SandboxFs* sandboxFs)
 {
-    g_return_val_if_fail(fh, false);
+    g_return_val_if_fail(sandboxFs->dev && fh, false);
 
     if (fh) {
         fuse_exit(fh);
     }
 
     return true;
+}
+
+void sandbox_fs_destroy(SandboxFs ** sandboxFs)
+{
+    g_return_if_fail(sandboxFs && *sandboxFs);
+
+    if ((*sandboxFs)->dev) {
+        g_free((*sandboxFs)->dev);
+    }
+
+    if ((*sandboxFs)->mountPoint) {
+        g_free((*sandboxFs)->mountPoint);
+    }
+
+    if (*sandboxFs) {
+        g_free(*sandboxFs);
+        *sandboxFs = NULL;
+    }
 }
 
 

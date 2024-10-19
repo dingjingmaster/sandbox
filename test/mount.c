@@ -1,16 +1,25 @@
 //
 // Created by dingjing on 10/18/24.
 //
+#include <glib.h>
+
 #include "../app/sandbox-fs.h"
 
 int main (void)
 {
     const char* isoPath = "/tmp/test-demo.iso";
 
-    if (!sandbox_fs_mount(isoPath, "/home/dingjing/a")) {
+    SandboxFs* fs = sandbox_fs_init(isoPath, "/home/dingjing/a");
+    g_return_val_if_fail(fs, -1);
+
+    bool hasErr = false;
+    if (!sandbox_fs_mount(fs)) {
+        hasErr = true;
         printf("sandbox_fs_mount() failed\n");
-        return -1;
     }
+
+    sandbox_fs_destroy(&fs);
+    g_return_val_if_fail(!hasErr, -1);
 
     return 0;
 }
