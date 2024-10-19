@@ -14,12 +14,12 @@ int main (void)
     g_return_val_if_fail(fs != NULL, -1);
 
     bool hasErr = false;
-    if (!sandbox_fs_resize(isoPath, 30)) {
+    if (!sandbox_fs_resize(fs, 30)) {
         hasErr = true;
         printf("sandbox_fs_resize() failed\n");
     }
 
     sandbox_fs_destroy(&fs);
 
-    return !hasErr;
+    return hasErr ? -1 : 0;
 }

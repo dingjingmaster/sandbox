@@ -13,12 +13,14 @@ int main (void)
     g_return_val_if_fail(fs, -1);
 
     bool hasErr = false;
-    if (!sandbox_fs_check(devPath)) {
+    if (!sandbox_fs_check(fs)) {
         hasErr = true;
         printf("sandbox_fs_check failed\n");
     }
 
-    g_return_val_if_fail(fs, -1);
+    sandbox_fs_destroy(&fs);
 
-    return !hasErr;
+    g_return_val_if_fail(!hasErr, -1);
+
+    return !hasErr ? 0 : 1;
 }

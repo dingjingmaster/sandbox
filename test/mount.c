@@ -19,6 +19,7 @@ int main (void)
     }
 
     sandbox_fs_destroy(&fs);
+
     g_return_val_if_fail(!hasErr, -1);
 
     return 0;

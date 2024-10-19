@@ -1474,7 +1474,7 @@ done:
 
 bool sandbox_fs_check(const SandboxFs* sandboxFs)
 {
-    c_return_val_if_fail(sandboxFs != NULL && sandboxFs->dev, false);
+    c_return_val_if_fail(sandboxFs && sandboxFs->dev, false);
 
     ntfs_volume         rawvol;
     int                 ret = 0;
@@ -1484,22 +1484,25 @@ bool sandbox_fs_check(const SandboxFs* sandboxFs)
 
     SANDBOX_FS_MUTEX_LOCK();
 
+    C_LOG_VERB("Checking if the volume exists. '%s'", sandboxFs->dev);
     dev = ntfs_device_alloc(sandboxFs->dev, 0, &ntfs_device_default_io_ops, NULL);
     if (!dev) {
         hasError = true;
+        C_LOG_WARNING("ntfs_device_alloc() failed");
         goto end;
     }
 
-    if (dev->d_ops->open(dev, O_RDONLY)) {
+    if (-1 >= dev->d_ops->open(dev, O_RDONLY)) {
         C_LOG_WARNING("Error opening partition device");
         ntfs_device_free(dev);
         hasError = true;
         goto end;
     }
 
-    if ((ret = verify_boot_sector(dev,&rawvol))) {
+    if (0 != (ret = verify_boot_sector(dev,&rawvol))) {
         dev->d_ops->close(dev);
         hasError = true;
+        C_LOG_WARNING("Error verifying boot_sector");
         goto end;
     }
     C_LOG_VERB("Boot sector verification complete. Proceeding to $MFT");
@@ -1507,7 +1510,7 @@ bool sandbox_fs_check(const SandboxFs* sandboxFs)
     verify_mft_preliminary(&rawvol);
 
     /* ntfs_device_mount() expects the device to be closed. */
-    if (dev->d_ops->close(dev)) {
+    if (0 != dev->d_ops->close(dev)) {
         C_LOG_WARNING("Failed to close the device.");
         hasError = true;
         goto end;
@@ -1526,7 +1529,6 @@ bool sandbox_fs_check(const SandboxFs* sandboxFs)
 
     if (vol->flags & VOLUME_IS_DIRTY) {
         C_LOG_WARNING("Volume is dirty.");
-        hasError = true;
     }
 
     check_volume(vol);
@@ -1542,19 +1544,16 @@ bool sandbox_fs_check(const SandboxFs* sandboxFs)
     }
 
     if (!gsErrors && !gsUnsupported) {
-        hasError = true;
         reset_dirty(vol);
     }
 
     ntfs_umount(vol, FALSE);
 
     if (gsErrors) {
-        hasError = true;
         goto end;
     }
 
     if (gsUnsupported) {
-        hasError = true;
         goto end;
     }
 
@@ -1570,10 +1569,15 @@ bool sandbox_fs_resize(SandboxFs* sandboxFs, cuint64 sizeMB)
 
     struct stat         st;
     int                 fd = 0;
+    ntfs_resize_t       resize;
+    ntfs_volume*        vol = NULL;
     bool                hasError = false;
     int64_t             newSize = sizeMB * 1024 * 1024;
 
+    memset(&resize, 0, sizeof(resize));
     newSize = align_4096(newSize);
+
+    SANDBOX_FS_MUTEX_LOCK();
 
     errno = 0;
     if (0 != stat(sandboxFs->dev, &st)) {
@@ -1629,9 +1633,7 @@ bool sandbox_fs_resize(SandboxFs* sandboxFs, cuint64 sizeMB)
     if (hasError) { goto end; }
 
     // check
-    ntfs_resize_t resize;
-    memset(&resize, 0, sizeof(resize));
-    ntfs_volume* vol = mount_volume(sandboxFs->dev);
+    vol = mount_volume(sandboxFs->dev);
     if (NULL == vol) {
         C_LOG_WARNING("Fail to mount volume: %s", sandboxFs->dev);
         hasError = true;
@@ -1725,7 +1727,6 @@ bool sandbox_fs_mount(SandboxFs* sandboxFs)
     }
 
     // check is mounted
-    sandboxFs->isMounted = (0 == ntfs_check_if_mounted(sandboxFs->dev, &existing_mount) && (existing_mount & NTFS_MF_MOUNTED) && (!(existing_mount & NTFS_MF_READONLY) || !ctx->ro));
     if (!ntfs_check_if_mounted(sandboxFs->dev, &existing_mount) && (existing_mount & NTFS_MF_MOUNTED) && (!(existing_mount & NTFS_MF_READONLY) || !ctx->ro)) {
         err = NTFS_VOLUME_LOCKED;
         hasErr = true;
@@ -1908,7 +1909,7 @@ bool sandbox_fs_mount(SandboxFs* sandboxFs)
 #endif /* DISABLE_PLUGINS */
 
     C_LOG_VERB("parsed options: %s", parsed_options ? parsed_options : "null");
-	sandboxFs->fuse = mount_fuse(parsed_options, sandboxFs->dev);
+	sandboxFs->fuse = mount_fuse(parsed_options, sandboxFs->mountPoint);
 	if (!sandboxFs->fuse) {
 		err = NTFS_VOLUME_FUSE_ERROR;
 	    hasErr = true;
@@ -1916,6 +1917,7 @@ bool sandbox_fs_mount(SandboxFs* sandboxFs)
 	}
 
 	ctx->mounted = TRUE;
+    sandboxFs->isMounted = true;
     C_LOG_VERB("mounted!");
 
 #if defined(linux) || defined(__uClinux__)
@@ -5948,8 +5950,9 @@ static int reset_dirty(ntfs_volume *vol)
 {
     le16 flags;
 
-    if (!(vol->flags | VOLUME_IS_DIRTY))
+    if (!(vol->flags | VOLUME_IS_DIRTY)) {
         return 0;
+    }
 
     C_LOG_VERB("Resetting dirty flag.");
 

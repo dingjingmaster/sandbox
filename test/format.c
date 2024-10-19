@@ -9,7 +9,7 @@ int main (void)
 {
     const char* isoPath = "/tmp/test-demo.iso";
 
-    SandboxFs* fs = sandbox_fs_init(isoPath, -1);
+    SandboxFs* fs = sandbox_fs_init(isoPath, NULL);
     g_return_val_if_fail(fs, -1);
 
     bool hasErr = false;
@@ -17,13 +17,13 @@ int main (void)
         hasErr = true;
         printf("generate file '%s' error\n", isoPath);
     }
-    g_return_val_if_fail(hasErr, -1);
+    g_return_val_if_fail(!hasErr, -1);
 
     if (!sandbox_fs_format(fs)) {
         hasErr = true;
         printf("format file '%s' error\n", isoPath);
     }
-    g_return_val_if_fail(hasErr, -1);
+    g_return_val_if_fail(!hasErr, -1);
 
-    return !hasErr;
+    return (hasErr ? -1 : 0);
 }
