@@ -100,9 +100,11 @@
 #include <dlfcn.h>
 #include <glib.h>
 #include <fuse.h>
+#include <pwd.h>
 #include <sys/sysmacros.h>
 #include <sys/wait.h>
 
+#include "utils.h"
 #include "c/clib.h"
 #include "./fs/sd.h"
 #include "./fs/boot.h"
@@ -518,7 +520,6 @@ struct _SandboxFs
     char*                       dev;
     char*                       mountPoint;
 
-    struct fuse*                fuse;
     bool                        isMounted;
 };
 
@@ -728,6 +729,7 @@ static int ntfs_fuse_trunc(const char *org_path, off_t size,
 #endif
 
 
+static gpointer mount_fs_thread                 (gpointer data);
 static void relocate_inode                      (ntfs_resize_t *resize, MFT_REF mref, int do_mftdata);
 static ATTR_REC *check_attr_record              (ATTR_REC *attr_rec, MFT_RECORD *mft_rec, u16 buflen);
 static int index_obj_id_insert                  (MFT_RECORD *m, const GUID *guid, const leMFT_REF ref);
@@ -798,6 +800,10 @@ static int add_attr_file_name                   (MFT_RECORD *m, const leMFT_REF 
 static int create_hardlink                      (INDEX_BLOCK *idx, const leMFT_REF ref_parent, MFT_RECORD *m_file, const leMFT_REF ref_file, const s64 allocated_size, const s64 data_size, const FILE_ATTR_FLAGS flags, const u16 packed_ea_size, const u32 reparse_point_tag, const char *file_name, const FILE_NAME_TYPE_FLAGS file_name_type);
 static int create_hardlink_res                  (MFT_RECORD *m_parent, const leMFT_REF ref_parent, MFT_RECORD *m_file, const leMFT_REF ref_file, const s64 allocated_size, const s64 data_size, const FILE_ATTR_FLAGS flags, const u16 packed_ea_size, const u32 reparse_point_tag, const char *file_name, const FILE_NAME_TYPE_FLAGS file_name_type);
 
+
+static void     umount_signal_process           (int signum);
+
+
 static cuint8*                                  gsBuf                   = NULL;         // 每次操作写入大小，块/簇，默认 27K
 static int                                      gsMftBitmapByteSize     = 0;            // 默认 8。
 static u8*                                      gsMftBitmap             = NULL;         // 默认：长度8的buffer。
@@ -837,7 +843,9 @@ static runlist_element*                         gsMftBitmapRl           = NULL;
 static s64                                      max_free_cluster_range  = 0;
 static ntfs_fuse_context_t*                     ctx                     = NULL;
 static u32                                      ntfs_sequence           = 0;
+
 // format -- start
+
 static struct _MkfsOpt
 {
     long                heads;
@@ -989,7 +997,10 @@ const struct DEFOPTION optionlist[] = {
 	{ "--version", OPT_VERSION, FLGOPT_BOGUS },
 	{ "-V", OPT_VERSION, FLGOPT_BOGUS },
 	{ (const char*)NULL, 0, 0 } /* end marker */
-} ;
+};
+
+pid_t mountPid = 0;
+struct fuse* gsFuse;
 
 
 SandboxFs* sandbox_fs_init(const char* devPath, const char* mountPoint)
@@ -1482,6 +1493,8 @@ bool sandbox_fs_check(const SandboxFs* sandboxFs)
     struct ntfs_device* dev = NULL;
     bool                hasError = false;
 
+    C_LOG_VERB("start lock!");
+
     SANDBOX_FS_MUTEX_LOCK();
 
     C_LOG_VERB("Checking if the volume exists. '%s'", sandboxFs->dev);
@@ -1499,7 +1512,7 @@ bool sandbox_fs_check(const SandboxFs* sandboxFs)
         goto end;
     }
 
-    if (0 != (ret = verify_boot_sector(dev,&rawvol))) {
+    if (TRUE != (ret = verify_boot_sector(dev,&rawvol))) {
         dev->d_ops->close(dev);
         hasError = true;
         C_LOG_WARNING("Error verifying boot_sector");
@@ -1705,277 +1718,60 @@ bool sandbox_fs_mount(SandboxFs* sandboxFs)
 {
     g_return_val_if_fail(sandboxFs && sandboxFs->dev && sandboxFs->mountPoint, false);
 
-    int                     err = 0;
-    struct stat             sbuf;
-    bool                    hasErr = false;
-    unsigned long           existing_mount;
-    const char*             failed_secure = NULL;
-    const char*             permissions_mode = NULL;
-#if !(defined(__sun) && defined (__SVR4))
-    fuse_fstype             fstype = FSTYPE_UNKNOWN;
-#endif
-    char*                   parsed_options = g_strdup_printf("allow_other,nonempty,relatime,fsname=%s", sandboxFs->dev);
+    if (sandbox_fs_is_mounted(sandboxFs)) {
+        sandbox_fs_unmount(sandboxFs);
+    }
+
+    errno = 0;
+    pid_t pid = fork();
+    switch (pid) {
+    case -1: {
+        C_LOG_WARNING("Fork failed: %s", strerror(errno));
+        return false;
+    }
+    case 0: {
+        // 子进程
+        signal(SIGKILL, umount_signal_process);
+        mount_fs_thread(sandboxFs);
+        kill(getppid(), SIGUSR1);
+        exit(0);
+        break;
+    }
+    default: {
+        mountPid = pid;
+        break;
+    }
+    }
+
+    return true;
+}
+
+bool sandbox_fs_is_mounted(SandboxFs * sandboxFs)
+{
+    g_return_val_if_fail(sandboxFs, false);
 
     SANDBOX_FS_MUTEX_LOCK();
 
-    // 创建新的进程/线程，执行挂载操作
-    if (ntfs_fuse_init()) {
-        err = NTFS_VOLUME_OUT_OF_MEMORY;
-        C_LOG_WARNING("fuse_init error!");
-        hasErr = true;
-        goto err2;
+    if (sandboxFs->isMounted) {
+        SANDBOX_FS_MUTEX_UNLOCK();
+        return true;
     }
 
-    // check is mounted
-    if (!ntfs_check_if_mounted(sandboxFs->dev, &existing_mount) && (existing_mount & NTFS_MF_MOUNTED) && (!(existing_mount & NTFS_MF_READONLY) || !ctx->ro)) {
-        err = NTFS_VOLUME_LOCKED;
-        hasErr = true;
-        goto err_out;
-    }
+    sandboxFs->isMounted = utils_check_is_mounted(sandboxFs->dev, sandboxFs->mountPoint);
 
-    if (sandboxFs->dev[0] != '/') {
-        C_LOG_WARNING("Mount point '%s' is not absolute path.", sandboxFs->dev);
-        hasErr = true;
-        goto err_out;
-    }
-
-    ctx->abs_mnt_point = strdup(sandboxFs->dev);
-    if (!ctx->abs_mnt_point) {
-        C_LOG_ERROR("strdup failed");
-        hasErr = true;
-        goto err_out;
-    }
-
-    ctx->security.uid = 0;
-    ctx->security.gid = 0;
-    if (!stat(sandboxFs->dev, &sbuf)) {
-        /* collect owner of mount point, useful for default mapping */
-        ctx->security.uid = sbuf.st_uid;
-        ctx->security.gid = sbuf.st_gid;
-   }
-
-#if defined(linux) || defined(__uClinux__)
-    fstype = get_fuse_fstype();
-
-    err = NTFS_VOLUME_NO_PRIVILEGE;
-    if (restore_privs()) {
-        hasErr = true;
-        goto err_out;
-    }
-
-    if (fstype == FSTYPE_NONE || fstype == FSTYPE_UNKNOWN) {
-        fstype = load_fuse_module();
-    }
-    create_dev_fuse();
-
-    if (drop_privs()) {
-        hasErr = true;
-        goto err_out;
-    }
-#endif
-
-    if (stat(sandboxFs->dev, &sbuf)) {
-        C_LOG_WARNING("Failed to access '%s'", sandboxFs->dev);
-        err = NTFS_VOLUME_NO_PRIVILEGE;
-        hasErr = true;
-        goto err_out;
-    }
-
-#if !(defined(__sun) && defined (__SVR4))
-    /* Always use fuseblk for block devices unless it's surely missing. */
-    if (S_ISBLK(sbuf.st_mode) && (fstype != FSTYPE_FUSE)) {
-        ctx->blkdev = TRUE;
-    }
-#endif
-
-#ifndef FUSE_INTERNAL
-    if (getuid() && ctx->blkdev) {
-        ntfs_log_error("%s", unpriv_fuseblk_msg);
-        err = NTFS_VOLUME_NO_PRIVILEGE;
-        goto err2;
-    }
-#endif
-
-    err = ntfs_open(sandboxFs->dev);
-    if (err) {
-        hasErr = true;
-        goto err_out;
-    }
-
-    /* Force read-only mount if the device was found read-only */
-    if (!ctx->ro && NVolReadOnly(ctx->vol)) {
-        ctx->rw = FALSE;
-        ctx->ro = TRUE;
-        if (ntfs_strinsert(&parsed_options, ",ro")) {
-            hasErr = true;
-            goto err_out;
-        }
-        C_LOG_VERB("Could not mount read-write, trying read-only");
-    }
-    else {
-        if (ctx->rw && ntfs_strinsert(&parsed_options, ",rw")) {
-            hasErr = true;
-            goto err_out;
-        }
-    }
-    /* We must do this after ntfs_open() to be able to set the blksize */
-    if (ctx->blkdev && set_fuseblk_options(&parsed_options)) {
-        hasErr = true;
-        goto err_out;
-    }
-
-    ctx->vol->abs_mnt_point = ctx->abs_mnt_point;
-    ctx->security.vol = ctx->vol;
-    ctx->vol->secure_flags = ctx->secure_flags;
-    ctx->vol->special_files = ctx->special_files;
-
-#ifdef HAVE_SETXATTR	/* extended attributes interface required */
-	ctx->vol->efs_raw = ctx->efs_raw;
-#endif /* HAVE_SETXATTR */
-	if (!ntfs_build_mapping(&ctx->security,ctx->usermap_path, (ctx->vol->secure_flags & ((1 << SECURITY_DEFAULT) | (1 << SECURITY_ACL))) && !ctx->inherit && !(ctx->vol->secure_flags & (1 << SECURITY_WANTED)))) {
-#if POSIXACLS
-		/* use basic permissions if requested */
-		if (ctx->vol->secure_flags & (1 << SECURITY_DEFAULT))
-			permissions_mode = "User mapping built, Posix ACLs not used";
-		else {
-			permissions_mode = "User mapping built, Posix ACLs in use";
-#if KERNELACLS
-			if (ntfs_strinsert(&parsed_options, ",default_permissions,acl")) {
-				err = NTFS_VOLUME_SYNTAX_ERROR;
-				goto err_out;
-			}
-#endif /* KERNELACLS */
-		}
-#else /* POSIXACLS */
-#if KERNELPERMS
-		if (!(ctx->vol->secure_flags & ((1 << SECURITY_DEFAULT) | (1 << SECURITY_ACL)))) {
-			/*
-			 * No explicit option but user mapping found
-			 * force default security
-			 */
-			ctx->vol->secure_flags |= (1 << SECURITY_DEFAULT);
-			if (ntfs_strinsert(&parsed_options, ",default_permissions")) {
-				err = NTFS_VOLUME_SYNTAX_ERROR;
-			    hasErr = true;
-				goto err_out;
-			}
-		}
-#endif /* KERNELPERMS */
-		permissions_mode = "User mapping built";
-#endif /* POSIXACLS */
-		ctx->dmask = ctx->fmask = 0;
-	}
-    else {
-		ctx->security.uid = ctx->uid;
-		ctx->security.gid = ctx->gid;
-		/* same ownership/permissions for all files */
-		ctx->security.mapping[MAPUSERS] = (struct MAPPING*)NULL;
-		ctx->security.mapping[MAPGROUPS] = (struct MAPPING*)NULL;
-		if ((ctx->vol->secure_flags & (1 << SECURITY_WANTED)) && !(ctx->vol->secure_flags & (1 << SECURITY_DEFAULT))) {
-			ctx->vol->secure_flags |= (1 << SECURITY_DEFAULT);
-			if (ntfs_strinsert(&parsed_options, ",default_permissions")) {
-				err = NTFS_VOLUME_SYNTAX_ERROR;
-			    hasErr = true;
-				goto err_out;
-			}
-		}
-		if (ctx->vol->secure_flags & (1 << SECURITY_DEFAULT)) {
-			ctx->vol->secure_flags |= (1 << SECURITY_RAW);
-			permissions_mode = "Global ownership and permissions enforced";
-		}
-        else {
-			ctx->vol->secure_flags &= ~(1 << SECURITY_RAW);
-			permissions_mode = "Ownership and permissions disabled";
-		}
-	}
-	if (ctx->usermap_path) {
-		free (ctx->usermap_path);
-	}
-
-#if defined(HAVE_SETXATTR) && defined(XATTR_MAPPINGS)
-	xattr_mapping = ntfs_xattr_build_mapping(ctx->vol, ctx->xattrmap_path);
-	ctx->vol->xattr_mapping = xattr_mapping;
-	/*
-	 * Errors are logged, do not refuse mounting, it would be
-	 * too difficult to fix the unmountable mapping file.
-	 */
-	if (ctx->xattrmap_path) {
-		free(ctx->xattrmap_path);
-	}
-#endif /* defined(HAVE_SETXATTR) && defined(XATTR_MAPPINGS) */
-
-#ifndef DISABLE_PLUGINS
-	register_internal_reparse_plugins();
-#endif /* DISABLE_PLUGINS */
-
-    C_LOG_VERB("parsed options: %s", parsed_options ? parsed_options : "null");
-	sandboxFs->fuse = mount_fuse(parsed_options, sandboxFs->mountPoint);
-	if (!sandboxFs->fuse) {
-		err = NTFS_VOLUME_FUSE_ERROR;
-	    hasErr = true;
-		goto err_out;
-	}
-
-	ctx->mounted = TRUE;
-    sandboxFs->isMounted = true;
-    C_LOG_VERB("mounted!");
-
-#if defined(linux) || defined(__uClinux__)
-	if (S_ISBLK(sbuf.st_mode) && (fstype == FSTYPE_FUSE)) {
-	    C_LOG_VERB("fuse");
-	}
-#endif
-	setup_logging(parsed_options);
-	if (failed_secure) {
-	    C_LOG_WARNING("%s",failed_secure);
-	}
-	if (permissions_mode) {
-	    C_LOG_WARNING("%s, configuration type %d", permissions_mode, 4 + POSIXACLS*6 - KERNELPERMS*3 + CACHEING);
-	}
-	if ((ctx->vol->secure_flags & (1 << SECURITY_RAW)) && !ctx->uid && ctx->gid) {
-		C_LOG_WARNING("Warning : using problematic uid==0 and gid!=0");
-	}
-
-	fuse_loop(sandboxFs->fuse);
-
-	err = 0;
-
-	fuse_unmount(sandboxFs->dev, ctx->fc);
-
-	fuse_destroy(sandboxFs->fuse);
-
-err_out:
-	ntfs_mount_error(sandboxFs->dev, sandboxFs->mountPoint, err);
-	if (ctx->abs_mnt_point) {
-		free(ctx->abs_mnt_point);
-	}
-#if defined(HAVE_SETXATTR) && defined(XATTR_MAPPINGS)
-	ntfs_xattr_free_mapping(xattr_mapping);
-#endif /* defined(HAVE_SETXATTR) && defined(XATTR_MAPPINGS) */
-err2:
-	ntfs_close();
-#ifndef DISABLE_PLUGINS
-	close_reparse_plugins(ctx);
-#endif /* DISABLE_PLUGINS */
-
-	free(ctx);
-    if (parsed_options) {
-	    free(parsed_options);
-    }
+    bool ret = sandboxFs->isMounted;
 
     SANDBOX_FS_MUTEX_UNLOCK();
 
-    return !hasErr;
+    return ret;
 }
 
-bool sandbox_fs_unmount(SandboxFs* sandboxFs)
+bool sandbox_fs_unmount()
 {
-    g_return_val_if_fail(sandboxFs->dev, false);
-
     SANDBOX_FS_MUTEX_LOCK();
 
-    if (sandboxFs->fuse) {
-        fuse_exit(sandboxFs->fuse);
+    if (gsFuse) {
+        fuse_exit(gsFuse);
     }
 
     SANDBOX_FS_MUTEX_UNLOCK();
@@ -2003,6 +1799,123 @@ void sandbox_fs_destroy(SandboxFs ** sandboxFs)
     }
 
     SANDBOX_FS_MUTEX_UNLOCK();
+}
+
+void sandbox_fs_execute_chroot(SandboxFs * sandboxFs, const char ** env, const char * exe)
+{
+    g_return_if_fail(sandboxFs && exe && env);
+    C_LOG_INFO("cmd: '%s', mountpoint: '%s'", exe ? exe : "<null>", sandboxFs->mountPoint? sandboxFs->mountPoint : "<null>");
+
+   // chdir
+    errno = 0;
+    if ( 0 != chdir(sandboxFs->mountPoint)) {
+        C_LOG_ERROR("chdir error: %s", c_strerror(errno));
+        return;
+    }
+
+    // chroot
+    errno = 0;
+    if ( 0 != chroot(sandboxFs->mountPoint)) {
+        C_LOG_ERROR("chroot error: %s", c_strerror(errno));
+        return;
+    }
+
+    // set env
+    if (env) {
+        for (int i = 0; env[i]; ++i) {
+            char** arr = c_strsplit(env[i], "=", 2);
+            if (c_strv_length(arr) != 2) {
+                // C_LOG_ERROR("error ENV %s", env[i]);
+                c_strfreev(arr);
+                continue;
+            }
+
+            char* key = arr[0];
+            char* val = arr[1];
+            C_LOG_VERB("[ENV] set %s", key);
+            c_setenv(key, val, true);
+            c_strfreev(arr);
+        }
+    }
+
+    // change user
+    if (c_getenv("USER")) {
+        errno = 0;
+        do {
+            struct passwd* pwd = getpwnam(c_getenv("USER"));
+            if (!pwd) {
+                C_LOG_ERROR("get struct passwd error: %s", c_strerror(errno));
+                break;
+            }
+            if (!c_file_test(pwd->pw_dir, C_FILE_TEST_EXISTS)) {
+                errno = 0;
+                if (!c_file_test("/home", C_FILE_TEST_EXISTS)) {
+                    c_mkdir("/home", 0755);
+                }
+                if (0 != c_mkdir(pwd->pw_dir, 0700)) {
+                    C_LOG_ERROR("mkdir error: %s", c_strerror(errno));
+                }
+                chown(pwd->pw_dir, pwd->pw_uid, pwd->pw_gid);
+            }
+
+            if (pwd->pw_dir) {
+                c_setenv("HOME", pwd->pw_dir, true);
+            }
+
+            setuid(pwd->pw_uid);
+            seteuid(pwd->pw_uid);
+
+            setgid(pwd->pw_gid);
+            setegid(pwd->pw_gid);
+        } while (0);
+    }
+
+#ifdef DEBUG
+    cchar** envs = c_get_environ();
+    for (int i = 0; envs[i]; ++i) {
+        c_log_raw(C_LOG_LEVEL_VERB, "%s", envs[i]);
+    }
+#endif
+
+    // run command
+#define CHECK_AND_RUN(dir)                              \
+do {                                                    \
+    char* cmdPath = c_strdup_printf("%s/%s", dir, exe); \
+    C_LOG_VERB("Found cmd: '%s'", cmdPath);             \
+    if (c_file_test(cmdPath, C_FILE_TEST_EXISTS)) {     \
+        C_LOG_VERB("run cmd: '%s'", cmdPath);           \
+        errno = 0;                                      \
+        execvpe(cmdPath, NULL, env);                    \
+        if (0 != errno) {                               \
+            C_LOG_ERROR("execute cmd '%s' error: %s",   \
+                cmdPath, c_strerror(errno));            \
+            return;                                     \
+        }                                               \
+    }                                                   \
+    c_free(cmdPath);                                    \
+} while (0); break
+
+    if (exe[0] == '/') {
+        C_LOG_VERB("run cmd: '%s'", exe);
+        errno = 0;
+        execvpe(exe, NULL, env);
+        if (0 != errno) { C_LOG_ERROR("execute cmd '%s' error: %s", exe, c_strerror(errno)); return; }
+    }
+    else {
+        do {
+            CHECK_AND_RUN("/bin");
+            CHECK_AND_RUN("/usr/bin");
+            CHECK_AND_RUN("/usr/local/bin");
+
+            CHECK_AND_RUN("/sbin");
+            CHECK_AND_RUN("/usr/sbin");
+            CHECK_AND_RUN("/usr/local/sbin");
+
+            C_LOG_ERROR("Cannot found binary path");
+        } while (0);
+    }
+
+    C_LOG_INFO("Finished!");
 }
 
 
@@ -5893,15 +5806,17 @@ static BOOL verify_boot_sector(struct ntfs_device *dev, ntfs_volume *rawvol)
 
     if (ntfs_pread(dev, 0, sizeof(buf), buf) != sizeof(buf)) {
         C_LOG_WARNING("Failed to read boot sector.");
-        return 1;
+        return FALSE;
     }
 
     if ((buf[0]!=0xeb) || ((buf[1]!=0x52) && (buf[1]!=0x5b)) || (buf[2]!=0x90)) {
         C_LOG_WARNING("Boot sector: Bad jump.");
+        return FALSE;
     }
 
     if (ntfs_boot->oem_id != magicNTFS) {
         C_LOG_WARNING("Boot sector: Bad NTFS magic.");
+        return FALSE;
     }
 
     gsBytesPerSector = le16_to_cpu(ntfs_boot->bpb.bytes_per_sector);
@@ -6366,7 +6281,7 @@ static runlist *load_runlist(ntfs_volume *rawvol, s64 offset_to_file_record, ATT
 
     attrs_offset = le16_to_cpu(((MFT_RECORD*)buf)->attrs_offset);
     // first attribute must be after the header.
-    if (attrs_offset<42) {
+    if (attrs_offset < 42) {
         C_LOG_WARNING("First attribute must be after the header (%u).", (int)attrs_offset);
     }
     attr_rec = (ATTR_RECORD *)(buf + attrs_offset);
@@ -13679,4 +13594,284 @@ static s64 ntfs_get_nr_free_mft_records(ntfs_volume *vol)
     if (nr_free >= 0)
         nr_free += (na->allocated_size - na->data_size) << 3;
     return nr_free;
+}
+
+static gpointer mount_fs_thread (gpointer data)
+{
+    g_return_val_if_fail(data, NULL);
+
+    SandboxFs* sf = (SandboxFs*) data;
+
+    int                     err = 0;
+    struct stat             sbuf;
+    bool                    hasErr = false;
+    unsigned long           existing_mount;
+    const char*             failed_secure = NULL;
+    const char*             permissions_mode = NULL;
+#if !(defined(__sun) && defined (__SVR4))
+    fuse_fstype             fstype = FSTYPE_UNKNOWN;
+#endif
+    char*                   parsed_options = g_strdup_printf("allow_other,nonempty,relatime,fsname=%s", sf->dev);
+
+    SANDBOX_FS_MUTEX_LOCK();
+
+    // 创建新的进程/线程，执行挂载操作
+    if (ntfs_fuse_init()) {
+        err = NTFS_VOLUME_OUT_OF_MEMORY;
+        C_LOG_WARNING("fuse_init error!");
+        hasErr = true;
+        goto err2;
+    }
+
+    // check is mounted
+    if (!ntfs_check_if_mounted(sf->dev, &existing_mount) && (existing_mount & NTFS_MF_MOUNTED) && (!(existing_mount & NTFS_MF_READONLY) || !ctx->ro)) {
+        err = NTFS_VOLUME_LOCKED;
+        hasErr = true;
+        goto err_out;
+    }
+
+    if (sf->dev[0] != '/') {
+        C_LOG_WARNING("Mount point '%s' is not absolute path.", sf->dev);
+        hasErr = true;
+        goto err_out;
+    }
+
+    ctx->abs_mnt_point = strdup(sf->dev);
+    if (!ctx->abs_mnt_point) {
+        C_LOG_ERROR("strdup failed");
+        hasErr = true;
+        goto err_out;
+    }
+
+    ctx->security.uid = 0;
+    ctx->security.gid = 0;
+    if (!stat(sf->dev, &sbuf)) {
+        /* collect owner of mount point, useful for default mapping */
+        ctx->security.uid = sbuf.st_uid;
+        ctx->security.gid = sbuf.st_gid;
+   }
+
+#if defined(linux) || defined(__uClinux__)
+    fstype = get_fuse_fstype();
+
+    err = NTFS_VOLUME_NO_PRIVILEGE;
+    if (restore_privs()) {
+        hasErr = true;
+        goto err_out;
+    }
+
+    if (fstype == FSTYPE_NONE || fstype == FSTYPE_UNKNOWN) {
+        fstype = load_fuse_module();
+    }
+    create_dev_fuse();
+
+    if (drop_privs()) {
+        hasErr = true;
+        goto err_out;
+    }
+#endif
+
+    if (stat(sf->dev, &sbuf)) {
+        C_LOG_WARNING("Failed to access '%s'", sf->dev);
+        err = NTFS_VOLUME_NO_PRIVILEGE;
+        hasErr = true;
+        goto err_out;
+    }
+
+#if !(defined(__sun) && defined (__SVR4))
+    /* Always use fuseblk for block devices unless it's surely missing. */
+    if (S_ISBLK(sbuf.st_mode) && (fstype != FSTYPE_FUSE)) {
+        ctx->blkdev = TRUE;
+    }
+#endif
+
+#ifndef FUSE_INTERNAL
+    if (getuid() && ctx->blkdev) {
+        ntfs_log_error("%s", unpriv_fuseblk_msg);
+        err = NTFS_VOLUME_NO_PRIVILEGE;
+        goto err2;
+    }
+#endif
+
+    err = ntfs_open(sf->dev);
+    if (err) {
+        hasErr = true;
+        goto err_out;
+    }
+
+    /* Force read-only mount if the device was found read-only */
+    if (!ctx->ro && NVolReadOnly(ctx->vol)) {
+        ctx->rw = FALSE;
+        ctx->ro = TRUE;
+        if (ntfs_strinsert(&parsed_options, ",ro")) {
+            hasErr = true;
+            goto err_out;
+        }
+        C_LOG_VERB("Could not mount read-write, trying read-only");
+    }
+    else {
+        if (ctx->rw && ntfs_strinsert(&parsed_options, ",rw")) {
+            hasErr = true;
+            goto err_out;
+        }
+    }
+    /* We must do this after ntfs_open() to be able to set the blksize */
+    if (ctx->blkdev && set_fuseblk_options(&parsed_options)) {
+        hasErr = true;
+        goto err_out;
+    }
+
+    ctx->vol->abs_mnt_point = ctx->abs_mnt_point;
+    ctx->security.vol = ctx->vol;
+    ctx->vol->secure_flags = ctx->secure_flags;
+    ctx->vol->special_files = ctx->special_files;
+
+#ifdef HAVE_SETXATTR	/* extended attributes interface required */
+	ctx->vol->efs_raw = ctx->efs_raw;
+#endif /* HAVE_SETXATTR */
+	if (!ntfs_build_mapping(&ctx->security,ctx->usermap_path, (ctx->vol->secure_flags & ((1 << SECURITY_DEFAULT) | (1 << SECURITY_ACL))) && !ctx->inherit && !(ctx->vol->secure_flags & (1 << SECURITY_WANTED)))) {
+#if POSIXACLS
+		/* use basic permissions if requested */
+		if (ctx->vol->secure_flags & (1 << SECURITY_DEFAULT))
+			permissions_mode = "User mapping built, Posix ACLs not used";
+		else {
+			permissions_mode = "User mapping built, Posix ACLs in use";
+#if KERNELACLS
+			if (ntfs_strinsert(&parsed_options, ",default_permissions,acl")) {
+				err = NTFS_VOLUME_SYNTAX_ERROR;
+				goto err_out;
+			}
+#endif /* KERNELACLS */
+		}
+#else /* POSIXACLS */
+#if KERNELPERMS
+		if (!(ctx->vol->secure_flags & ((1 << SECURITY_DEFAULT) | (1 << SECURITY_ACL)))) {
+			/*
+			 * No explicit option but user mapping found
+			 * force default security
+			 */
+			ctx->vol->secure_flags |= (1 << SECURITY_DEFAULT);
+			if (ntfs_strinsert(&parsed_options, ",default_permissions")) {
+				err = NTFS_VOLUME_SYNTAX_ERROR;
+			    hasErr = true;
+				goto err_out;
+			}
+		}
+#endif /* KERNELPERMS */
+		permissions_mode = "User mapping built";
+#endif /* POSIXACLS */
+		ctx->dmask = ctx->fmask = 0;
+	}
+    else {
+		ctx->security.uid = ctx->uid;
+		ctx->security.gid = ctx->gid;
+		/* same ownership/permissions for all files */
+		ctx->security.mapping[MAPUSERS] = (struct MAPPING*)NULL;
+		ctx->security.mapping[MAPGROUPS] = (struct MAPPING*)NULL;
+		if ((ctx->vol->secure_flags & (1 << SECURITY_WANTED)) && !(ctx->vol->secure_flags & (1 << SECURITY_DEFAULT))) {
+			ctx->vol->secure_flags |= (1 << SECURITY_DEFAULT);
+			if (ntfs_strinsert(&parsed_options, ",default_permissions")) {
+				err = NTFS_VOLUME_SYNTAX_ERROR;
+			    hasErr = true;
+				goto err_out;
+			}
+		}
+		if (ctx->vol->secure_flags & (1 << SECURITY_DEFAULT)) {
+			ctx->vol->secure_flags |= (1 << SECURITY_RAW);
+			permissions_mode = "Global ownership and permissions enforced";
+		}
+        else {
+			ctx->vol->secure_flags &= ~(1 << SECURITY_RAW);
+			permissions_mode = "Ownership and permissions disabled";
+		}
+	}
+	if (ctx->usermap_path) {
+		free (ctx->usermap_path);
+	}
+
+#if defined(HAVE_SETXATTR) && defined(XATTR_MAPPINGS)
+	xattr_mapping = ntfs_xattr_build_mapping(ctx->vol, ctx->xattrmap_path);
+	ctx->vol->xattr_mapping = xattr_mapping;
+	/*
+	 * Errors are logged, do not refuse mounting, it would be
+	 * too difficult to fix the unmountable mapping file.
+	 */
+	if (ctx->xattrmap_path) {
+		free(ctx->xattrmap_path);
+	}
+#endif /* defined(HAVE_SETXATTR) && defined(XATTR_MAPPINGS) */
+
+#ifndef DISABLE_PLUGINS
+	register_internal_reparse_plugins();
+#endif /* DISABLE_PLUGINS */
+
+    C_LOG_VERB("parsed options: %s", parsed_options ? parsed_options : "null");
+	gsFuse = mount_fuse(parsed_options, sf->mountPoint);
+	if (!gsFuse) {
+		err = NTFS_VOLUME_FUSE_ERROR;
+	    hasErr = true;
+		goto err_out;
+	}
+
+	ctx->mounted = TRUE;
+    sf->isMounted = true;
+    C_LOG_VERB("mounted!");
+
+#if defined(linux) || defined(__uClinux__)
+	if (S_ISBLK(sbuf.st_mode) && (fstype == FSTYPE_FUSE)) {
+	    C_LOG_VERB("fuse");
+	}
+#endif
+	setup_logging(parsed_options);
+	if (failed_secure) {
+	    C_LOG_WARNING("%s",failed_secure);
+	}
+	if (permissions_mode) {
+	    C_LOG_WARNING("%s, configuration type %d", permissions_mode, 4 + POSIXACLS*6 - KERNELPERMS*3 + CACHEING);
+	}
+	if ((ctx->vol->secure_flags & (1 << SECURITY_RAW)) && !ctx->uid && ctx->gid) {
+		C_LOG_WARNING("Warning : using problematic uid==0 and gid!=0");
+	}
+
+    sf->isMounted = true;
+
+    SANDBOX_FS_MUTEX_UNLOCK();
+
+	fuse_loop(gsFuse);
+
+    SANDBOX_FS_MUTEX_LOCK();
+
+    sf->isMounted = false;
+
+	err = 0;
+
+	fuse_unmount(sf->dev, ctx->fc);
+
+	fuse_destroy(gsFuse);
+
+err_out:
+	ntfs_mount_error(sf->dev, sf->mountPoint, err);
+	if (ctx->abs_mnt_point) {
+		free(ctx->abs_mnt_point);
+	}
+#if defined(HAVE_SETXATTR) && defined(XATTR_MAPPINGS)
+	ntfs_xattr_free_mapping(xattr_mapping);
+#endif /* defined(HAVE_SETXATTR) && defined(XATTR_MAPPINGS) */
+err2:
+	ntfs_close();
+#ifndef DISABLE_PLUGINS
+	close_reparse_plugins(ctx);
+#endif /* DISABLE_PLUGINS */
+
+	free(ctx);
+    if (parsed_options) {
+	    free(parsed_options);
+    }
+
+    return NULL;
+}
+
+static void umount_signal_process (int signum)
+{
+    sandbox_fs_unmount();
 }

@@ -5,24 +5,27 @@
 #include "sandbox.h"
 
 #include <fcntl.h>
+#include <pwd.h>
 #include <c/clib.h>
 #include <sys/un.h>
 #include <gio/gio.h>
 #include <sys/file.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <sys/mount.h>
 #include <sys/socket.h>
+#include <linux/sched.h>
 
-#include "loop.h"
 #include "namespace.h"
-#include "filesystem.h"
+#include "rootfs.h"
+#include "sandbox-fs.h"
 #include "proto/ipc-message.h"
 
 
 #define DEBUG_ISO_SIZE              1024
-#define DEBUG_FS_TYPE               "ext3"
 #define DEBUG_ROOT                  "/usr/local/andsec/sandbox/"
 #define DEBUG_MOUNT_POINT           DEBUG_ROOT"/.sandbox/"
-#define DEBUG_ISO_PATH              DEBUG_ROOT"/data/sandbox.iso"
+#define DEBUG_ISO_PATH              DEBUG_ROOT"/data/sandbox.box"
 #define DEBUG_SOCKET_PATH           DEBUG_ROOT"/data/sandbox.sock"
 #define DEBUG_LOCK_PATH             DEBUG_ROOT"/data/sandbox.lock"
 
@@ -32,9 +35,8 @@ struct _SandboxContext
     struct DeviceInfo {
         cchar*          isoFullPath;                // 文件系统路径
         cuint64         isoSize;                    // 文件系统大小
-        cchar*          loopDevName;                // loop设备名称
-        cchar*          filesystemType;             // 文件系统类型
         cchar*          mountPoint;                 // 设备挂载点
+        SandboxFs*      sandboxFs;
     } deviceInfo;
 
     struct Status {
@@ -71,6 +73,7 @@ static cchar**  sandbox_get_client_env  (cchar** oldEnv, const GList* cliEnv);
 static csize    read_all_data           (GSocket* fr, char** out/*out*/);
 static bool     sandbox_send_cmd        (SandboxContext* context, const char* buf, gsize bufSize);
 static gboolean sandbox_new_req         (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData);
+static void     sandbox_chroot_execute  (const char* cmd, const char* mountPoint, char** env);
 
 static CmdLine gsCmdline = {0};
 
@@ -85,6 +88,7 @@ static GOptionEntry gsEntry[] = {
 SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
 {
     bool ret = true;
+    GError* error = NULL;
     SandboxContext* sc = NULL;
 
     // 分配资源
@@ -112,8 +116,6 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
         sc->deviceInfo.isoFullPath = c_file_path_format_arr(sc->deviceInfo.isoFullPath);
         if (!sc->deviceInfo.isoFullPath) { ret = false; break; }
         sc->deviceInfo.isoSize = DEBUG_ISO_SIZE;
-        sc->deviceInfo.filesystemType = c_strdup(DEBUG_FS_TYPE);
-        if (!sc->deviceInfo.filesystemType) { ret = false; break; }
         sc->deviceInfo.mountPoint = c_strdup(DEBUG_MOUNT_POINT);
         sc->deviceInfo.mountPoint = c_file_path_format_arr(sc->deviceInfo.mountPoint);
         if (!sc->deviceInfo.mountPoint) { ret = false; break; }
@@ -137,9 +139,14 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
 
     if (!ret) { goto end; }
 
+    // 初始化
+    sc->deviceInfo.sandboxFs = sandbox_fs_init(sc->deviceInfo.isoFullPath, sc->deviceInfo.mountPoint);
+    if (!sc->deviceInfo.sandboxFs) {
+        goto end;
+    }
+
     // 创建 server
     do {
-        GError* error = NULL;
         struct sockaddr_un addrT = {0};
         memset (&addrT, 0, sizeof (addrT));
         addrT.sun_family = AF_LOCAL;
@@ -156,7 +163,8 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
         C_LOG_INFO("sandbox started: '%s'", sandbox_is_first() ? "Server" : "Client");
 
         if (sandbox_is_first()) {
-            bool ret = namespace_enter();
+            C_LOG_INFO("sandbox Server ...");
+            ret = namespace_enter();
             if (!ret) {
                 ret = false;
                 C_LOG_ERROR("namespace enter failed!");
@@ -202,91 +210,24 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
         else {
             C_LOG_VERB("[CLIENT] sandbox begin parse command line.");
             do {
-                GError* error = NULL;
+                error = NULL;
                 sc->cmdLine.cmdCtx = g_option_context_new(NULL);
                 g_option_context_add_main_entries(sc->cmdLine.cmdCtx, gsEntry, NULL);
-                // g_option_context_set_translate_func()
                 if (!g_option_context_parse(sc->cmdLine.cmdCtx, &argc, &argv, &error)) {
                     C_LOG_ERROR("parse error: %s", error->message);
                     ret = false;
                     break;
                 }
             } while (false);
-            // FIXME:// xorg-xhost
             system("xhost +");
         }
     } while (0);
 
 end:
-    if (!ret) { sandbox_destroy(&sc); return NULL; }
+    if (error)  { g_error_free(error); }
+    if (!ret)   { sandbox_destroy(&sc); return NULL; }
 
     return sc;
-}
-
-bool sandbox_mount_filesystem(SandboxContext *context)
-{
-    c_return_val_if_fail(context, false);
-
-    if (!filesystem_generated_iso (context->deviceInfo.isoFullPath, context->deviceInfo.isoSize)) {
-        C_LOG_VERB("Generate iso failed: %s, size: %d", context->deviceInfo.isoFullPath, context->deviceInfo.isoSize);
-        return false;
-    }
-
-    // 检测文件是否关联了设备
-    bool isInuse = loop_check_file_is_inuse(context->deviceInfo.isoFullPath);
-    if (!isInuse) {
-        C_LOG_VERB("%s is not in use", context->deviceInfo.isoFullPath);
-        char* loopDev = loop_get_free_device_name();
-        c_return_val_if_fail(loopDev, false);
-        C_LOG_VERB("loop dev name: %s", loopDev);
-        if (!c_file_test(loopDev, C_FILE_TEST_EXISTS)) {
-            if (!loop_mknod(loopDev)) {
-                C_LOG_VERB("mknod failed: %s", loopDev);
-                c_free(loopDev);
-                return false;
-            }
-        }
-        context->deviceInfo.loopDevName = c_strdup(loopDev);
-        c_free(loopDev);
-    }
-    else {
-        context->deviceInfo.loopDevName = loop_get_device_name_by_file_name(context->deviceInfo.isoFullPath);
-        C_LOG_VERB("'%s' is in use '%s'", context->deviceInfo.isoFullPath, context->deviceInfo.loopDevName);
-    }
-
-    c_return_val_if_fail(context->deviceInfo.loopDevName, false);
-
-    // 检测设备是否关联了文件
-    isInuse = loop_check_device_is_inuse(context->deviceInfo.loopDevName);
-    if (!isInuse) {
-        // 将文件和设备进行关联
-        if (!loop_attach_file_to_loop(context->deviceInfo.isoFullPath, context->deviceInfo.loopDevName)) {
-            C_LOG_ERROR("attach file to device error!");
-            return false;
-        }
-    }
-
-    // 检查是否挂载了文件系统
-    if (filesystem_is_mount(context->deviceInfo.loopDevName)) {
-        C_LOG_VERB("device already mounted!");
-        return true;
-    }
-
-    // 检查是否需要格式化文件系统，需要则进行系统格式化
-    if (!filesystem_check(context->deviceInfo.loopDevName, context->deviceInfo.filesystemType)) {
-        if (!filesystem_format(context->deviceInfo.loopDevName, context->deviceInfo.filesystemType)) {
-            C_LOG_ERROR("device format error!");
-            return false;
-        }
-    }
-
-    // 挂载系统
-    if (!filesystem_mount(context->deviceInfo.loopDevName, context->deviceInfo.filesystemType, context->deviceInfo.mountPoint)) {
-        C_LOG_ERROR("device mount error!");
-        return false;
-    }
-
-    return true;
 }
 
 void sandbox_destroy(SandboxContext** context)
@@ -304,16 +245,12 @@ void sandbox_destroy(SandboxContext** context)
         c_free((*context)->deviceInfo.isoFullPath);
     }
 
-    if ((*context)->deviceInfo.filesystemType) {
-        c_free((*context)->deviceInfo.filesystemType);
-    }
-
-    if ((*context)->deviceInfo.loopDevName) {
-        c_free((*context)->deviceInfo.loopDevName);
-    }
-
     if ((*context)->deviceInfo.mountPoint) {
         c_free((*context)->deviceInfo.mountPoint);
+    }
+
+    if ((*context)->deviceInfo.sandboxFs) {
+        sandbox_fs_destroy(&((*context)->deviceInfo.sandboxFs));
     }
 
     // status
@@ -336,6 +273,161 @@ void sandbox_destroy(SandboxContext** context)
     }
     // finally
     c_free(*context);
+}
+
+bool sandbox_is_mounted(SandboxContext * context)
+{
+    c_return_val_if_fail(context, false);
+
+    return sandbox_fs_is_mounted(context->deviceInfo.sandboxFs);
+}
+
+bool sandbox_make_rootfs(SandboxContext * context)
+{
+    g_return_val_if_fail(context, false);
+
+    return rootfs_init(context->deviceInfo.mountPoint);
+}
+
+bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char * cmd)
+{
+    g_return_val_if_fail(context, false);
+    g_return_val_if_fail(context->deviceInfo.sandboxFs, false);
+    g_return_val_if_fail(context->deviceInfo.mountPoint, false);
+    g_return_val_if_fail(context->deviceInfo.isoFullPath, false);
+
+    switch (fork()) {
+        case -1: {
+            return false;
+        }
+        case 0: {
+            break;
+        }
+        default: {
+            return true;
+        }
+    }
+
+    // chdir
+    C_LOG_VERB("Start chdir...");
+    errno = 0;
+    if (0 != chdir(context->deviceInfo.mountPoint)) {
+        C_LOG_ERROR("chdir error: %s", c_strerror(errno));
+        return false;
+    }
+    C_LOG_VERB("chdir done");
+
+    // chroot
+    C_LOG_VERB("Start chroot...");
+    errno = 0;
+    if ( 0 != chroot(context->deviceInfo.mountPoint)) {
+        C_LOG_ERROR("chroot error: %s", c_strerror(errno));
+        return false;
+    }
+    C_LOG_VERB("chroot done");
+
+    // set env
+    C_LOG_VERB("Start merge environment profile");
+    if (env) {
+        for (int i = 0; env[i]; ++i) {
+            char** arr = c_strsplit(env[i], "=", 2);
+            if (c_strv_length(arr) != 2) {
+                c_strfreev(arr);
+                continue;
+            }
+
+            char* key = arr[0];
+            char* val = arr[1];
+            C_LOG_VERB("[ENV] set %s", key);
+            c_setenv(key, val, true);
+            c_strfreev(arr);
+        }
+    }
+    C_LOG_VERB("Merge environment profile done");
+
+    // change user
+    C_LOG_VERB("Start change user");
+    if (c_getenv("USER")) {
+        errno = 0;
+        do {
+            struct passwd* pwd = getpwnam(c_getenv("USER"));
+            if (!pwd) {
+                C_LOG_ERROR("get struct passwd error: %s", c_strerror(errno));
+                break;
+            }
+            if (!c_file_test(pwd->pw_dir, C_FILE_TEST_EXISTS)) {
+                errno = 0;
+                if (!c_file_test("/home", C_FILE_TEST_EXISTS)) {
+                    c_mkdir("/home", 0755);
+                }
+                if (0 != c_mkdir(pwd->pw_dir, 0700)) {
+                    C_LOG_ERROR("mkdir error: %s", c_strerror(errno));
+                }
+                chown(pwd->pw_dir, pwd->pw_uid, pwd->pw_gid);
+            }
+
+            if (pwd->pw_dir) {
+                c_setenv("HOME", pwd->pw_dir, true);
+            }
+
+            setuid(pwd->pw_uid);
+            seteuid(pwd->pw_uid);
+
+            setgid(pwd->pw_gid);
+            setegid(pwd->pw_gid);
+        } while (0);
+    }
+    C_LOG_VERB("Change user OK!");
+
+#ifdef DEBUG
+    cchar** envs = c_get_environ();
+    for (int i = 0; envs[i]; ++i) {
+        c_log_raw(C_LOG_LEVEL_VERB, "%s", envs[i]);
+    }
+#endif
+
+    // run command
+#define CHECK_AND_RUN(dir)                              \
+do {                                                    \
+    char* cmdPath = c_strdup_printf("%s/%s", dir, cmd); \
+    C_LOG_VERB("Found cmd: '%s'", cmdPath);             \
+    if (c_file_test(cmdPath, C_FILE_TEST_EXISTS)) {     \
+        C_LOG_VERB("run cmd: '%s'", cmdPath);           \
+        errno = 0;                                      \
+        execvpe(cmdPath, NULL, env);                    \
+        if (0 != errno) {                               \
+            C_LOG_ERROR("execute cmd '%s' error: %s",   \
+                cmdPath, c_strerror(errno));            \
+            return;                                     \
+        }                                               \
+    }                                                   \
+    c_free(cmdPath);                                    \
+} while (0); break
+
+    C_LOG_VERB("Start execute cmd '%s' ...", cmd);
+    if (cmd[0] == '/') {
+        C_LOG_VERB("run cmd: '%s'", cmd);
+        errno = 0;
+        execvpe(cmd, NULL, env);
+        if (0 != errno) { C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno)); return; }
+    }
+    else {
+        do {
+            CHECK_AND_RUN("/bin");
+            CHECK_AND_RUN("/usr/bin");
+            CHECK_AND_RUN("/usr/local/bin");
+
+            CHECK_AND_RUN("/sbin");
+            CHECK_AND_RUN("/usr/sbin");
+            CHECK_AND_RUN("/usr/local/sbin");
+
+            C_LOG_ERROR("Cannot found binary path");
+        } while (0);
+    }
+
+    C_LOG_INFO("execute cmd '%s' Finished!", cmd);
+
+    return true;
 }
 
 void sandbox_cwd(SandboxContext *context)
@@ -392,6 +484,124 @@ bool sandbox_is_first()
     return ret;
 }
 
+
+static void sandbox_chroot_execute (const char* cmd, const char* mountPoint, char** env)
+{
+    C_LOG_INFO("cmd: '%s', mountpoint: '%s'", cmd ? cmd : "<null>", mountPoint ? mountPoint : "<null>");
+
+    c_return_if_fail(cmd && mountPoint);
+
+    // chdir
+    errno = 0;
+    if ( 0 != chdir(mountPoint)) {
+        C_LOG_ERROR("chdir error: %s", c_strerror(errno));
+        return;
+    }
+
+    // chroot
+    errno = 0;
+    if ( 0 != chroot(mountPoint)) {
+        C_LOG_ERROR("chroot error: %s", c_strerror(errno));
+        return;
+    }
+
+    // set env
+    if (env) {
+        for (int i = 0; env[i]; ++i) {
+            char** arr = c_strsplit(env[i], "=", 2);
+            if (c_strv_length(arr) != 2) {
+                // C_LOG_ERROR("error ENV %s", env[i]);
+                c_strfreev(arr);
+                continue;
+            }
+
+            char* key = arr[0];
+            char* val = arr[1];
+            C_LOG_VERB("[ENV] set %s", key);
+            c_setenv(key, val, true);
+            c_strfreev(arr);
+        }
+    }
+
+    // change user
+    if (c_getenv("USER")) {
+        errno = 0;
+        do {
+            struct passwd* pwd = getpwnam(c_getenv("USER"));
+            if (!pwd) {
+                C_LOG_ERROR("get struct passwd error: %s", c_strerror(errno));
+                break;
+            }
+            if (!c_file_test(pwd->pw_dir, C_FILE_TEST_EXISTS)) {
+                errno = 0;
+                if (!c_file_test("/home", C_FILE_TEST_EXISTS)) {
+                    c_mkdir("/home", 0755);
+                }
+                if (0 != c_mkdir(pwd->pw_dir, 0700)) {
+                    C_LOG_ERROR("mkdir error: %s", c_strerror(errno));
+                }
+                chown(pwd->pw_dir, pwd->pw_uid, pwd->pw_gid);
+            }
+
+            if (pwd->pw_dir) {
+                c_setenv("HOME", pwd->pw_dir, true);
+            }
+
+            setuid(pwd->pw_uid);
+            seteuid(pwd->pw_uid);
+
+            setgid(pwd->pw_gid);
+            setegid(pwd->pw_gid);
+        } while (0);
+    }
+
+#ifdef DEBUG
+    cchar** envs = c_get_environ();
+    for (int i = 0; envs[i]; ++i) {
+        c_log_raw(C_LOG_LEVEL_VERB, "%s", envs[i]);
+    }
+#endif
+
+    // run command
+#define CHECK_AND_RUN(dir)                              \
+do {                                                    \
+    char* cmdPath = c_strdup_printf("%s/%s", dir, cmd); \
+    C_LOG_VERB("Found cmd: '%s'", cmdPath);             \
+    if (c_file_test(cmdPath, C_FILE_TEST_EXISTS)) {     \
+        C_LOG_VERB("run cmd: '%s'", cmdPath);           \
+        errno = 0;                                      \
+        execvpe(cmdPath, NULL, env);                    \
+        if (0 != errno) {                               \
+            C_LOG_ERROR("execute cmd '%s' error: %s",   \
+                cmdPath, c_strerror(errno));            \
+            return;                                     \
+        }                                               \
+    }                                                   \
+    c_free(cmdPath);                                    \
+} while (0); break
+
+    if (cmd[0] == '/') {
+        C_LOG_VERB("run cmd: '%s'", cmd);
+        errno = 0;
+        execvpe(cmd, NULL, env);
+        if (0 != errno) { C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno)); return; }
+    }
+    else {
+        do {
+            CHECK_AND_RUN("/bin");
+            CHECK_AND_RUN("/usr/bin");
+            CHECK_AND_RUN("/usr/local/bin");
+
+            CHECK_AND_RUN("/sbin");
+            CHECK_AND_RUN("/usr/sbin");
+            CHECK_AND_RUN("/usr/local/sbin");
+
+            C_LOG_ERROR("Cannot found binary path");
+        } while (0);
+    }
+
+    C_LOG_INFO("Finished!");
+}
 
 static void sandbox_req(SandboxContext *context)
 {
@@ -492,9 +702,30 @@ static void sandbox_process_req (gpointer data, gpointer udata)
     char* binStr = NULL;
     IpcMessageData* cmd = ipc_message_data_new();
     GSocketConnection* conn = (GSocketConnection*) data;
-    const SandboxContext* sc = (SandboxContext*) udata;
-
+    SandboxContext* sc = (SandboxContext*) udata;
     GSocket* socket = g_socket_connection_get_socket (conn);
+
+    C_LOG_VERB("Check sandbox is mounted?");
+    if (!sandbox_fs_is_mounted(sc->deviceInfo.sandboxFs)) {
+        C_LOG_VERB("Sandbox is not mounted");
+        if (sandbox_fs_mount(sc->deviceInfo.sandboxFs)) {
+            C_LOG_VERB("Sandbox mount OK!");
+        }
+        else {
+            C_LOG_WARNING("Sandbox mount error!");
+            goto out;
+        }
+    }
+
+    // make rootfs
+    C_LOG_VERB("Sandbox make rootfs");
+    if (sandbox_make_rootfs(sc)) {
+        C_LOG_VERB("sandbox make rootfs OK!");
+    }
+    else {
+        C_LOG_WARNING("Sandbox make rootfs error!");
+    }
+    C_LOG_VERB("Sandbox is mounted!");
 
     cuint64 strLen = read_all_data (socket, &binStr);
     if (strLen <= 0) {
@@ -510,34 +741,20 @@ static void sandbox_process_req (gpointer data, gpointer udata)
     switch (ipc_message_type(cmd)) {
         case IPC_TYPE_OPEN_TERMINATOR: {
             C_LOG_INFO("Open terminator");
-            NewProcessParam param = {
-                .cmd = TERMINATOR,
-                .fsSize = sc->deviceInfo.isoSize,
-                .fsType = sc->deviceInfo.filesystemType,
-                .mountPoint = sc->deviceInfo.mountPoint,
-                .isoFullPath = sc->deviceInfo.isoFullPath,
-                .env = sandbox_get_client_env(sc->status.env, ipc_message_get_env_list(cmd)),
-            };
-            bool ret = namespace_execute_cmd(&param);
+            char** env = sandbox_get_client_env(sc->status.env, ipc_message_get_env_list(cmd));
+            bool ret = sandbox_execute_cmd(sc, env, TERMINATOR);//namespace_execute_cmd(&param);
             C_LOG_INFO("return: %s", ret ? "true" : "false");
 
-            c_strfreev(param.env);
+            c_strfreev(env);
             break;
         }
         case IPC_TYPE_OPEN_FM: {
             C_LOG_INFO("Open file manager");
-            NewProcessParam param = {
-                .cmd = FILE_MANAGER,
-                .fsSize = sc->deviceInfo.isoSize,
-                .fsType = sc->deviceInfo.filesystemType,
-                .mountPoint = sc->deviceInfo.mountPoint,
-                .isoFullPath = sc->deviceInfo.isoFullPath,
-                .env = sandbox_get_client_env(sc->status.env, ipc_message_get_env_list(cmd)),
-            };
-            bool ret = namespace_execute_cmd(&param);
+            char** env = sandbox_get_client_env(sc->status.env, ipc_message_get_env_list(cmd));
+            bool ret = sandbox_execute_cmd(sc, env, TERMINATOR);
             C_LOG_INFO("return: %s", ret ? "true" : "false");
 
-            c_strfreev(param.env);
+            c_strfreev(env);
             break;
         }
         case IPC_TYPE_QUIT: {
@@ -592,19 +809,19 @@ static bool sandbox_send_cmd (SandboxContext* context, const char* buf, gsize bu
     do {
         g_socket_connect(context->socket.socket, context->socket.address, NULL, &error);
         if (error) {
-            C_LOG_ERROR("[Client] connect error: %s\n", error->message);
+            C_LOG_ERROR("[Client] connect error: %s", error->message);
             break;
         }
 
         g_socket_condition_wait(context->socket.socket, G_IO_OUT, NULL, &error);
         if (error) {
-            C_LOG_ERROR("[Client] wait error: %s\n", error->message);
+            C_LOG_ERROR("[Client] wait error: %s", error->message);
             break;
         }
 
         g_socket_send_with_blocking(context->socket.socket, buf, bufSize, true, NULL, &error);
         if (error) {
-            C_LOG_ERROR("[Client] send error: %s\n", error->message);
+            C_LOG_ERROR("[Client] send error: %s", error->message);
             break;
         }
     } while (false);
@@ -728,7 +945,7 @@ do { \
     }
     c_strfreev(orgEnv);
 
-#if DEBUG
+#if 0//DEBUG
     for (int i = 0; (*env)[i]; ++i) {
         C_LOG_DEBUG("[ENV] '%s'", (*env)[i]);
     }
@@ -757,7 +974,7 @@ static cchar** sandbox_get_client_env (cchar** oldEnv, const GList* cliEnv)
 
     if (cliEnv) {
         C_LOG_DEBUG("client env");
-        for (GList* env = cliEnv; env; env = env->next) {
+        for (const GList* env = cliEnv; env; env = env->next) {
             char** arr = c_strsplit(env->data, "=", 2);
             if (c_strv_length(arr) != 2) {
                 continue;

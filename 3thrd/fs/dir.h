@@ -26,6 +26,7 @@
 #define _NTFS_DIR_H
 
 #include "types.h"
+#include "../fs/inode.h"
 
 #define PATH_SEP '/'
 

@@ -30,333 +30,333 @@ static bool mklink          (const char* src, const char* dest);
 static bool mkbind          (const char* src, const char* dest);
 
 
-bool filesystem_generated_iso(const char *absolutePath, cuint64 sizeMB)
-{
-    c_return_val_if_fail(absolutePath && (absolutePath[0] == '/') && (sizeMB > 0), false);
-
-    bool hasError = false;
-
-    cchar* dirPath = c_strdup(absolutePath);
-    if (dirPath) {
-        cchar* dir = c_strrstr(dirPath, "/");
-        if (dir) {
-            *dir = '\0';
-        }
-        C_LOG_VERB("dir: %s", dirPath);
-
-        if (!c_file_test(dirPath, C_FILE_TEST_EXISTS)) {
-            if (0 != c_mkdir_with_parents(dirPath, 0755)) {
-                C_LOG_VERB("mkdir_with_parents: '%s' error.", dirPath);
-                hasError = true;
-            }
-        }
-        c_free0(dirPath);
-    }
-    c_return_val_if_fail(!hasError, false);
-
-    int fd = open(absolutePath, O_RDWR | O_CREAT, 0600);
-    if (fd < 0) {
-        C_LOG_VERB("open: '%s' error: %s", absolutePath, c_strerror(errno));
-        return false;
-    }
-
-    if (lseek(fd, 0, SEEK_END) > 0) {
-        return true;
-    }
-
-    do {
-        cuint64 needSize = 1024 * 1024 * sizeMB;
-        off_t ret = lseek(fd, needSize - 1, SEEK_SET);
-        if (ret < 0) {
-            C_LOG_VERB("lseek: '%s' error: %s", absolutePath, c_strerror(errno));
-            hasError = true;
-            break;
-        }
-        else {
-            if (-1 == write(fd, "", 1)) {
-                C_LOG_VERB("write: '%s' error: %s", absolutePath, c_strerror(errno));
-                hasError = true;
-                break;
-            }
-            c_fsync(fd);
-        }
-    } while (0);
-
-    // 写入 andsec 加密文件头
-
-    CError* error = NULL;
-    c_close(fd, &error);
-    if (error) {
-        hasError = true;
-        C_LOG_VERB("close: '%s' error: %s", absolutePath, error->message);
-        c_error_free(error);
-    }
-    c_return_val_if_fail(!hasError, false);
-
-    return true;
-}
-
-bool filesystem_format(const char *devPath, const char *fsType)
-{
-    bool formatted = false;
-
-    c_return_val_if_fail(devPath && fsType, false);
-
-    if ((0 == c_strcmp0(fsType, "ext2")) || (0 == c_strcmp0(fsType, "ext3")) || (0 == c_strcmp0(fsType, "ext4"))) {
-        FILE* popenFr = NULL;
-        do {
-            char* formatCmd = NULL;
-            char* cmdBuf = c_strdup_printf("mkfs.%s", fsType);
-            char* bin = c_strdup_printf("/bin/%s", cmdBuf);
-            char* usrBin = c_strdup_printf("/usr/bin/%s", cmdBuf);
-            char* sbin = c_strdup_printf("/sbin/%s", cmdBuf);
-            char* usrSbin = c_strdup_printf("/usr/sbin/%s", cmdBuf);
-
-            do {
-                if (c_file_test(bin, C_FILE_TEST_EXISTS)) {
-                    formatCmd = c_strdup_printf("yes | %s %s > /dev/null 2>&1 && $?", bin, devPath);
-                }
-                else if (c_file_test(usrBin, C_FILE_TEST_EXISTS)) {
-                    formatCmd = c_strdup_printf("yes | %s %s > /dev/null 2>&1 && $?", usrBin, devPath);
-                }
-                else if (c_file_test(sbin, C_FILE_TEST_EXISTS)) {
-                    formatCmd = c_strdup_printf("yes | %s %s > /dev/null 2>&1 && $?", sbin, devPath);
-                }
-                else if (c_file_test(usrSbin, C_FILE_TEST_EXISTS)) {
-                    formatCmd = c_strdup_printf("yes | %s %s > /dev/null 2>&1 && $?", usrSbin, devPath);
-                }
-            } while (0);
-
-            c_free(cmdBuf);
-            c_free(bin);
-            c_free(usrBin);
-            c_free(sbin);
-            c_free(usrSbin);
-
-            if (formatCmd) {
-                popenFr = popen(formatCmd, "r");
-                c_free(formatCmd);
-                if (!popenFr) {
-                    C_LOG_ERROR("popen format error!");
-                    break;
-                }
-
-                char buf[16] = {0};
-                c_file_read_line_arr(popenFr, buf, sizeof(buf) - 1);
-                if (c_strlen(buf) > 0 && 0 == c_strcmp0("0", buf)) {
-                    formatted = true;
-                }
-            }
-        } while (0);
-        if (popenFr) {
-            pclose(popenFr);
-        }
-    }
-
-    c_return_val_if_fail(formatted, true);
-
-    UDisksBlock* block = NULL;
-    UDisksClient* client = NULL;
-    UDisksObject* udisksObj = NULL;
-
-    do {
-        client = udisks_client_new_sync(NULL, NULL);
-        if (!client)    { break; }
-        udisksObj = getObjectFromBlockDevice(client, devPath);
-        if (!udisksObj) { break; }
-        block = udisks_object_get_block (udisksObj);
-        if (!block)     { break; }
-        {
-            // format
-            GError* error = NULL;
-            GVariantBuilder optionsBuilder;
-            g_variant_builder_init(&optionsBuilder, G_VARIANT_TYPE_VARDICT);
-            g_variant_builder_add (&optionsBuilder, "{sv}", "label", g_variant_new_string ("Sandbox"));
-            g_variant_builder_add (&optionsBuilder, "{sv}", "take-ownership", g_variant_new_boolean (TRUE));
-            formatted = udisks_block_call_format_sync(block, fsType, g_variant_builder_end(&optionsBuilder), NULL, &error);
-            if (error) {
-                C_LOG_ERROR("format error: %s", error->message);
-                break;
-            }
-        }
-    } while (false);
-
-    if (block)      { g_object_unref(block); }
-    if (udisksObj)  { g_object_unref(udisksObj); }
-    if (client)     { g_object_unref(client); }
-
-
-    return formatted;
-}
-
-bool filesystem_check(const char *devPath, const char* fsType)
-{
-    c_return_val_if_fail(devPath, false);
-
-    bool checkOK = false;
-
-    if (fsType && (0 == c_strcmp0(fsType, "ext2") || (0 == c_strcmp0(fsType, "ext3")))) {
-        ext2_filsys fs;
-        errcode_t error;
-
-        do {
-            error = ext2fs_open(devPath, EXT2_FLAG_RW, 0, 0, unix_io_manager, &fs);
-            if (error) {
-                C_LOG_ERROR("Open '%s' error: %s", devPath, c_strerror(errno));
-                break;
-            }
-
-            error = ext2fs_check_desc(fs);
-            if (error) {
-                C_LOG_ERROR("Filesystem check error: '%s'", c_strerror(errno));
-            }
-            else {
-                checkOK = true;
-            }
-            ext2fs_close(fs);
-            return checkOK;
-        } while (0);
-    }
-
-    UDisksFilesystem* fs = NULL;
-    UDisksClient* client = NULL;
-    UDisksObject* udisksObj = NULL;
-
-    do {
-        client = udisks_client_new_sync(NULL, NULL);
-        if (!client)    { break; }
-        udisksObj = getObjectFromBlockDevice(client, devPath);
-        if (!udisksObj) { break; }
-        fs = udisks_object_get_filesystem(udisksObj);
-        if (!fs)        { break; }
-
-        {
-            // check
-            GError* error = NULL;
-            GVariantBuilder opt1;
-            g_variant_builder_init(&opt1, G_VARIANT_TYPE_VARDICT);
-            g_variant_builder_add (&opt1, "{sv}", "auth.no_user_interaction", g_variant_new_boolean(true));
-            checkOK = udisks_filesystem_call_check_sync(fs, g_variant_builder_end(&opt1), NULL, NULL, &error);
-            if (error) {
-                C_LOG_ERROR("format error: %s", error->message);
-                g_error_free(error);
-                error = NULL;
-                break;
-            }
-            C_LOG_VERB("check filesystem: %s", (checkOK ? "OK" : "Failed"));
-
-            // 检查不通过则尝试修复
-            GVariantBuilder opt2;
-            g_variant_builder_init(&opt2, G_VARIANT_TYPE_VARDICT);
-            g_variant_builder_add (&opt2, "{sv}", "auth.no_user_interaction", g_variant_new_boolean(true));
-            checkOK = udisks_filesystem_call_repair_sync(fs, g_variant_builder_end(&opt2), NULL, NULL, &error);
-            if (error) {
-                C_LOG_ERROR("format error: %s", error->message);
-                g_error_free(error);
-                error = NULL;
-                break;
-            }
-        }
-    } while (false);
-
-    if (fs)         { g_object_unref(fs); }
-    if (udisksObj)  { g_object_unref(udisksObj); }
-    if (client)     { g_object_unref(client); }
-
-    return checkOK;
-}
-
-bool filesystem_mount(const char* devName, const char* fsType, const char *mountPoint)
-{
-    c_return_val_if_fail(devName && mountPoint, false);
-
-    if (!c_file_test(mountPoint, C_FILE_TEST_EXISTS)) {
-        c_mkdir_with_parents(mountPoint, 0700);
-    }
-
-    c_return_val_if_fail(c_file_test(mountPoint, C_FILE_TEST_EXISTS), false);
-
-    if (filesystem_is_mountpoint(mountPoint)) {
-        C_LOG_VERB("%s already mounted!", mountPoint);
-        return true;
-    }
-
-    errno = 0;
-    if (0 != mount (devName, mountPoint, fsType, MS_SILENT | MS_NOSUID, NULL)) {
-        C_LOG_ERROR("mount failed :%s", c_strerror(errno));
-        return false;
-    }
-
-    return true;
-}
-
-bool filesystem_is_mount(const char *devPath)
-{
-    c_return_val_if_fail(devPath, false);
-
-    bool mountOK = false;
-
-#define ETC_MTAB "/etc/mtab"
-    if (c_file_test(ETC_MTAB, C_FILE_TEST_EXISTS)) {
-        do {
-            struct mntent* ent = NULL;
-            FILE* mtab = setmntent(ETC_MTAB, "r");
-            if (NULL == mtab) {
-                break;
-            }
-
-            while ((void*)(ent == getmntent(mtab)) != NULL) {
-                if (0 == c_strcmp0(c_file_path_format_arr(devPath),
-                                    c_file_path_format_arr(ent->mnt_fsname))) {
-                    mountOK = true;
-                    break;
-                }
-            }
-        } while (0);
-        return mountOK;
-    }
-
-    UDisksFilesystem *fs = NULL;
-    UDisksClient *client = NULL;
-    UDisksObject *udisksObj = NULL;
-
-    do {
-        GError *error = NULL;
-        client = udisks_client_new_sync(NULL, &error);
-        if (!client) {
-            C_LOG_ERROR("udisks_client_new_sync error: %s", error->message);
-            g_error_free(error);
-            break;
-        }
-
-        udisksObj = getObjectFromBlockDevice(client, devPath);
-        if (!udisksObj) {
-            C_LOG_ERROR("getObjectFromBlockDevice error");
-            break;
-        }
-        fs = udisks_object_get_filesystem(udisksObj);
-        if (!fs) {
-            C_LOG_ERROR("udisks_object_get_filesystem error");
-            break;
-        }
-
-        {
-            // is mount?
-            const char *const *mp = udisks_filesystem_get_mount_points(fs);
-            if (c_strv_const_length(mp) > 0) {
-                mountOK = true;
-                break;
-            }
-        }
-    } while (false);
-
-    if (fs) { g_object_unref(fs); }
-    if (udisksObj) { g_object_unref(udisksObj); }
-    if (client) { g_object_unref(client); }
-
-
-    return mountOK;
-}
+// bool filesystem_generated_iso(const char *absolutePath, cuint64 sizeMB)
+// {
+//     c_return_val_if_fail(absolutePath && (absolutePath[0] == '/') && (sizeMB > 0), false);
+//
+//     bool hasError = false;
+//
+//     cchar* dirPath = c_strdup(absolutePath);
+//     if (dirPath) {
+//         cchar* dir = c_strrstr(dirPath, "/");
+//         if (dir) {
+//             *dir = '\0';
+//         }
+//         C_LOG_VERB("dir: %s", dirPath);
+//
+//         if (!c_file_test(dirPath, C_FILE_TEST_EXISTS)) {
+//             if (0 != c_mkdir_with_parents(dirPath, 0755)) {
+//                 C_LOG_VERB("mkdir_with_parents: '%s' error.", dirPath);
+//                 hasError = true;
+//             }
+//         }
+//         c_free0(dirPath);
+//     }
+//     c_return_val_if_fail(!hasError, false);
+//
+//     int fd = open(absolutePath, O_RDWR | O_CREAT, 0600);
+//     if (fd < 0) {
+//         C_LOG_VERB("open: '%s' error: %s", absolutePath, c_strerror(errno));
+//         return false;
+//     }
+//
+//     if (lseek(fd, 0, SEEK_END) > 0) {
+//         return true;
+//     }
+//
+//     do {
+//         cuint64 needSize = 1024 * 1024 * sizeMB;
+//         off_t ret = lseek(fd, needSize - 1, SEEK_SET);
+//         if (ret < 0) {
+//             C_LOG_VERB("lseek: '%s' error: %s", absolutePath, c_strerror(errno));
+//             hasError = true;
+//             break;
+//         }
+//         else {
+//             if (-1 == write(fd, "", 1)) {
+//                 C_LOG_VERB("write: '%s' error: %s", absolutePath, c_strerror(errno));
+//                 hasError = true;
+//                 break;
+//             }
+//             c_fsync(fd);
+//         }
+//     } while (0);
+//
+//     // 写入 andsec 加密文件头
+//
+//     CError* error = NULL;
+//     c_close(fd, &error);
+//     if (error) {
+//         hasError = true;
+//         C_LOG_VERB("close: '%s' error: %s", absolutePath, error->message);
+//         c_error_free(error);
+//     }
+//     c_return_val_if_fail(!hasError, false);
+//
+//     return true;
+// }
+//
+// bool filesystem_format(const char *devPath, const char *fsType)
+// {
+//     bool formatted = false;
+//
+//     c_return_val_if_fail(devPath && fsType, false);
+//
+//     if ((0 == c_strcmp0(fsType, "ext2")) || (0 == c_strcmp0(fsType, "ext3")) || (0 == c_strcmp0(fsType, "ext4"))) {
+//         FILE* popenFr = NULL;
+//         do {
+//             char* formatCmd = NULL;
+//             char* cmdBuf = c_strdup_printf("mkfs.%s", fsType);
+//             char* bin = c_strdup_printf("/bin/%s", cmdBuf);
+//             char* usrBin = c_strdup_printf("/usr/bin/%s", cmdBuf);
+//             char* sbin = c_strdup_printf("/sbin/%s", cmdBuf);
+//             char* usrSbin = c_strdup_printf("/usr/sbin/%s", cmdBuf);
+//
+//             do {
+//                 if (c_file_test(bin, C_FILE_TEST_EXISTS)) {
+//                     formatCmd = c_strdup_printf("yes | %s %s > /dev/null 2>&1 && $?", bin, devPath);
+//                 }
+//                 else if (c_file_test(usrBin, C_FILE_TEST_EXISTS)) {
+//                     formatCmd = c_strdup_printf("yes | %s %s > /dev/null 2>&1 && $?", usrBin, devPath);
+//                 }
+//                 else if (c_file_test(sbin, C_FILE_TEST_EXISTS)) {
+//                     formatCmd = c_strdup_printf("yes | %s %s > /dev/null 2>&1 && $?", sbin, devPath);
+//                 }
+//                 else if (c_file_test(usrSbin, C_FILE_TEST_EXISTS)) {
+//                     formatCmd = c_strdup_printf("yes | %s %s > /dev/null 2>&1 && $?", usrSbin, devPath);
+//                 }
+//             } while (0);
+//
+//             c_free(cmdBuf);
+//             c_free(bin);
+//             c_free(usrBin);
+//             c_free(sbin);
+//             c_free(usrSbin);
+//
+//             if (formatCmd) {
+//                 popenFr = popen(formatCmd, "r");
+//                 c_free(formatCmd);
+//                 if (!popenFr) {
+//                     C_LOG_ERROR("popen format error!");
+//                     break;
+//                 }
+//
+//                 char buf[16] = {0};
+//                 c_file_read_line_arr(popenFr, buf, sizeof(buf) - 1);
+//                 if (c_strlen(buf) > 0 && 0 == c_strcmp0("0", buf)) {
+//                     formatted = true;
+//                 }
+//             }
+//         } while (0);
+//         if (popenFr) {
+//             pclose(popenFr);
+//         }
+//     }
+//
+//     c_return_val_if_fail(formatted, true);
+//
+//     UDisksBlock* block = NULL;
+//     UDisksClient* client = NULL;
+//     UDisksObject* udisksObj = NULL;
+//
+//     do {
+//         client = udisks_client_new_sync(NULL, NULL);
+//         if (!client)    { break; }
+//         udisksObj = getObjectFromBlockDevice(client, devPath);
+//         if (!udisksObj) { break; }
+//         block = udisks_object_get_block (udisksObj);
+//         if (!block)     { break; }
+//         {
+//             // format
+//             GError* error = NULL;
+//             GVariantBuilder optionsBuilder;
+//             g_variant_builder_init(&optionsBuilder, G_VARIANT_TYPE_VARDICT);
+//             g_variant_builder_add (&optionsBuilder, "{sv}", "label", g_variant_new_string ("Sandbox"));
+//             g_variant_builder_add (&optionsBuilder, "{sv}", "take-ownership", g_variant_new_boolean (TRUE));
+//             formatted = udisks_block_call_format_sync(block, fsType, g_variant_builder_end(&optionsBuilder), NULL, &error);
+//             if (error) {
+//                 C_LOG_ERROR("format error: %s", error->message);
+//                 break;
+//             }
+//         }
+//     } while (false);
+//
+//     if (block)      { g_object_unref(block); }
+//     if (udisksObj)  { g_object_unref(udisksObj); }
+//     if (client)     { g_object_unref(client); }
+//
+//
+//     return formatted;
+// }
+//
+// bool filesystem_check(const char *devPath, const char* fsType)
+// {
+//     c_return_val_if_fail(devPath, false);
+//
+//     bool checkOK = false;
+//
+//     if (fsType && (0 == c_strcmp0(fsType, "ext2") || (0 == c_strcmp0(fsType, "ext3")))) {
+//         ext2_filsys fs;
+//         errcode_t error;
+//
+//         do {
+//             error = ext2fs_open(devPath, EXT2_FLAG_RW, 0, 0, unix_io_manager, &fs);
+//             if (error) {
+//                 C_LOG_ERROR("Open '%s' error: %s", devPath, c_strerror(errno));
+//                 break;
+//             }
+//
+//             error = ext2fs_check_desc(fs);
+//             if (error) {
+//                 C_LOG_ERROR("Filesystem check error: '%s'", c_strerror(errno));
+//             }
+//             else {
+//                 checkOK = true;
+//             }
+//             ext2fs_close(fs);
+//             return checkOK;
+//         } while (0);
+//     }
+//
+//     UDisksFilesystem* fs = NULL;
+//     UDisksClient* client = NULL;
+//     UDisksObject* udisksObj = NULL;
+//
+//     do {
+//         client = udisks_client_new_sync(NULL, NULL);
+//         if (!client)    { break; }
+//         udisksObj = getObjectFromBlockDevice(client, devPath);
+//         if (!udisksObj) { break; }
+//         fs = udisks_object_get_filesystem(udisksObj);
+//         if (!fs)        { break; }
+//
+//         {
+//             // check
+//             GError* error = NULL;
+//             GVariantBuilder opt1;
+//             g_variant_builder_init(&opt1, G_VARIANT_TYPE_VARDICT);
+//             g_variant_builder_add (&opt1, "{sv}", "auth.no_user_interaction", g_variant_new_boolean(true));
+//             checkOK = udisks_filesystem_call_check_sync(fs, g_variant_builder_end(&opt1), NULL, NULL, &error);
+//             if (error) {
+//                 C_LOG_ERROR("format error: %s", error->message);
+//                 g_error_free(error);
+//                 error = NULL;
+//                 break;
+//             }
+//             C_LOG_VERB("check filesystem: %s", (checkOK ? "OK" : "Failed"));
+//
+//             // 检查不通过则尝试修复
+//             GVariantBuilder opt2;
+//             g_variant_builder_init(&opt2, G_VARIANT_TYPE_VARDICT);
+//             g_variant_builder_add (&opt2, "{sv}", "auth.no_user_interaction", g_variant_new_boolean(true));
+//             checkOK = udisks_filesystem_call_repair_sync(fs, g_variant_builder_end(&opt2), NULL, NULL, &error);
+//             if (error) {
+//                 C_LOG_ERROR("format error: %s", error->message);
+//                 g_error_free(error);
+//                 error = NULL;
+//                 break;
+//             }
+//         }
+//     } while (false);
+//
+//     if (fs)         { g_object_unref(fs); }
+//     if (udisksObj)  { g_object_unref(udisksObj); }
+//     if (client)     { g_object_unref(client); }
+//
+//     return checkOK;
+// }
+//
+// bool filesystem_mount(const char* devName, const char* fsType, const char *mountPoint)
+// {
+//     c_return_val_if_fail(devName && mountPoint, false);
+//
+//     if (!c_file_test(mountPoint, C_FILE_TEST_EXISTS)) {
+//         c_mkdir_with_parents(mountPoint, 0700);
+//     }
+//
+//     c_return_val_if_fail(c_file_test(mountPoint, C_FILE_TEST_EXISTS), false);
+//
+//     if (filesystem_is_mountpoint(mountPoint)) {
+//         C_LOG_VERB("%s already mounted!", mountPoint);
+//         return true;
+//     }
+//
+//     errno = 0;
+//     if (0 != mount (devName, mountPoint, fsType, MS_SILENT | MS_NOSUID, NULL)) {
+//         C_LOG_ERROR("mount failed :%s", c_strerror(errno));
+//         return false;
+//     }
+//
+//     return true;
+// }
+//
+// bool filesystem_is_mount(const char *devPath)
+// {
+//     c_return_val_if_fail(devPath, false);
+//
+//     bool mountOK = false;
+//
+// #define ETC_MTAB "/etc/mtab"
+//     if (c_file_test(ETC_MTAB, C_FILE_TEST_EXISTS)) {
+//         do {
+//             struct mntent* ent = NULL;
+//             FILE* mtab = setmntent(ETC_MTAB, "r");
+//             if (NULL == mtab) {
+//                 break;
+//             }
+//
+//             while ((void*)(ent == getmntent(mtab)) != NULL) {
+//                 if (0 == c_strcmp0(c_file_path_format_arr(devPath),
+//                                     c_file_path_format_arr(ent->mnt_fsname))) {
+//                     mountOK = true;
+//                     break;
+//                 }
+//             }
+//         } while (0);
+//         return mountOK;
+//     }
+//
+//     UDisksFilesystem *fs = NULL;
+//     UDisksClient *client = NULL;
+//     UDisksObject *udisksObj = NULL;
+//
+//     do {
+//         GError *error = NULL;
+//         client = udisks_client_new_sync(NULL, &error);
+//         if (!client) {
+//             C_LOG_ERROR("udisks_client_new_sync error: %s", error->message);
+//             g_error_free(error);
+//             break;
+//         }
+//
+//         udisksObj = getObjectFromBlockDevice(client, devPath);
+//         if (!udisksObj) {
+//             C_LOG_ERROR("getObjectFromBlockDevice error");
+//             break;
+//         }
+//         fs = udisks_object_get_filesystem(udisksObj);
+//         if (!fs) {
+//             C_LOG_ERROR("udisks_object_get_filesystem error");
+//             break;
+//         }
+//
+//         {
+//             // is mount?
+//             const char *const *mp = udisks_filesystem_get_mount_points(fs);
+//             if (c_strv_const_length(mp) > 0) {
+//                 mountOK = true;
+//                 break;
+//             }
+//         }
+//     } while (false);
+//
+//     if (fs) { g_object_unref(fs); }
+//     if (udisksObj) { g_object_unref(udisksObj); }
+//     if (client) { g_object_unref(client); }
+//
+//
+//     return mountOK;
+// }
 
 bool filesystem_rootfs(const char *mountPoint)
 {
@@ -369,6 +369,7 @@ bool filesystem_rootfs(const char *mountPoint)
     chdir(mountPoint);
 
     // 软连接 bin
+    C_LOG_VERB("mklink 'usr/bin'");
     {
         if (!mklink("usr/bin", "bin")) {
             return false;
@@ -376,6 +377,7 @@ bool filesystem_rootfs(const char *mountPoint)
     }
 
     // 软连接 lib
+    C_LOG_VERB("mklink 'usr/lib'");
     {
         if (!mklink("usr/lib", "lib")) {
             return false;
@@ -383,16 +385,19 @@ bool filesystem_rootfs(const char *mountPoint)
     }
 
     // 软连接 lib64
+    C_LOG_VERB("mklink 'usr/lib64'");
     {
         if (!mklink("usr/lib64", "lib64")) {
             return false;
         }
     }
 
+    C_LOG_VERB("chdir");
     chdir(oldPath);
 
     // 创建 etc/ 绑定
     {
+        C_LOG_VERB("mkbind etc/");
         cchar* etcB = c_strdup_printf("%s/etc", mountPoint);
         if (!mkbind("/etc", etcB)) {
             c_free(etcB);
@@ -403,6 +408,7 @@ bool filesystem_rootfs(const char *mountPoint)
 
     // 创建 usr/ 绑定
     {
+        C_LOG_VERB("mkbind 'usr/'");
         cchar* usrB = c_strdup_printf("%s/usr", mountPoint);
         if (!mkbind("/usr", usrB)) {
             c_free(usrB);
@@ -413,6 +419,7 @@ bool filesystem_rootfs(const char *mountPoint)
 
     // 创建 home
     {
+        C_LOG_VERB("mkdir 'home/'");
         cchar* usrB = c_strdup_printf("%s/home", mountPoint);
         cint oldMask = umask(0);
         if (!c_mkdir(mountPoint, 0755)) {
@@ -425,12 +432,14 @@ bool filesystem_rootfs(const char *mountPoint)
     }
 
     // dev
+    C_LOG_VERB("mount 'dev/'");
     if (!mount_dev(mountPoint)) {
         C_LOG_ERROR("mount dev");
         return false;
     }
 
     // proc
+    C_LOG_VERB("mount 'proc/'");
     if (!mount_proc(mountPoint)) {
         C_LOG_ERROR("mount proc!");
         return false;

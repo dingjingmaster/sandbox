@@ -32,7 +32,6 @@ pkg_check_modules(DISK REQUIRED udisks2)
 pkg_check_modules(GLIB REQUIRED gio-2.0)
 pkg_check_modules(VTE REQUIRED vte-2.91)
 pkg_check_modules(GAIL REQUIRED gail-3.0)
-#pkg_check_modules(PROTO REQUIRED libprotobuf-c)
 
 add_subdirectory(app)
 add_subdirectory(data)

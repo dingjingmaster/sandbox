@@ -3,11 +3,12 @@ include(${CMAKE_SOURCE_DIR}/3thrd/fs/libsandbox-fs.cmake)
 #include(${CMAKE_SOURCE_DIR}/3thrd/fuse-lite/libfuse-lite.cmake)
 
 add_executable(test-format format.c ${C_SRC} ${SANDBOX_FS_SRC} ${FUSE_LITE_SRC}
-        ../app/sandbox-fs.c
+        ../app/utils.c
         ../app/fs/sd.c
         ../app/fs/boot.c
         ../app/fs/utils.c
         ../app/fs/attrdef.c
+        ../app/sandbox-fs.c
 )
 target_link_libraries(test-format PUBLIC
         ${GLIB_LIBRARIES}
@@ -31,6 +32,7 @@ target_compile_definitions(test-format PUBLIC
 )
 
 add_executable(test-check check.c ${C_SRC} ${SANDBOX_FS_SRC} ${FUSE_LITE_SRC}
+        ../app/utils.c
         ../app/fs/sd.c
         ../app/fs/boot.c
         ../app/fs/utils.c
@@ -59,6 +61,7 @@ target_compile_definitions(test-check PUBLIC
 )
 
 add_executable(test-resize resize.c ${C_SRC} ${SANDBOX_FS_SRC} ${FUSE_LITE_SRC}
+        ../app/utils.c
         ../app/fs/sd.c
         ../app/fs/boot.c
         ../app/fs/utils.c
@@ -87,6 +90,7 @@ target_compile_definitions(test-resize PUBLIC
 )
 
 add_executable(test-mount mount.c ${C_SRC} ${SANDBOX_FS_SRC} # ${FUSE_LITE_SRC}
+        ../app/utils.c
         ../app/fs/sd.c
         ../app/fs/boot.c
         ../app/fs/utils.c
@@ -116,6 +120,7 @@ target_compile_definitions(test-mount PUBLIC
 
 add_executable(test-unmount umount.c ${C_SRC} ${SANDBOX_FS_SRC} # ${FUSE_LITE_SRC}
         ../app/fs/sd.c
+        ../app/utils.c
         ../app/fs/boot.c
         ../app/fs/utils.c
         ../app/fs/attrdef.c

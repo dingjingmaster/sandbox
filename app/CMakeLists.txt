@@ -1,10 +1,7 @@
 
 file(GLOB SANDBOX_SRC
-        ${CMAKE_SOURCE_DIR}/app loop.h
-        ${CMAKE_SOURCE_DIR}/app loop.c
-
-        ${CMAKE_SOURCE_DIR}/app polkit.h
-        ${CMAKE_SOURCE_DIR}/app polkit.c
+        ${CMAKE_SOURCE_DIR}/app rootfs.h
+        ${CMAKE_SOURCE_DIR}/app rootfs.c
 
         ${CMAKE_SOURCE_DIR}/app environ.h
         ${CMAKE_SOURCE_DIR}/app environ.c
@@ -15,11 +12,11 @@ file(GLOB SANDBOX_SRC
         ${CMAKE_SOURCE_DIR}/app namespace.h
         ${CMAKE_SOURCE_DIR}/app namespace.c
 
-        ${CMAKE_SOURCE_DIR}/app filesystem.h
-        ${CMAKE_SOURCE_DIR}/app filesystem.c
-
         ${CMAKE_SOURCE_DIR}/app sandbox-fs.h
         ${CMAKE_SOURCE_DIR}/app sandbox-fs.c
+
+        ${CMAKE_SOURCE_DIR}/app utils.h
+        ${CMAKE_SOURCE_DIR}/app utils.c
 
         ${CMAKE_SOURCE_DIR}/app fs/sd.h
         ${CMAKE_SOURCE_DIR}/app fs/sd.c

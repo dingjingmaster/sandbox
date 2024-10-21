@@ -63,17 +63,13 @@ bool c_atomic_int_compare_and_exchange (volatile int *atomic, int oldVal, int ne
 {
     bool success;
 
-    C_LOG_DEBUG_CONSOLE("lock -- lock -- lock 1");
     pthread_mutex_lock (&gsAtomicLock);
-    C_LOG_DEBUG_CONSOLE("lock -- lock -- lock 2");
 
     if ((success = (*atomic == oldVal))) {
         *atomic = newVal;
     }
 
-    C_LOG_DEBUG_CONSOLE("lock -- lock -- unlock 1");
     pthread_mutex_unlock (&gsAtomicLock);
-    C_LOG_DEBUG_CONSOLE("lock -- lock -- unlock 2");
 
     return success;
 }
