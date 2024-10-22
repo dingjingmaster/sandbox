@@ -83,7 +83,7 @@ bool rootfs_init(const char * mountPoint)
     {
         C_LOG_VERB("mkdir 'home/'");
         cchar* homeB = c_strdup_printf("%s/home", mountPoint);
-        cint oldMask = umask(0);
+        mode_t oldMask = umask(0);
         if (!mkdir_parent(homeB, 0755)) {
             c_free(homeB);
             umask(oldMask);
@@ -97,7 +97,7 @@ bool rootfs_init(const char * mountPoint)
     {
         C_LOG_VERB("mkdir 'tmp/'");
         cchar* tmpB = c_strdup_printf("%s/tmp", mountPoint);
-        cint oldMask = umask(0);
+        mode_t oldMask = umask(0);
         if (!mkdir_parent(tmpB, 0777)) {
             c_free(tmpB);
             umask(oldMask);
@@ -223,12 +223,18 @@ static bool mount_dev (const char* mountPoint)
     if (!c_file_test(dev, C_FILE_TEST_EXISTS)) {
         c_mkdir_with_parents(dev, 0755);
     }
+    umount(dev);
+    if (true != mkbind("/dev", dev)) {
+        C_LOG_ERROR("proc mount failed! ");
+        c_free(dev);
+        return false;
+    }
     c_free(dev);
 
     dev = c_strdup_printf("%s/dev/null", mountPoint);
     if (!c_file_test(dev, C_FILE_TEST_EXISTS)) {
         errno = 0;
-        cint oldMask = umask(0);
+        mode_t oldMask = umask(0);
         dev_t devT = makedev(1, 3);
         if (0 != mknod(dev, S_IFCHR | 0666, devT)) {
             C_LOG_ERROR("mknod /dev/null error: %s", strerror(errno));
