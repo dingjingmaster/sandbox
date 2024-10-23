@@ -705,6 +705,29 @@ static void sandbox_process_req (gpointer data, gpointer udata)
     SandboxContext* sc = (SandboxContext*) udata;
     GSocket* socket = g_socket_connection_get_socket (conn);
 
+    C_LOG_VERB("Check sandbox iso is exists");
+    if (!c_file_test(sc->deviceInfo.isoFullPath, F_OK)) {
+        if (!sandbox_fs_generated_box(sc->deviceInfo.sandboxFs, sc->deviceInfo.isoSize)) {
+            C_LOG_WARNING("sandbox fs generation failed");
+            return;
+        }
+
+        if (!sandbox_fs_format(sc->deviceInfo.sandboxFs)) {
+            C_LOG_WARNING("sandbox fs format failed");
+            return;
+        }
+    }
+
+    if (!c_file_test(sc->deviceInfo.isoFullPath, F_OK)) {
+        C_LOG_WARNING("sandbox not exists!");
+        return;
+    }
+
+    if (!sandbox_fs_check(sc->deviceInfo.sandboxFs)) {
+        C_LOG_WARNING("sandbox fs check failed");
+        return;
+    }
+
     C_LOG_VERB("Check sandbox is mounted?");
     if (!sandbox_fs_is_mounted(sc->deviceInfo.sandboxFs)) {
         C_LOG_VERB("Sandbox is not mounted");

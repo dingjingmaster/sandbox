@@ -37,7 +37,7 @@ include(${CMAKE_SOURCE_DIR}/3thrd/fs/libsandbox-fs.cmake)
 
 add_executable(sandbox main.c ${SANDBOX_SRC} ${PROTO_SRC_C} ${C_SRC} ${SANDBOX_FS_SRC})
 
-target_link_libraries(sandbox PUBLIC -lpthread
+target_link_libraries(sandbox PUBLIC -lpthread -dl
         ${GLIB_LIBRARIES}
         ${E2FS_LIBRARIES}
         ${CLIB_LIBRARIES}

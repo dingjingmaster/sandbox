@@ -10,7 +10,7 @@ add_executable(test-format format.c ${C_SRC} ${SANDBOX_FS_SRC} ${FUSE_LITE_SRC}
         ../app/fs/attrdef.c
         ../app/sandbox-fs.c
 )
-target_link_libraries(test-format PUBLIC
+target_link_libraries(test-format PUBLIC -lpthread -ldl
         ${GLIB_LIBRARIES}
         ${CLIB_LIBRARIES}
         ${FUSE_LIBRARIES}
@@ -39,7 +39,7 @@ add_executable(test-check check.c ${C_SRC} ${SANDBOX_FS_SRC} ${FUSE_LITE_SRC}
         ../app/fs/attrdef.c
         ../app/sandbox-fs.c
 )
-target_link_libraries(test-check PUBLIC
+target_link_libraries(test-check PUBLIC -lpthread -ldl
         ${GLIB_LIBRARIES}
         ${CLIB_LIBRARIES}
         ${FUSE_LIBRARIES}
@@ -68,7 +68,7 @@ add_executable(test-resize resize.c ${C_SRC} ${SANDBOX_FS_SRC} ${FUSE_LITE_SRC}
         ../app/fs/attrdef.c
         ../app/sandbox-fs.c
 )
-target_link_libraries(test-resize PUBLIC
+target_link_libraries(test-resize PUBLIC -lpthread -ldl
         ${GLIB_LIBRARIES}
         ${CLIB_LIBRARIES}
         ${FUSE_LIBRARIES}
@@ -97,7 +97,7 @@ add_executable(test-mount mount.c ${C_SRC} ${SANDBOX_FS_SRC} # ${FUSE_LITE_SRC}
         ../app/fs/attrdef.c
         ../app/sandbox-fs.c
 )
-target_link_libraries(test-mount PUBLIC
+target_link_libraries(test-mount PUBLIC -lpthread -ldl
         ${GLIB_LIBRARIES}
         ${CLIB_LIBRARIES}
         ${FUSE_LIBRARIES}
@@ -126,7 +126,7 @@ add_executable(test-unmount umount.c ${C_SRC} ${SANDBOX_FS_SRC} # ${FUSE_LITE_SR
         ../app/fs/attrdef.c
         ../app/sandbox-fs.c
 )
-target_link_libraries(test-unmount PUBLIC
+target_link_libraries(test-unmount PUBLIC -lpthread -ldl
         ${GLIB_LIBRARIES}
         ${CLIB_LIBRARIES}
         ${FUSE_LIBRARIES}
