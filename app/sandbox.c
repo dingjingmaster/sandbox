@@ -74,6 +74,7 @@ static csize    read_all_data           (GSocket* fr, char** out/*out*/);
 static bool     sandbox_send_cmd        (SandboxContext* context, const char* buf, gsize bufSize);
 static gboolean sandbox_new_req         (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData);
 static void     sandbox_chroot_execute  (const char* cmd, const char* mountPoint, char** env);
+static gboolean sandbox_clean           (SandboxContext *context);
 
 static CmdLine gsCmdline = {0};
 
@@ -196,12 +197,14 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
                 break;
             }
 
-            sc->socket.worker = g_thread_pool_new (sandbox_process_req, sc, 10, false, &error);
+            sc->socket.worker = g_thread_pool_new (sandbox_process_req, sc, -1, false, &error);
             if (error) {
                 ret = false;
                 C_LOG_ERROR("g_thread_pool_new error: %s", error->message);
                 break;
             }
+
+            g_timeout_add (3000, sandbox_clean, sc);
 
             // c_assert(!sc->socket.listener && !sc->socket.socket);
             c_chmod (sc->socket.sandboxSock, 0777);
@@ -304,6 +307,7 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
             break;
         }
         default: {
+            wait(NULL);
             return true;
         }
     }
@@ -368,6 +372,9 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
 
             if (pwd->pw_dir) {
                 c_setenv("HOME", pwd->pw_dir, true);
+
+                // change dir
+                chdir(pwd->pw_dir);
             }
 
             setuid(pwd->pw_uid);
@@ -603,6 +610,13 @@ do {                                                    \
     }
 
     C_LOG_INFO("Finished!");
+}
+
+gboolean sandbox_clean(SandboxContext * context)
+{
+    g_thread_pool_stop_unused_threads();
+
+    (void) context;
 }
 
 static void sandbox_req(SandboxContext *context)
