@@ -33,25 +33,61 @@ bool rootfs_init(const char * mountPoint)
     // 软连接 bin
     C_LOG_VERB("mklink 'usr/bin'");
     {
-        if (!mklink("usr/bin", "bin")) {
-            return false;
+        cchar* binB = c_strdup_printf("%s/bin", mountPoint);
+        if (c_file_test("/bin", C_FILE_TEST_IS_SYMLINK)) {
+            if (!mklink("usr/bin", "bin")) {
+                C_LOG_WARNING("mklink 'usr/bin' failed");
+                c_free(binB);
+                return false;
+            }
         }
+        else {
+            if (!mkbind("/bin", binB)) {
+                C_LOG_WARNING("mkbind '/bin' failed");
+                c_free(binB);
+                return false;
+            }
+        }
+        c_free(binB);
     }
 
     // 软连接 lib
     C_LOG_VERB("mklink 'usr/lib'");
     {
-        if (!mklink("usr/lib", "lib")) {
-            return false;
+        cchar* libB = c_strdup_printf("%s/lib", mountPoint);
+        if (c_file_test("/lib", C_FILE_TEST_IS_SYMLINK)) {
+            if (!mklink("usr/lib", "lib")) {
+                C_LOG_WARNING("mklink 'usr/lib' failed");
+                return false;
+            }
         }
+        else {
+            if (!mkbind("/lib", libB)) {
+                C_LOG_WARNING("mkbind '/lib' failed");
+                c_free(libB);
+                return false;
+            }
+        }
+        c_free(libB);
     }
 
     // 软连接 lib64
     C_LOG_VERB("mklink 'usr/lib64'");
     {
-        if (!mklink("usr/lib64", "lib64")) {
-            return false;
+        cchar* lib64B = c_strdup_printf("%s/lib64", mountPoint);
+        if (c_file_test("/lib64", C_FILE_TEST_IS_SYMLINK)) {
+            if (!mklink("usr/lib64", "lib64")) {
+                return false;
+            }
         }
+        else {
+            if (!mkbind("/lib64", lib64B)) {
+                C_LOG_WARNING("mkbind '/lib64' failed");
+                c_free(lib64B);
+                return false;
+            }
+        }
+        c_free(lib64B);
     }
 
     C_LOG_VERB("chdir");
