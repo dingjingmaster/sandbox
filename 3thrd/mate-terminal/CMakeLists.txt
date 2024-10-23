@@ -60,4 +60,4 @@ target_compile_definitions(sandbox-mate-terminal PUBLIC
         -DTERMINAL_COMPILATION
 )
 
-install(TARGETS sandbox-mate-terminal DESTINATION /usr/bin/)
+install(TARGETS sandbox-mate-terminal DESTINATION /usr/local/andsec/sandbox/bin/)

@@ -199,4 +199,4 @@ target_compile_definitions(sandbox-nemo PUBLIC
         -DNEMO_DATADIR=\"/usr/local/share/nemo\"
 )
 
-install(TARGETS sandbox-nemo DESTINATION /usr/bin/)
+install(TARGETS sandbox-nemo DESTINATION /usr/local/andsec/sandbox/bin/)

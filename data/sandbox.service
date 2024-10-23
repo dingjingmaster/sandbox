@@ -4,8 +4,8 @@ After=display-manager.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/sandbox
-ExecStop=kill -9 $(pidof sandbox)
+ExecStart=/usr/local/andsec/sandbox/bin/sandbox
+ExecStop=/usr/local/andsec/sandbox/bin/sandbox -q
 Restart=always
 
 [Install]

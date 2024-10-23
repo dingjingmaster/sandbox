@@ -413,6 +413,8 @@ do {                                                    \
     }
     else {
         do {
+            CHECK_AND_RUN("/usr/local/andsec/sandbox/bin");
+
             CHECK_AND_RUN("/bin");
             CHECK_AND_RUN("/usr/bin");
             CHECK_AND_RUN("/usr/local/bin");
@@ -706,7 +708,7 @@ static void sandbox_process_req (gpointer data, gpointer udata)
     GSocket* socket = g_socket_connection_get_socket (conn);
 
     C_LOG_VERB("Check sandbox iso is exists");
-    if (!c_file_test(sc->deviceInfo.isoFullPath, F_OK)) {
+    if (!c_file_test(sc->deviceInfo.isoFullPath, C_FILE_TEST_EXISTS)) {
         if (!sandbox_fs_generated_box(sc->deviceInfo.sandboxFs, sc->deviceInfo.isoSize)) {
             C_LOG_WARNING("sandbox fs generation failed");
             return;
@@ -718,15 +720,19 @@ static void sandbox_process_req (gpointer data, gpointer udata)
         }
     }
 
-    if (!c_file_test(sc->deviceInfo.isoFullPath, F_OK)) {
-        C_LOG_WARNING("sandbox not exists!");
+    C_LOG_VERB("Check sandbox iso exists again.");
+    if (!c_file_test(sc->deviceInfo.isoFullPath, C_FILE_TEST_EXISTS)) {
+        C_LOG_WARNING("sandbox file '%s' not exists!", sc->deviceInfo.isoFullPath);
         return;
     }
 
-    if (!sandbox_fs_check(sc->deviceInfo.sandboxFs)) {
-        C_LOG_WARNING("sandbox fs check failed");
-        return;
-    }
+    // 重新实现 check 函数
+
+    // C_LOG_VERB("Check sandbox filesystem.");
+    // if (!sandbox_fs_check(sc->deviceInfo.sandboxFs)) {
+    //     C_LOG_WARNING("sandbox filesystem check failed");
+    //     return;
+    // }
 
     C_LOG_VERB("Check sandbox is mounted?");
     if (!sandbox_fs_is_mounted(sc->deviceInfo.sandboxFs)) {

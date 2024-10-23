@@ -37,7 +37,7 @@ include(${CMAKE_SOURCE_DIR}/3thrd/fs/libsandbox-fs.cmake)
 
 add_executable(sandbox main.c ${SANDBOX_SRC} ${PROTO_SRC_C} ${C_SRC} ${SANDBOX_FS_SRC})
 
-target_link_libraries(sandbox PUBLIC -lpthread -dl
+target_link_libraries(sandbox PUBLIC -lpthread -ldl
         ${GLIB_LIBRARIES}
         ${E2FS_LIBRARIES}
         ${CLIB_LIBRARIES}
@@ -66,4 +66,4 @@ target_compile_definitions(sandbox PUBLIC
         -DFILE_MANAGER=\"sandbox-nemo\"
 )
 
-install(TARGETS sandbox DESTINATION /usr/bin)
+install(TARGETS sandbox DESTINATION /usr/local/andsec/sandbox/bin)
