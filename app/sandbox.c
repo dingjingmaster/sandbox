@@ -780,7 +780,7 @@ static void sandbox_process_req (gpointer data, gpointer udata)
         case IPC_TYPE_OPEN_FM: {
             C_LOG_INFO("Open file manager");
             char** env = sandbox_get_client_env(sc->status.env, ipc_message_get_env_list(cmd));
-            bool ret = sandbox_execute_cmd(sc, env, TERMINATOR);
+            bool ret = sandbox_execute_cmd(sc, env, FILE_MANAGER);
             C_LOG_INFO("return: %s", ret ? "true" : "false");
 
             c_strfreev(env);

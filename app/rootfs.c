@@ -34,7 +34,7 @@ bool rootfs_init(const char * mountPoint)
     C_LOG_VERB("mklink 'usr/bin'");
     {
         cchar* binB = c_strdup_printf("%s/bin", mountPoint);
-        if (c_file_test("/bin", C_FILE_TEST_IS_SYMLINK)) {
+        if (file_is_link("/bin")) {
             if (!mklink("usr/bin", "bin")) {
                 C_LOG_WARNING("mklink 'usr/bin' failed");
                 c_free(binB);
@@ -55,7 +55,7 @@ bool rootfs_init(const char * mountPoint)
     C_LOG_VERB("mklink 'usr/lib'");
     {
         cchar* libB = c_strdup_printf("%s/lib", mountPoint);
-        if (c_file_test("/lib", C_FILE_TEST_IS_SYMLINK)) {
+        if (file_is_link("/lib")) {
             if (!mklink("usr/lib", "lib")) {
                 C_LOG_WARNING("mklink 'usr/lib' failed");
                 return false;
@@ -75,7 +75,7 @@ bool rootfs_init(const char * mountPoint)
     C_LOG_VERB("mklink 'usr/lib64'");
     {
         cchar* lib64B = c_strdup_printf("%s/lib64", mountPoint);
-        if (c_file_test("/lib64", C_FILE_TEST_IS_SYMLINK)) {
+        if (file_is_link("/lib64")) {
             if (!mklink("usr/lib64", "lib64")) {
                 return false;
             }
@@ -189,6 +189,7 @@ static bool mkbind(const char* src, const char* dest)
         errno = 0;
         if (-1 == c_mkdir_with_parents(dest, 0755)) {
             C_LOG_ERROR("%s error: %s", dest, c_strerror(errno));
+            return false;
         }
     }
 
