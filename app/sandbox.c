@@ -197,7 +197,7 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
                 break;
             }
 
-            sc->socket.worker = g_thread_pool_new (sandbox_process_req, sc, -1, false, &error);
+            sc->socket.worker = g_thread_pool_new (sandbox_process_req, sc, 100, false, &error);
             if (error) {
                 ret = false;
                 C_LOG_ERROR("g_thread_pool_new error: %s", error->message);
@@ -299,7 +299,8 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
     g_return_val_if_fail(context->deviceInfo.mountPoint, false);
     g_return_val_if_fail(context->deviceInfo.isoFullPath, false);
 
-    switch (fork()) {
+    pid_t pid = fork();
+    switch (pid) {
         case -1: {
             return false;
         }
@@ -317,7 +318,7 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
     errno = 0;
     if (0 != chdir(context->deviceInfo.mountPoint)) {
         C_LOG_ERROR("chdir error: %s", c_strerror(errno));
-        return false;
+        exit(-1);
     }
     C_LOG_VERB("chdir done");
 
@@ -326,7 +327,7 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
     errno = 0;
     if ( 0 != chroot(context->deviceInfo.mountPoint)) {
         C_LOG_ERROR("chroot error: %s", c_strerror(errno));
-        return false;
+        exit(-1);
     }
     C_LOG_VERB("chroot done");
 
@@ -405,7 +406,8 @@ do {                                                    \
         if (0 != errno) {                               \
             C_LOG_ERROR("execute cmd '%s' error: %s",   \
                 cmdPath, c_strerror(errno));            \
-            return;                                     \
+            c_free(cmdPath);                            \
+            exit(-1);                                   \
         }                                               \
     }                                                   \
     c_free(cmdPath);                                    \
@@ -416,7 +418,7 @@ do {                                                    \
         C_LOG_VERB("run cmd: '%s'", cmd);
         errno = 0;
         execvpe(cmd, NULL, env);
-        if (0 != errno) { C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno)); return; }
+        if (0 != errno) { C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno)); exit(0); }
     }
     else {
         do {
@@ -436,7 +438,7 @@ do {                                                    \
 
     C_LOG_INFO("execute cmd '%s' Finished!", cmd);
 
-    return true;
+    exit(0);
 }
 
 void sandbox_cwd(SandboxContext *context)
