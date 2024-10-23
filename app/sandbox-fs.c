@@ -1725,22 +1725,22 @@ bool sandbox_fs_mount(SandboxFs* sandboxFs)
     errno = 0;
     pid_t pid = fork();
     switch (pid) {
-    case -1: {
-        C_LOG_WARNING("Fork failed: %s", strerror(errno));
-        return false;
-    }
-    case 0: {
-        // 子进程
-        signal(SIGKILL, umount_signal_process);
-        mount_fs_thread(sandboxFs);
-        kill(getppid(), SIGUSR1);
-        exit(0);
-        break;
-    }
-    default: {
-        mountPid = pid;
-        break;
-    }
+        case -1: {
+            C_LOG_WARNING("Fork failed: %s", strerror(errno));
+            return false;
+        }
+        case 0: {
+            // 子进程
+            signal(SIGKILL, umount_signal_process);
+            mount_fs_thread(sandboxFs);
+            C_LOG_INFO("Filesystem exit");
+            exit(0);
+            break;
+        }
+        default: {
+            mountPid = pid;
+            break;
+        }
     }
 
     return true;
@@ -1758,6 +1758,14 @@ bool sandbox_fs_is_mounted(SandboxFs * sandboxFs)
     }
 
     sandboxFs->isMounted = utils_check_is_mounted(sandboxFs->dev, sandboxFs->mountPoint);
+    if (sandboxFs->isMounted) {
+        C_LOG_WARNING("Not mounted!");
+    }
+
+    sandboxFs->isMounted = utils_check_is_mounted(sandboxFs->dev, NULL);
+    if (sandboxFs->isMounted) {
+        C_LOG_WARNING("Not mounted!");
+    }
 
     bool ret = sandboxFs->isMounted;
 

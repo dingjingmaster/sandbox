@@ -56,6 +56,8 @@ struct _SandboxContext
         GOptionContext*     cmdCtx;
     } cmdLine;
 
+    gint                mIsExit;                    // atomic
+    GThread*            mCleanThread;               // 资源回收线程
     GMainLoop*          mainLoop;
 };
 
@@ -197,14 +199,14 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
                 break;
             }
 
-            sc->socket.worker = g_thread_pool_new (sandbox_process_req, sc, 100, false, &error);
+            sc->socket.worker = g_thread_pool_new (sandbox_process_req, sc, 100, true, &error);
             if (error) {
                 ret = false;
                 C_LOG_ERROR("g_thread_pool_new error: %s", error->message);
                 break;
             }
 
-            g_timeout_add (3000, sandbox_clean, sc);
+            sc->mCleanThread = g_thread_new("cleanThread", sandbox_clean, sc);
 
             // c_assert(!sc->socket.listener && !sc->socket.socket);
             c_chmod (sc->socket.sandboxSock, 0777);
@@ -308,7 +310,6 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
             break;
         }
         default: {
-            wait(NULL);
             return true;
         }
     }
@@ -616,8 +617,17 @@ do {                                                    \
 
 gboolean sandbox_clean(SandboxContext * context)
 {
-    g_thread_pool_stop_unused_threads();
+    int status;
 
+    while (true) {
+        if (0 != g_atomic_int_get(&context->mIsExit)) {
+            break;
+        }
+        waitpid(-1, &status, WNOHANG);
+        sleep(5);
+    }
+
+    return true;
     (void) context;
 }
 
@@ -805,6 +815,7 @@ static void sandbox_process_req (gpointer data, gpointer udata)
         case IPC_TYPE_QUIT: {
             C_LOG_INFO("Quit");
             g_main_loop_quit(sc->mainLoop);
+            g_atomic_int_set(&sc->mIsExit, 1);
             break;
         }
         default: {
