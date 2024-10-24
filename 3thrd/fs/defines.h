@@ -11,7 +11,7 @@
 #define SANDBOX_VERSION                             1
 
 // Boot
-#define SANDBOX_EFS_HEADER_SIZE                     4096                    // 头部 4KB
+#define SANDBOX_EFS_HEADER_SIZE                     10240               // 尾部 10KB
 
 #define SANDBOX_MSG_OFFSET                          3
 #define SANDBOX_ORDER_OFFSET                        14

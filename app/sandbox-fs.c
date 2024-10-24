@@ -577,7 +577,7 @@ static int ntfs_fuse_rmdir                      (const char *path);
 static int xattr_namespace                      (const char *name);
 static ntfs_inode *get_parent_dir               (const char *path);
 static s64 ntfs_get_nr_free_mft_records         (ntfs_volume *vol);
-static bool mkntfs_init_efs_header              (ntfs_volume* vol);
+static bool mkntfs_init_sandbox_header          (ntfs_volume* vol);
 static void deallocate_scattered_clusters       (const runlist *rl);
 static int ntfs_open                            (const char *device);
 static ntfs_volume *mount_volume                (const char* volume);
@@ -599,7 +599,6 @@ static void print_num_of_relocations            (ntfs_resize_t *resize);
 static void delayed_updates                     (ntfs_resize_t *resize);
 static void relocate_inodes                     (ntfs_resize_t *resize);
 static void check_resize_constraints            (ntfs_resize_t *resize);
-static void fs_sandbox_header_init              (EfsFileHeader* header);
 static bool fs_sandbox_header_check             (EfsFileHeader* header);
 static void set_resize_constraints              (ntfs_resize_t *resize);
 static void set_disk_usage_constraint           (ntfs_resize_t *resize);
@@ -841,6 +840,7 @@ static s64                                      max_free_cluster_range  = 0;
 static ntfs_fuse_context_t*                     ctx                     = NULL;
 static u32                                      ntfs_sequence           = 0;
 
+guint64 gVolumeSize = 0;
 // format -- start
 
 static struct _MkfsOpt
@@ -1258,20 +1258,22 @@ bool sandbox_fs_format(SandboxFs* sandboxFs)
         goto done;
     }
 
-    // 负责初始化 EFS 头部 4KB
-    C_LOG_INFO("Start write efs header...");
-    if (!mkntfs_init_efs_header(gsVol)) {
-        C_LOG_ERROR("Could not initialize efs header");
-        hasError = true;
-        goto done;
-    }
-    C_LOG_INFO("Write efs header OK!");
-
     if (!mkntfs_override_vol_params(gsVol)) {
         C_LOG_ERROR("Could not override partition");
         hasError = true;
         goto done;
     }
+
+    /**
+     * @note 文件系统尾部预留10KB的大小，实际使用8KB，关键信息放在中间8KB处
+     */
+    C_LOG_INFO("Start write efs header...");
+    if (!mkntfs_init_sandbox_header(gsVol)) {
+        C_LOG_ERROR("Could not initialize efs header");
+        hasError = true;
+        goto done;
+    }
+    C_LOG_INFO("Write efs header OK!");
 
 #if 0
     printf("g_vol:\n");
@@ -1945,19 +1947,6 @@ do {                                                    \
     }
 
     C_LOG_INFO("Finished!");
-}
-
-
-
-static void fs_sandbox_header_init (EfsFileHeader* header)
-{
-    memset(header, 0, sizeof(EfsFileHeader));
-
-    // header->magic = be32_to_cpu(SANDBOX_MAGIC);
-    // header->magicID = be32_to_cpu(SANDBOX_MAGIC);
-    header->version = SANDBOX_VERSION;
-    header->headSize = sizeof(EfsFileHeader);
-    header->fileType = FILE_TYPE_SANDBOX;
 }
 
 bool fs_sandbox_header_check(EfsFileHeader * header)
@@ -4454,7 +4443,8 @@ static BOOL mkntfs_open_partition(ntfs_volume *vol, const char* devName)
         }
 #ifdef HAVE_LINUX_MAJOR_H
     }
-    else if ((IDE_DISK_MAJOR(MAJOR(sbuf.st_rdev)) && MINOR(sbuf.st_rdev) % 64 == 0) || (SCSI_DISK_MAJOR(MAJOR(sbuf.st_rdev)) && MINOR(sbuf.st_rdev) % 16 == 0)) {
+    else if ((IDE_DISK_MAJOR(MAJOR(sbuf.st_rdev)) && MINOR(sbuf.st_rdev) % 64 == 0)
+        || (SCSI_DISK_MAJOR(MAJOR(sbuf.st_rdev)) && MINOR(sbuf.st_rdev) % 16 == 0)) {
         C_LOG_WARNING("%s is entire device, not just one partition.", vol->dev->d_name);
 #endif
     }
@@ -4498,12 +4488,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
     BOOL winboot = TRUE;
 
     /* If user didn't specify the sector size, determine it now. */
-    if (opts.sectorSize < 0) {
-        opts.sectorSize = ntfs_device_sector_size_get(vol->dev);
-        if (opts.sectorSize < 0) {
-            opts.sectorSize = 512;
-        }
-    }
+    opts.sectorSize = 512;
 
     /* Validate sector size. */
     if ((opts.sectorSize - 1) & opts.sectorSize) {
@@ -4521,19 +4506,17 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
     /**
      * 设置扇区大小
      */
-    if (ntfs_device_block_size_set(vol->dev, opts.sectorSize)) {
+    if (ntfs_device_block_size_set(vol->dev, (int) opts.sectorSize)) {
         C_LOG_VERB("Failed to set the device block size to the sector size.  This may cause problems when creating the backup boot sector and also may affect performance but should be harmless otherwise.  Error: %s", strerror(errno));
     }
 
     /**
      * 扇区数量：测盘总大小 / 扇区大小
      */
-    if (opts.numSectors < 0) {
-        opts.numSectors = ntfs_device_size_get(vol->dev, opts.sectorSize);
-        if (opts.numSectors <= 0) {
-            C_LOG_WARNING("Couldn't determine the size of %s.  Please specify the number of sectors manually.", vol->dev->d_name);
-            return FALSE;
-        }
+    opts.numSectors = ntfs_device_size_get(vol->dev, (int) opts.sectorSize);
+    if (opts.numSectors <= 0) {
+        C_LOG_WARNING("Couldn't determine the size of %s.  Please specify the number of sectors manually.", vol->dev->d_name);
+        return FALSE;
     }
     C_LOG_VERB("number of sectors = %lld (0x%llx)", opts.numSectors, opts.numSectors);
 
@@ -4549,7 +4532,6 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
     opts.numSectors -= i;
 
     /* If user didn't specify the partition start sector, determine it. */
-    opts.partStartSect = 8;
     if (opts.partStartSect < 0) {
         opts.partStartSect = ntfs_device_partition_start_sector_get(vol->dev);    // linux/hdreg.h 中获取磁盘扇区开始位置
         if (opts.partStartSect < 0) {
@@ -4611,6 +4593,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
         return FALSE;
     }
     volume_size = opts.numSectors * opts.sectorSize;  // 磁盘扇区数量 x 磁盘扇区大小 = 磁盘总容量
+    gVolumeSize = volume_size;
 
     /**
      * 磁盘容量需大于 1MB
@@ -4855,35 +4838,44 @@ static BOOL mkntfs_initialize_bitmaps(void)
     return (bitmap_allocate(i, 1));
 }
 
-bool mkntfs_init_efs_header(ntfs_volume *vol)
+bool mkntfs_init_sandbox_header(ntfs_volume *vol)
 {
     g_return_val_if_fail(vol != NULL && vol->dev != NULL, false);
 
     bool hasErr = false;
-    EfsFileHeader* header = NULL;
-    char* headerBuf = ntfs_malloc(SANDBOX_EFS_HEADER_SIZE);
-    if (!headerBuf) {
+    EfsSandboxFileHeader* header = ntfs_malloc(sizeof(EfsSandboxFileHeader));
+    if (!header) {
         C_LOG_WARNING("malloc error!");
         goto done;
     }
 
-    memset(headerBuf, 0, SANDBOX_EFS_HEADER_SIZE);
+    memset(header, 0, sizeof(EfsSandboxFileHeader));
 
-    header = headerBuf;
-    fs_sandbox_header_init(header);
-    memcpy(headerBuf + sizeof(EfsFileHeader), "Andsec DJ Test", 14);
-    memcpy(headerBuf + SANDBOX_EFS_HEADER_SIZE - 2, "DJ", 2);
+    header->fileHeader.version = SANDBOX_VERSION;
+    header->fileHeader.headSize = sizeof(EfsSandboxFileHeader);
+    header->fileHeader.fileType = FILE_TYPE_SANDBOX;
+
+    C_LOG_VERB("header->ps: %d", sizeof(header->ps));
+    for (int i = 0; i < sizeof(header->ps); i += 16) {
+        memcpy(((char*)header->ps) + i, "Andsec Start....", 16);
+    }
+
+    for (int i = 0; i < sizeof(header->pe); i += 16) {
+        memcpy(((char*)header->pe) + i, "Andsec End!!!!!!", 16);
+    }
 
     errno = 0;
-    if (vol->dev->d_ops->write(vol->dev, headerBuf, SANDBOX_EFS_HEADER_SIZE) <= 0) {
+    C_LOG_WARNING("sandbox: %d", sizeof (EfsSandboxFileHeader));
+    vol->dev->d_ops->seek(vol->dev, gVolumeSize, SEEK_SET);
+    if (vol->dev->d_ops->write(vol->dev, header, sizeof(EfsSandboxFileHeader)) <= 0) {
         C_LOG_WARNING("write efs header error: %s", strerror(errno));
         hasErr = true;
         goto done;
     }
 
 done:
-    if (headerBuf) {
-        ntfs_free(headerBuf);
+    if (header) {
+        ntfs_free(header);
     }
     return !hasErr;
 }

@@ -452,6 +452,14 @@ typedef struct _EfsFileHeader
 } EfsFileHeader;
 C_STRUCT_SIZE_CHECK(EfsFileHeader, 256)
 
+typedef struct _EfsSandboxFileHeader
+{
+    uint8_t             ps[1024];                   // 预留 1KB 不用
+    EfsFileHeader       fileHeader;                 // 公共头部 256
+    uint8_t             padding[7936];              // 保留后续使用
+    uint8_t             pe[1024];                   // 预留 1KB 不用
+} EfsSandboxFileHeader;
+C_STRUCT_SIZE_CHECK(EfsSandboxFileHeader, 10240)
 
 
 #pragma pack(pop)
