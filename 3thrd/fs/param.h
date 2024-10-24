@@ -95,7 +95,7 @@ enum {
  *		Parameters for user and xattr mappings
  */
 
-#define XATTRMAPPINGFILE ".NTFS-3G/XattrMapping" /* default mapping file */
+#define XATTRMAPPINGFILE ".Andsec/XattrMapping" /* default mapping file */
 
 /*
  *		Parameters for path canonicalization

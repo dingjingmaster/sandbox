@@ -154,11 +154,6 @@ switch if you want to be able to build the NTFS utilities."
 /* Page size on ia32. Can change to 8192 on Alpha. */
 #define NTFS_PAGE_SIZE                      4096
 
-#define SANDBOX_FS_MAGIC                    0x18A4
-#define SANDBOX_FS_MAGIC_ID                 0x5246
-
-#define SANDBOX_VERSION_NEW                 0x0001
-
 // check --start
 #define RETURN_FS_ERRORS_CORRECTED          (1)
 #define RETURN_SYSTEM_NEEDS_REBOOT          (2)
@@ -582,6 +577,7 @@ static int ntfs_fuse_rmdir                      (const char *path);
 static int xattr_namespace                      (const char *name);
 static ntfs_inode *get_parent_dir               (const char *path);
 static s64 ntfs_get_nr_free_mft_records         (ntfs_volume *vol);
+static bool mkntfs_init_efs_header              (ntfs_volume* vol);
 static void deallocate_scattered_clusters       (const runlist *rl);
 static int ntfs_open                            (const char *device);
 static ntfs_volume *mount_volume                (const char* volume);
@@ -604,6 +600,7 @@ static void delayed_updates                     (ntfs_resize_t *resize);
 static void relocate_inodes                     (ntfs_resize_t *resize);
 static void check_resize_constraints            (ntfs_resize_t *resize);
 static void fs_sandbox_header_init              (EfsFileHeader* header);
+static bool fs_sandbox_header_check             (EfsFileHeader* header);
 static void set_resize_constraints              (ntfs_resize_t *resize);
 static void set_disk_usage_constraint           (ntfs_resize_t *resize);
 static void truncate_badclust_file              (ntfs_resize_t *resize);
@@ -1261,6 +1258,15 @@ bool sandbox_fs_format(SandboxFs* sandboxFs)
         goto done;
     }
 
+    // 负责初始化 EFS 头部 4KB
+    C_LOG_INFO("Start write efs header...");
+    if (!mkntfs_init_efs_header(gsVol)) {
+        C_LOG_ERROR("Could not initialize efs header");
+        hasError = true;
+        goto done;
+    }
+    C_LOG_INFO("Write efs header OK!");
+
     if (!mkntfs_override_vol_params(gsVol)) {
         C_LOG_ERROR("Could not override partition");
         hasError = true;
@@ -1314,6 +1320,7 @@ bool sandbox_fs_format(SandboxFs* sandboxFs)
         hasError = true;
         goto done;
     }
+
     /**
      * 负责初始化启动扇区(Boot Sector)的运行列表(Runlist)
      *
@@ -1718,6 +1725,11 @@ bool sandbox_fs_mount(SandboxFs* sandboxFs)
 {
     g_return_val_if_fail(sandboxFs && sandboxFs->dev && sandboxFs->mountPoint, false);
 
+    if (!sandbox_fs_check(sandboxFs)) {
+        C_LOG_WARNING("Sandbox fs check failed");
+        return false;
+    }
+
     if (sandbox_fs_is_mounted(sandboxFs)) {
         sandbox_fs_unmount(sandboxFs);
     }
@@ -1932,11 +1944,31 @@ static void fs_sandbox_header_init (EfsFileHeader* header)
 {
     memset(header, 0, sizeof(EfsFileHeader));
 
-    header->magic = SANDBOX_FS_MAGIC;
-    header->magicID = SANDBOX_FS_MAGIC_ID;
-    header->version = SANDBOX_VERSION_NEW;
+    header->magic = be32_to_cpu(SANDBOX_MAGIC);
+    header->magicID = be32_to_cpu(SANDBOX_MAGIC);
+    header->version = SANDBOX_VERSION;
     header->headSize = sizeof(EfsFileHeader);
     header->fileType = FILE_TYPE_SANDBOX;
+}
+
+bool fs_sandbox_header_check(EfsFileHeader * header)
+{
+    if (!header) {
+        C_LOG_WARNING("header is null");
+        return false;
+    }
+
+    if (be32_to_cpu(SANDBOX_MAGIC) != header->magic) {
+        C_LOG_WARNING("invalid magic");
+        return false;
+    }
+
+    if (FILE_TYPE_SANDBOX != header->fileType) {
+        C_LOG_WARNING("invalid file type");
+        return false;
+    }
+
+    return true;
 }
 
 static ntfs_time mkntfs_time(void)
@@ -2298,58 +2330,58 @@ static s64 ntfs_rlwrite(struct ntfs_device *dev, const runlist *rl, const u8 *va
             length = val_len - total;
             delta -= length;
         }
-        if (dev->d_ops->seek(dev, rl[i].lcn * gsVol->cluster_size, SEEK_SET) == (off_t)-1)
+        if (dev->d_ops->seek(dev, rl[i].lcn * gsVol->cluster_size, SEEK_SET) == (off_t)-1) {
             return -1LL;
+        }
         retry = 0;
         do {
             /* use specific functions if buffer is not prefilled */
             switch (write_type) {
             case WRITE_BITMAP :
-                bytes_written = mkntfs_bitmap_write(dev,
-                    total, length);
+                bytes_written = mkntfs_bitmap_write(dev, total, length);
                 break;
             case WRITE_LOGFILE :
-                bytes_written = mkntfs_logfile_write(dev,
-                    total, length);
+                bytes_written = mkntfs_logfile_write(dev, total, length);
                 break;
             default :
-                bytes_written = dev->d_ops->write(dev,
-                    val + total, length);
+                bytes_written = dev->d_ops->write(dev, val + total, length);
                 break;
             }
             if (bytes_written == -1LL) {
                 retry = errno;
-                C_LOG_WARNING("Error writing to %s",
-                    dev->d_name);
+                C_LOG_WARNING("Error writing to %s", dev->d_name);
                 errno = retry;
                 return bytes_written;
             }
             if (bytes_written) {
                 length -= bytes_written;
                 total += bytes_written;
-                if (inited_size)
+                if (inited_size) {
                     *inited_size += bytes_written;
-            } else {
+                }
+            }
+            else {
                 retry++;
             }
         } while (length && retry < 3);
         if (length) {
-            C_LOG_WARNING("Failed to complete writing to %s after three "
-                    "retries.", dev->d_name);
+            C_LOG_WARNING("Failed to complete writing to %s after three retries.", dev->d_name);
             return total;
         }
     }
     if (delta) {
         int eo;
         char *b = ntfs_calloc(delta);
-        if (!b)
+        if (!b) {
             return -1;
+        }
         bytes_written = mkntfs_write(dev, b, delta);
         eo = errno;
         free(b);
         errno = eo;
-        if (bytes_written == -1LL)
+        if (bytes_written == -1LL) {
             return bytes_written;
+        }
     }
     return total;
 }
@@ -3058,14 +3090,15 @@ static int insert_resident_attr_in_mft_record(MFT_RECORD *m, const ATTR_TYPES ty
     a->length = cpu_to_le32(asize);
     a->non_resident = 0;
     a->name_length = name_len;
-    if (type == AT_OBJECT_ID)
+    if (type == AT_OBJECT_ID) {
         a->name_offset = const_cpu_to_le16(0);
-    else
+    }
+    else {
         a->name_offset = const_cpu_to_le16(24);
+    }
     a->flags = flags;
     a->instance = m->next_attr_instance;
-    m->next_attr_instance = cpu_to_le16((le16_to_cpu(m->next_attr_instance)
-            + 1) & 0xffff);
+    m->next_attr_instance = cpu_to_le16((le16_to_cpu(m->next_attr_instance) + 1) & 0xffff);
     a->value_length = cpu_to_le32(val_len);
     a->value_offset = cpu_to_le16(24 + ((name_len*2 + 7) & ~7));
     a->resident_flags = res_flags;
@@ -3300,11 +3333,11 @@ static int add_attr_data_positioned(MFT_RECORD *m, const char *name, const u32 n
 {
     int err;
 
-    err = insert_positioned_attr_in_mft_record(m, AT_DATA, name, name_len,
-            ic, flags, rl, val, val_len);
-    if (err < 0)
-        C_LOG_WARNING("add_attr_data_positioned failed: %s",
-                strerror(-err));
+    err = insert_positioned_attr_in_mft_record(m, AT_DATA, name, name_len, ic, flags, rl, val, val_len);
+    if (err < 0) {
+        C_LOG_WARNING("add_attr_data_positioned failed: %s", strerror(-err));
+    }
+
     return err;
 }
 
@@ -4368,7 +4401,6 @@ static void mkntfs_cleanup(void)
 static BOOL mkntfs_open_partition(ntfs_volume *vol, const char* devName)
 {
     BOOL result = FALSE;
-    int i;
     struct stat sbuf;
     unsigned long mnt_flags;
 
@@ -4384,12 +4416,11 @@ static BOOL mkntfs_open_partition(ntfs_volume *vol, const char* devName)
     /**
      * opts.no_action 命令行输入，是否执行实际的格式化磁盘操作
      */
-    i = O_RDWR;
 
     /**
      * 打开磁盘
      */
-    if (vol->dev->d_ops->open(vol->dev, i)) {
+    if (vol->dev->d_ops->open(vol->dev, O_RDWR)) {
         if (errno == ENOENT) {
             C_LOG_WARNING("The device doesn't exist; did you specify it correctly?");
         }
@@ -4461,7 +4492,6 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
     if (opts.sectorSize < 0) {
         opts.sectorSize = ntfs_device_sector_size_get(vol->dev);
         if (opts.sectorSize < 0) {
-            C_LOG_VERB("The sector size was not specified for %s and it could not be obtained automatically. It has been set to 512 bytes.", vol->dev->d_name);
             opts.sectorSize = 512;
         }
     }
@@ -4576,7 +4606,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
      * 磁盘容量需大于 1MB
      */
     if (volume_size < (1 << 20)) {            /* 1MiB */
-        C_LOG_WARNING("Device is too small (%llikiB).  Minimum NTFS volume size is 1MiB.", (long long)(volume_size / 1024));
+        C_LOG_WARNING("Device is too small (%llikiB).  Minimum Sandbox FS volume size is 1MiB.", (long long)(volume_size / 1024));
         return FALSE;
     }
     C_LOG_VERB("volume size = %llikiB", (long long) (volume_size / 1024));
@@ -4601,7 +4631,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
             vol->cluster_size <<= 1;
             // 块大小不能大于 2MB
             if (vol->cluster_size >= NTFS_MAX_CLUSTER_SIZE) {
-                C_LOG_WARNING("Device is too large to hold an FS volume (maximum size is 256TiB).");
+                C_LOG_WARNING("Device is too large to hold an Sandbox FS volume (maximum size is 256TiB).");
                 return FALSE;
             }
         }
@@ -4634,7 +4664,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
     vol->cluster_size_bits = ffs(vol->cluster_size) - 1;
     C_LOG_VERB("cluster size = %u bytes", (unsigned int)vol->cluster_size);
     if (vol->cluster_size > 4096) {
-        C_LOG_WARNING("Windows cannot use compression when the cluster size is larger than 4096 bytes. Compression has been disabled for this volume.");
+        C_LOG_WARNING("Cannot use compression when the cluster size is larger than 4096 bytes. Compression has been disabled for this volume.");
     }
 
     // 簇/块 数量
@@ -4684,7 +4714,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
         vol->mft_record_size = opts.sectorSize;
     }
     if (vol->mft_record_size > (unsigned long)page_size) {
-        C_LOG_WARNING("Mft record size (%u bytes) exceeds system page size (%li bytes). You will not be able to mount this volume using the NTFS kernel driver.", (unsigned)vol->mft_record_size, page_size);
+        C_LOG_WARNING("Mft record size (%u bytes) exceeds system page size (%li bytes). You will not be able to mount this volume using the Sandbox FS kernel driver.", (unsigned)vol->mft_record_size, page_size);
     }
 
     // ffs 位操作中用于定位下一个可用的位（从低位开始，下一个可被设位1的位置）
@@ -4709,7 +4739,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
     }
 
     if (vol->indx_record_size > (unsigned long)page_size) {
-        C_LOG_WARNING("Index record size (%u bytes) exceeds system page size (%li bytes).  You will not be able to mount this volume using the NTFS kernel driver.", (unsigned)vol->indx_record_size, page_size);
+        C_LOG_WARNING("Index record size (%u bytes) exceeds system page size (%li bytes).  You will not be able to mount this volume using the Sandbox FS kernel driver.", (unsigned)vol->indx_record_size, page_size);
     }
     vol->indx_record_size_bits = ffs(vol->indx_record_size) - 1;
     C_LOG_VERB("index record size = %u bytes", (unsigned)vol->indx_record_size);
@@ -4815,6 +4845,39 @@ static BOOL mkntfs_initialize_bitmaps(void)
     return (bitmap_allocate(i, 1));
 }
 
+bool mkntfs_init_efs_header(ntfs_volume *vol)
+{
+    g_return_val_if_fail(vol != NULL && vol->dev != NULL, false);
+
+    bool hasErr = false;
+    EfsFileHeader* header = NULL;
+    char* headerBuf = ntfs_malloc(SANDBOX_EFS_HEADER_SIZE);
+    if (!headerBuf) {
+        C_LOG_WARNING("malloc error!");
+        goto done;
+    }
+
+    memset(headerBuf, 0, SANDBOX_EFS_HEADER_SIZE);
+
+    header = headerBuf;
+    fs_sandbox_header_init(header);
+    memcpy(headerBuf + sizeof(EfsFileHeader), "Andsec DJ Test", 14);
+    memcpy(headerBuf + SANDBOX_EFS_HEADER_SIZE - 2, "DJ", 2);
+
+    errno = 0;
+    if (vol->dev->d_ops->write(vol->dev, headerBuf, SANDBOX_EFS_HEADER_SIZE) <= 0) {
+        C_LOG_WARNING("write efs header error: %s", strerror(errno));
+        hasErr = true;
+        goto done;
+    }
+
+done:
+    if (headerBuf) {
+        ntfs_free(headerBuf);
+    }
+    return !hasErr;
+}
+
 /**
  * @brief mkntfs_initialize_rl_mft -
  *  MFT 是 NTFS 文件系统的核心数据结构，用于存储文件和目录的元数据信息
@@ -4841,6 +4904,7 @@ static BOOL mkntfs_initialize_rl_mft(void)
         }
     }
     C_LOG_VERB("$MFT logical cluster number = 0x%llx", gsMftLcn);
+
     /* Determine MFT zone size. */
     gsMftZoneEnd = gsVol->nr_clusters;
     switch (opts.mftZoneMultiplier) {  /* % of volume size in clusters */
@@ -5135,8 +5199,7 @@ static BOOL mkntfs_sync_index_record(INDEX_ALLOCATION* idx, MFT_RECORD* m, ntfsc
     rl_index = ntfs_mapping_pairs_decompress(gsVol, a, NULL);
     if (!rl_index) {
         ntfs_attr_put_search_ctx(ctx);
-        C_LOG_WARNING("Failed to decompress runlist of $INDEX_ALLOCATION "
-                "attribute.");
+        C_LOG_WARNING("Failed to decompress runlist of $INDEX_ALLOCATION attribute.");
         return FALSE;
     }
     if (sle64_to_cpu(a->initialized_size) < i) {
@@ -5146,13 +5209,11 @@ static BOOL mkntfs_sync_index_record(INDEX_ALLOCATION* idx, MFT_RECORD* m, ntfsc
         return FALSE;
     }
     ntfs_attr_put_search_ctx(ctx);
-    i = sizeof(INDEX_BLOCK) - sizeof(INDEX_HEADER) +
-            le32_to_cpu(idx->index.allocated_size);
+    i = sizeof(INDEX_BLOCK) - sizeof(INDEX_HEADER) + le32_to_cpu(idx->index.allocated_size);
     err = ntfs_mst_pre_write_fixup((NTFS_RECORD*)idx, i);
     if (err) {
         free(rl_index);
-        C_LOG_WARNING("ntfs_mst_pre_write_fixup() failed while "
-            "syncing index block.");
+        C_LOG_WARNING("ntfs_mst_pre_write_fixup() failed while syncing index block.");
         return FALSE;
     }
     lw = ntfs_rlwrite(gsVol->dev, rl_index, (u8*)idx, i, NULL, WRITE_STANDARD);
@@ -5181,17 +5242,16 @@ static BOOL create_file_volume(MFT_RECORD *m, leMFT_REF root_ref, VOLUME_FLAGS f
         init_system_file_sd(FILE_Volume, &sd, &i);
         err = add_attr_sd(m, sd, i);
     }
-    if (!err)
-        err = add_attr_data(m, NULL, 0, CASE_SENSITIVE,
-                const_cpu_to_le16(0), NULL, 0);
-    if (!err)
-        err = add_attr_vol_name(m, gsVol->vol_name, gsVol->vol_name ?
-                strlen(gsVol->vol_name) : 0);
     if (!err) {
-        if (fl & VOLUME_IS_DIRTY)
-            ntfs_log_quiet("Setting the volume dirty so check "
-                    "disk runs on next reboot into "
-                    "Windows.");
+        err = add_attr_data(m, NULL, 0, CASE_SENSITIVE, const_cpu_to_le16(0), NULL, 0);
+    }
+    if (!err) {
+        err = add_attr_vol_name(m, gsVol->vol_name, gsVol->vol_name ? strlen(gsVol->vol_name) : 0);
+    }
+    if (!err) {
+        if (fl & VOLUME_IS_DIRTY) {
+            ntfs_log_quiet("Setting the volume dirty so check disk runs on next reboot into Windows.");
+        }
         err = add_attr_vol_info(m, fl, gsVol->major_ver, gsVol->minor_ver);
     }
     if (err < 0) {
@@ -5208,7 +5268,8 @@ static int create_backup_boot_sector(u8 *buff)
     int size, e;
 
     C_LOG_VERB("Creating backup boot sector.");
-    /*
+    /**
+     * 将(512, opts.sector_size) 大小的数据写到最后一个扇区，大小不超过 8192 因为这是Boot分区大小
      * Write the first max(512, opts.sector_size) bytes from buf to the
      * last sector, but limit that to 8192 bytes of written data since that
      * is how big $Boot is (and how big our buffer is)..
@@ -5243,7 +5304,7 @@ static int create_backup_boot_sector(u8 *buff)
 
 bb_err:
     C_LOG_WARNING("Couldn't write backup boot sector. This is due to a "
-                "limitation in theLinux kernel. This is not a major "
+                "limitation in the Linux kernel. This is not a major "
                 "problem as Windows check disk will create the"
                 "backup boot sector when it is run on your next boot "
                 "into Windows.");
@@ -5268,7 +5329,7 @@ static BOOL mkntfs_create_root_structures(void)
     char *buf_sds;
     GUID vol_guid;
 
-    ntfs_log_quiet("Creating NTFS volume structures.");
+    ntfs_log_quiet("Creating Sandbox FS volume structures.");
     nr_sysfiles = 27;       // 系统 MFT
     /**
      * Setup an empty mft record.  Note, we can just give 0 as the mft
@@ -5507,6 +5568,7 @@ static BOOL mkntfs_create_root_structures(void)
         return FALSE;
     }
     memcpy(bs, boot_array, sizeof(boot_array));
+
     /*
      * Create the boot sector in bs. Note, that bs is already zeroed
      * in the boot sector section and that it has the NTFS OEM id/magic
@@ -5551,9 +5613,7 @@ static BOOL mkntfs_create_root_structures(void)
         bs->clusters_per_index_record = -gsVol->indx_record_size_bits;
         if ((1 << -bs->clusters_per_index_record) != (s32)gsVol->indx_record_size) {
             free(bs);
-            C_LOG_WARNING("BUG: calculated "
-                    "clusters_per_index_record is wrong "
-                    "(= 0x%x)", bs->clusters_per_index_record);
+            C_LOG_WARNING("BUG: calculated clusters_per_index_record is wrong (= 0x%x)", bs->clusters_per_index_record);
             return FALSE;
         }
     }
@@ -5571,8 +5631,8 @@ static BOOL mkntfs_create_root_structures(void)
         C_LOG_ERROR("FATAL: Generated boot sector is invalid!");
         return FALSE;
     }
-    err = add_attr_data_positioned(m, NULL, 0, CASE_SENSITIVE,
-            const_cpu_to_le16(0), gsRlBoot, (u8*)bs, 8192);
+
+    err = add_attr_data_positioned(m, NULL, 0, CASE_SENSITIVE, const_cpu_to_le16(0), gsRlBoot, (u8*)bs, 8192);
     if (!err)
         err = create_hardlink(gsIndexBlock, root_ref, m,
                 MK_LE_MREF(FILE_Boot, FILE_Boot),
@@ -5598,24 +5658,23 @@ static BOOL mkntfs_create_root_structures(void)
         volume_flags |= VOLUME_IS_DIRTY;
     }
     free(bs);
+
     /*
      * We cheat a little here and if the user has requested all times to be
      * set to zero then we set the GUID to zero as well.  This options is
      * only used for development purposes so that should be fine.
      */
     memset(&vol_guid, 0, sizeof(vol_guid));
-    if (!create_file_volume(m, root_ref, volume_flags, &vol_guid))
+    if (!create_file_volume(m, root_ref, volume_flags, &vol_guid)) {
         return FALSE;
+    }
     C_LOG_VERB("Creating $BadClus (mft record 8)");
     m = (MFT_RECORD*)(gsBuf + 8 * gsVol->mft_record_size);
     /* FIXME: This should be IGNORE_CASE */
     /* Create a sparse named stream of size equal to the volume size. */
-    err = add_attr_data_positioned(m, "$Bad", 4, CASE_SENSITIVE,
-            const_cpu_to_le16(0), gsRlBad, NULL,
-            gsVol->nr_clusters * gsVol->cluster_size);
+    err = add_attr_data_positioned(m, "$Bad", 4, CASE_SENSITIVE, const_cpu_to_le16(0), gsRlBad, NULL, gsVol->nr_clusters * gsVol->cluster_size);
     if (!err) {
-        err = add_attr_data(m, NULL, 0, CASE_SENSITIVE,
-                const_cpu_to_le16(0), NULL, 0);
+        err = add_attr_data(m, NULL, 0, CASE_SENSITIVE, const_cpu_to_le16(0), NULL, 0);
     }
     if (!err) {
         err = create_hardlink(gsIndexBlock, root_ref, m,
@@ -5624,8 +5683,7 @@ static BOOL mkntfs_create_root_structures(void)
                 0, 0, "$BadClus", FILE_NAME_WIN32_AND_DOS);
     }
     if (err < 0) {
-        C_LOG_WARNING("Couldn't create $BadClus: %s",
-                strerror(-err));
+        C_LOG_WARNING("Couldn't create $BadClus: %s", strerror(-err));
         return FALSE;
     }
     /* create $Secure (NTFS 3.0+) */
@@ -5642,17 +5700,15 @@ static BOOL mkntfs_create_root_structures(void)
     buf_sds_first_size = 0;
     if (!err) {
         int buf_sds_size;
-
         buf_sds_first_size = 0xfc;
         buf_sds_size = 0x40000 + buf_sds_first_size;
         buf_sds = ntfs_calloc(buf_sds_size);
-        if (!buf_sds)
+        if (!buf_sds) {
             return FALSE;
+        }
         init_secure_sds(buf_sds);
         memcpy(buf_sds + 0x40000, buf_sds, buf_sds_first_size);
-        err = add_attr_data(m, "$SDS", 4, CASE_SENSITIVE,
-                const_cpu_to_le16(0), (u8*)buf_sds,
-                buf_sds_size);
+        err = add_attr_data(m, "$SDS", 4, CASE_SENSITIVE, const_cpu_to_le16(0), (u8*)buf_sds, buf_sds_size);
     }
     /* FIXME: This should be IGNORE_CASE */
     if (!err)
@@ -5660,30 +5716,27 @@ static BOOL mkntfs_create_root_structures(void)
             AT_UNUSED, COLLATION_NTOFS_SECURITY_HASH,
             gsVol->indx_record_size);
     /* FIXME: This should be IGNORE_CASE */
-    if (!err)
-        err = add_attr_index_root(m, "$SII", 4, CASE_SENSITIVE,
-            AT_UNUSED, COLLATION_NTOFS_ULONG,
-            gsVol->indx_record_size);
-    if (!err)
+    if (!err) {
+        err = add_attr_index_root(m, "$SII", 4, CASE_SENSITIVE, AT_UNUSED, COLLATION_NTOFS_ULONG, gsVol->indx_record_size);
+    }
+    if (!err) {
         err = initialize_secure(buf_sds, buf_sds_first_size, m);
+    }
     free(buf_sds);
     if (err < 0) {
-        C_LOG_WARNING("Couldn't create $Secure: %s",
-            strerror(-err));
+        C_LOG_WARNING("Couldn't create $Secure: %s", strerror(-err));
         return FALSE;
     }
     C_LOG_VERB("Creating $UpCase (mft record 0xa)");
     m = (MFT_RECORD*)(gsBuf + 0xa * gsVol->mft_record_size);
-    err = add_attr_data(m, NULL, 0, CASE_SENSITIVE, const_cpu_to_le16(0),
-            (u8*)gsVol->upcase, gsVol->upcase_len << 1);
+    err = add_attr_data(m, NULL, 0, CASE_SENSITIVE, const_cpu_to_le16(0), (u8*)gsVol->upcase, gsVol->upcase_len << 1);
     /*
      * The $Info only exists since Windows 8, but it apparently
      * does not disturb chkdsk from earlier versions.
      */
-    if (!err)
-        err = add_attr_data(m, "$Info", 5, CASE_SENSITIVE,
-            const_cpu_to_le16(0),
-            (u8*)gsUpcaseInfo, sizeof(struct UPCASEINFO));
+    if (!err) {
+        err = add_attr_data(m, "$Info", 5, CASE_SENSITIVE, const_cpu_to_le16(0), (u8*)gsUpcaseInfo, sizeof(struct UPCASEINFO));
+    }
     if (!err)
         err = create_hardlink(gsIndexBlock, root_ref, m,
                 MK_LE_MREF(FILE_UpCase, FILE_UpCase),
@@ -5711,54 +5764,49 @@ static BOOL mkntfs_create_root_structures(void)
                 FILE_ATTR_I30_INDEX_PRESENT, 0, 0,
                 "$Extend", FILE_NAME_WIN32_AND_DOS);
     /* FIXME: This should be IGNORE_CASE */
-    if (!err)
-        err = add_attr_index_root(m, "$I30", 4, CASE_SENSITIVE,
-            AT_FILE_NAME, COLLATION_FILE_NAME,
-            gsVol->indx_record_size);
+    if (!err) {
+        err = add_attr_index_root(m, "$I30", 4, CASE_SENSITIVE, AT_FILE_NAME, COLLATION_FILE_NAME, gsVol->indx_record_size);
+    }
     if (err < 0) {
-        C_LOG_WARNING("Couldn't create $Extend: %s",
-            strerror(-err));
+        C_LOG_WARNING("Couldn't create $Extend: %s", strerror(-err));
         return FALSE;
     }
     /* NTFS reserved system files (mft records 0xc-0xf) */
     for (i = 0xc; i < 0x10; i++) {
         C_LOG_VERB("Creating system file (mft record 0x%x)", i);
         m = (MFT_RECORD*)(gsBuf + i * gsVol->mft_record_size);
-        err = add_attr_data(m, NULL, 0, CASE_SENSITIVE,
-                const_cpu_to_le16(0), NULL, 0);
+        err = add_attr_data(m, NULL, 0, CASE_SENSITIVE, const_cpu_to_le16(0), NULL, 0);
         if (!err) {
             init_system_file_sd(i, &sd, &j);
             err = add_attr_sd(m, sd, j);
         }
         if (err < 0) {
-            C_LOG_WARNING("Couldn't create system file %i (0x%x): "
-                    "%s", i, i, strerror(-err));
+            C_LOG_WARNING("Couldn't create system file %i (0x%x): %s", i, i, strerror(-err));
             return FALSE;
         }
     }
     /* create systemfiles for ntfs volumes (3.1) */
     /* starting with file 24 (ignoring file 16-23) */
-    extend_flags = FILE_ATTR_HIDDEN | FILE_ATTR_SYSTEM |
-        FILE_ATTR_ARCHIVE | FILE_ATTR_VIEW_INDEX_PRESENT;
+    extend_flags = FILE_ATTR_HIDDEN | FILE_ATTR_SYSTEM | FILE_ATTR_ARCHIVE | FILE_ATTR_VIEW_INDEX_PRESENT;
     C_LOG_VERB("Creating $Quota (mft record 24)");
     m = (MFT_RECORD*)(gsBuf + 24 * gsVol->mft_record_size);
     m->flags |= MFT_RECORD_IS_4;
     m->flags |= MFT_RECORD_IS_VIEW_INDEX;
-    if (!err)
-        err = create_hardlink_res((MFT_RECORD*)(gsBuf +
-            11 * gsVol->mft_record_size), extend_ref, m,
-            MK_LE_MREF(24, 1), 0LL, 0LL, extend_flags,
-            0, 0, "$Quota", FILE_NAME_WIN32_AND_DOS);
+    if (!err) {
+        err = create_hardlink_res((MFT_RECORD*)(gsBuf + 11 * gsVol->mft_record_size), extend_ref, m, MK_LE_MREF(24, 1), 0LL, 0LL, extend_flags, 0, 0,
+            "$Quota", FILE_NAME_WIN32_AND_DOS);
+    }
     /* FIXME: This should be IGNORE_CASE */
-    if (!err)
-        err = add_attr_index_root(m, "$Q", 2, CASE_SENSITIVE, AT_UNUSED,
-            COLLATION_NTOFS_ULONG, gsVol->indx_record_size);
+    if (!err) {
+        err = add_attr_index_root(m, "$Q", 2, CASE_SENSITIVE, AT_UNUSED, COLLATION_NTOFS_ULONG, gsVol->indx_record_size);
+    }
     /* FIXME: This should be IGNORE_CASE */
-    if (!err)
-        err = add_attr_index_root(m, "$O", 2, CASE_SENSITIVE, AT_UNUSED,
-            COLLATION_NTOFS_SID, gsVol->indx_record_size);
-    if (!err)
+    if (!err) {
+        err = add_attr_index_root(m, "$O", 2, CASE_SENSITIVE, AT_UNUSED, COLLATION_NTOFS_SID, gsVol->indx_record_size);
+    }
+    if (!err) {
         err = initialize_quota(m);
+    }
     if (err < 0) {
         C_LOG_WARNING("Couldn't create $Quota: %s", strerror(-err));
         return FALSE;
@@ -5767,39 +5815,33 @@ static BOOL mkntfs_create_root_structures(void)
     m = (MFT_RECORD*)(gsBuf + 25 * gsVol->mft_record_size);
     m->flags |= MFT_RECORD_IS_4;
     m->flags |= MFT_RECORD_IS_VIEW_INDEX;
-    if (!err)
-        err = create_hardlink_res((MFT_RECORD*)(gsBuf +
-                11 * gsVol->mft_record_size), extend_ref,
-                m, MK_LE_MREF(25, 1), 0LL, 0LL,
-                extend_flags, 0, 0, "$ObjId",
-                FILE_NAME_WIN32_AND_DOS);
+    if (!err) {
+        err = create_hardlink_res((MFT_RECORD*)(gsBuf + 11 * gsVol->mft_record_size), extend_ref, m, MK_LE_MREF(25, 1), 0LL, 0LL, extend_flags, 0, 0,
+            "$ObjId", FILE_NAME_WIN32_AND_DOS);
+    }
 
     /* FIXME: This should be IGNORE_CASE */
-    if (!err)
-        err = add_attr_index_root(m, "$O", 2, CASE_SENSITIVE, AT_UNUSED,
-            COLLATION_NTOFS_ULONGS,
-            gsVol->indx_record_size);
+    if (!err) {
+        err = add_attr_index_root(m, "$O", 2, CASE_SENSITIVE, AT_UNUSED, COLLATION_NTOFS_ULONGS, gsVol->indx_record_size);
+    }
     if (err < 0) {
-        C_LOG_WARNING("Couldn't create $ObjId: %s",
-                strerror(-err));
+        C_LOG_WARNING("Couldn't create $ObjId: %s", strerror(-err));
         return FALSE;
     }
     C_LOG_VERB("Creating $Reparse (mft record 26)");
     m = (MFT_RECORD*)(gsBuf + 26 * gsVol->mft_record_size);
     m->flags |= MFT_RECORD_IS_4;
     m->flags |= MFT_RECORD_IS_VIEW_INDEX;
-    if (!err)
-        err = create_hardlink_res((MFT_RECORD*)(gsBuf + 11 * gsVol->mft_record_size),
-                extend_ref, m, MK_LE_MREF(26, 1),
-                0LL, 0LL, extend_flags, 0, 0,
-                "$Reparse", FILE_NAME_WIN32_AND_DOS);
+    if (!err) {
+        err = create_hardlink_res((MFT_RECORD*)(gsBuf + 11 * gsVol->mft_record_size), extend_ref, m, MK_LE_MREF(26, 1), 0LL, 0LL, extend_flags, 0,
+            0, "$Reparse", FILE_NAME_WIN32_AND_DOS);
+    }
     /* FIXME: This should be IGNORE_CASE */
-    if (!err)
-        err = add_attr_index_root(m, "$R", 2, CASE_SENSITIVE, AT_UNUSED,
-            COLLATION_NTOFS_ULONGS, gsVol->indx_record_size);
+    if (!err) {
+        err = add_attr_index_root(m, "$R", 2, CASE_SENSITIVE, AT_UNUSED, COLLATION_NTOFS_ULONGS, gsVol->indx_record_size);
+    }
     if (err < 0) {
-        C_LOG_WARNING("Couldn't create $Reparse: %s",
-            strerror(-err));
+        C_LOG_WARNING("Couldn't create $Reparse: %s", strerror(-err));
         return FALSE;
     }
     return TRUE;
@@ -5817,7 +5859,7 @@ static BOOL verify_boot_sector(struct ntfs_device *dev, ntfs_volume *rawvol)
         return FALSE;
     }
 
-    if ((buf[0]!=0xeb) || ((buf[1]!=0x52) && (buf[1]!=0x5b)) || (buf[2]!=0x90)) {
+    if ((buf[0]!=0xeb) || ((buf[1]!=0x0C) && (buf[1]!=0x5b)) || (buf[2]!=0x90)) {
         C_LOG_WARNING("Boot sector: Bad jump.");
         return FALSE;
     }
@@ -5837,13 +5879,20 @@ static BOOL verify_boot_sector(struct ntfs_device *dev, ntfs_volume *rawvol)
     }
     gsSectorsPerCluster = ntfs_boot->bpb.sectors_per_cluster;
 
+    // // 检测 Andsec 头部
+    // EfsFileHeader* efsHeader = (EfsFileHeader*)((char*)buf + SANDBOX_EFS_HEADER_OFFSET);
+    // if (!fs_sandbox_header_check(efsHeader)) {
+    //     C_LOG_WARNING("Andsec EfsHeader Check error!");
+    //     return FALSE;
+    // }
+
     // todo: if partition, query bios and match heads/tracks? */
 
     // Initialize some values into rawvol. We will need those later.
     rawvol->dev = dev;
     ntfs_boot_sector_parse(rawvol, (NTFS_BOOT_SECTOR *)buf);
 
-    return 0;
+    return TRUE;
 }
 
 static void check_volume(ntfs_volume *vol)
@@ -7432,11 +7481,8 @@ static u8 *get_mft_bitmap(expand_t *expand)
         expand->mft_bitmap = (u8*)ntfs_calloc(bitmap_size);
         if (rl && expand->mft_bitmap) {
             for (prl=rl; prl->length && ok; prl++) {
-                lseek_to_cluster(vol,
-                    prl->lcn + expand->cluster_increment);
-                ok = !read_all(vol->dev, expand->mft_bitmap
-                    + (prl->vcn << vol->cluster_size_bits),
-                    prl->length << vol->cluster_size_bits);
+                lseek_to_cluster(vol, prl->lcn + expand->cluster_increment);
+                ok = !read_all(vol->dev, expand->mft_bitmap + (prl->vcn << vol->cluster_size_bits), prl->length << vol->cluster_size_bits);
             }
             if (!ok) {
                 C_LOG_WARNING("Could not read the MFT bitmap");

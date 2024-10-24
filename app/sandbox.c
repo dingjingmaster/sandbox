@@ -752,14 +752,6 @@ static void sandbox_process_req (gpointer data, gpointer udata)
         return;
     }
 
-    // 重新实现 check 函数
-
-    // C_LOG_VERB("Check sandbox filesystem.");
-    // if (!sandbox_fs_check(sc->deviceInfo.sandboxFs)) {
-    //     C_LOG_WARNING("sandbox filesystem check failed");
-    //     return;
-    // }
-
     C_LOG_VERB("Check sandbox is mounted?");
     if (!sandbox_fs_is_mounted(sc->deviceInfo.sandboxFs)) {
         C_LOG_VERB("Sandbox is not mounted");

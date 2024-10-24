@@ -136,5 +136,7 @@ union ALIGNMENT {
     void *ptralign;
 } ;
 
+
+
 #endif /* defined _NTFS_TYPES_H */
 

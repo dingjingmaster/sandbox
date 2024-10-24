@@ -40,6 +40,7 @@
 
 #include "param.h"
 #include "compat.h"
+#include "defines.h"
 #include "bootsect.h"
 #include "debug.h"
 #include "logging.h"
@@ -68,8 +69,8 @@ BOOL ntfs_boot_sector_is_ntfs(NTFS_BOOT_SECTOR *b)
     C_LOG_VERB("Beginning bootsector check.");
 
     C_LOG_VERB("Checking OEMid, NTFS signature.");
-    if (b->oem_id != const_cpu_to_le64(0x202020205346544eULL)) { /* "NTFS    " */
-        C_LOG_WARNING("NTFS signature is missing.");
+    if (b->oem_id != const_cpu_to_le64(SANDBOX_OEM_S64)) { /* "Andsec  " */
+        C_LOG_WARNING("Sandbox FS signature is missing.");
         goto not_ntfs;
     }
 

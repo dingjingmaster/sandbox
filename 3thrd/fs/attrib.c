@@ -64,6 +64,7 @@
 #include "logging.h"
 #include "misc.h"
 #include "efs.h"
+#include "c/log.h"
 
 ntfschar AT_UNNAMED[] = { const_cpu_to_le16('\0') };
 ntfschar STREAM_SDS[] = { const_cpu_to_le16('$'),
@@ -524,8 +525,7 @@ ntfs_attr *ntfs_attr_open(ntfs_inode *ni, const ATTR_TYPES type,
             || a->compression_unit)
             && (ni->vol->major_ver < 3)) {
             errno = EIO;
-            ntfs_log_perror("Compressed inode %lld not allowed"
-                    " on NTFS %d.%d",
+            C_LOG_WARNING("Compressed inode %lld not allowed on Sandbox FS %d.%d",
                     (unsigned long long)ni->mft_no,
                     ni->vol->major_ver,
                     ni->vol->major_ver);

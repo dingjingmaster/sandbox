@@ -27,10 +27,11 @@
 #include "./endians.h"
 #include "support.h"
 #include "./types.h"
+#include "defines.h"
 
 /* The NTFS oem_id */
-#define magicNTFS const_cpu_to_le64 (0x202020205346544e) /* "NTFS    " */
-#define NTFS_SB_MAGIC 0x5346544e /* 'NTFS' */
+#define magicNTFS const_cpu_to_le64 (SANDBOX_OEM_S64) /* "Andsec  " */
+#define NTFS_SB_MAGIC SANDBOX_MAGIC /* 'Andsec' */
 
 /*
  * Location of bootsector on partition:
