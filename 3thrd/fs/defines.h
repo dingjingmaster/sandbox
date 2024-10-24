@@ -5,9 +5,9 @@
 #ifndef sandbox_DEFINES_H
 #define sandbox_DEFINES_H
 
-#define SANDBOX_OEM                                 "Andsec  "
-#define SANDBOX_OEM_S64                             0x2020636573646e41ULL
-#define SANDBOX_MAGIC                               0x73646e41
+#define SANDBOX_OEM                                 "NTFS    "
+// #define SANDBOX_MAGIC                               0x5346544e
+// #define SANDBOX_OEM_S64                             0x202020205346544eUL
 #define SANDBOX_VERSION                             1
 
 // Boot

@@ -996,9 +996,9 @@ static s64 ntfs_attr_pread_i(ntfs_attr *na, const s64 pos, s64 count, void *b)
     /* Sanity checking arguments is done in ntfs_attr_pread(). */
 
     if ((na->data_flags & ATTR_COMPRESSION_MASK) && NAttrNonResident(na)) {
-        if ((na->data_flags & ATTR_COMPRESSION_MASK)
-            == ATTR_IS_COMPRESSED)
+        if ((na->data_flags & ATTR_COMPRESSION_MASK) == ATTR_IS_COMPRESSED) {
             return ntfs_compressed_attr_pread(na, pos, count, b);
+        }
         else {
                 /* compression mode not supported */
             errno = EOPNOTSUPP;
@@ -1029,7 +1029,7 @@ static s64 ntfs_attr_pread_i(ntfs_attr *na, const s64 pos, s64 count, void *b)
         && (na->data_flags & ATTR_IS_ENCRYPTED)
         && NAttrNonResident(na)) {
         if (na->data_size != na->initialized_size) {
-            ntfs_log_error("uninitialized encrypted file not supported\n");
+            C_LOG_WARNING("uninitialized encrypted file not supported\n");
             errno = EINVAL;
             return -1;
         }
@@ -1059,7 +1059,7 @@ res_err_out:
                 le32_to_cpu(ctx->attr->value_length) >
                 (char*)ctx->mrec + vol->mft_record_size) {
             errno = EIO;
-            ntfs_log_perror("%s: Sanity check failed", __FUNCTION__);
+            C_LOG_WARNING("%s: Sanity check failed", __FUNCTION__);
             goto res_err_out;
         }
         memcpy(b, val + pos, count);
@@ -1114,7 +1114,7 @@ res_err_out:
          */
         if (errno == ENOENT) {
             errno = EIO;
-            ntfs_log_perror("%s: Failed to find VCN #1", __FUNCTION__);
+            C_LOG_WARNING("%s: Failed to find VCN #1", __FUNCTION__);
         }
         return -1;
     }
@@ -1130,8 +1130,7 @@ res_err_out:
             if (!rl) {
                 if (errno == ENOENT) {
                     errno = EIO;
-                    ntfs_log_perror("%s: Failed to find VCN #2",
-                            __FUNCTION__);
+                    C_LOG_WARNING("%s: Failed to find VCN #2", __FUNCTION__);
                 }
                 goto rl_err_out;
             }
@@ -1140,19 +1139,16 @@ res_err_out:
         }
         if (!rl->length) {
             errno = EIO;
-            ntfs_log_perror("%s: Zero run length", __FUNCTION__);
+            C_LOG_WARNING("%s: Zero run length", __FUNCTION__);
             goto rl_err_out;
         }
         if (rl->lcn < (LCN)0) {
             if (rl->lcn != (LCN)LCN_HOLE) {
-                ntfs_log_perror("%s: Bad run (%lld)",
-                        __FUNCTION__,
-                        (long long)rl->lcn);
+                C_LOG_WARNING("%s: Bad run (%lld)", __FUNCTION__, (long long)rl->lcn);
                 goto rl_err_out;
             }
             /* It is a hole, just zero the matching @b range. */
-            to_read = min(count, (rl->length <<
-                    vol->cluster_size_bits) - ofs);
+            to_read = min(count, (rl->length << vol->cluster_size_bits) - ofs);
             memset(b, 0, to_read);
             /* Update progress counters. */
             total += to_read;
@@ -1161,14 +1157,11 @@ res_err_out:
             continue;
         }
         /* It is a real lcn, read it into @dst. */
-        to_read = min(count, (rl->length << vol->cluster_size_bits) -
-                ofs);
+        to_read = min(count, (rl->length << vol->cluster_size_bits) - ofs);
 retry:
-        ntfs_log_trace("Reading %lld bytes from vcn %lld, lcn %lld, ofs"
-                " %lld.\n", (long long)to_read, (long long)rl->vcn,
+        C_LOG_VERB("Reading %lld bytes from vcn %lld, lcn %lld, ofs %lld.\n", (long long)to_read, (long long)rl->vcn,
                    (long long )rl->lcn, (long long)ofs);
-        br = ntfs_pread(vol->dev, (rl->lcn << vol->cluster_size_bits) +
-                ofs, to_read, b);
+        br = ntfs_pread(vol->dev, (rl->lcn << vol->cluster_size_bits) + ofs, to_read, b);
         /* If everything ok, update progress counters and continue. */
         if (br > 0) {
             total += br;
@@ -1184,7 +1177,7 @@ retry:
             return total;
         if (!br)
             errno = EIO;
-        ntfs_log_perror("%s: ntfs_pread failed", __FUNCTION__);
+        C_LOG_WARNING("%s: ntfs_pread failed", __FUNCTION__);
         return -1;
     }
     /* Finally, return the number of bytes read. */
@@ -1221,19 +1214,17 @@ s64 ntfs_attr_pread(ntfs_attr *na, const s64 pos, s64 count, void *b)
 
     if (!na || !na->ni || !na->ni->vol || !b || pos < 0 || count < 0) {
         errno = EINVAL;
-        ntfs_log_perror("%s: na=%p  b=%p  pos=%lld  count=%lld",
-                __FUNCTION__, na, b, (long long)pos,
-                (long long)count);
+        C_LOG_WARNING("na=%p  b=%p  pos=%lld  count=%lld", na, b, (long long)pos, (long long)count);
         return -1;
     }
 
-    ntfs_log_enter("Entering for inode %lld attr 0x%x pos %lld count "
-               "%lld\n", (unsigned long long)na->ni->mft_no,
+    C_LOG_VERB("Entering for inode %lld attr 0x%x pos %lld count %lld\n", (unsigned long long)na->ni->mft_no,
                le32_to_cpu(na->type), (long long)pos, (long long)count);
 
     ret = ntfs_attr_pread_i(na, pos, count, b);
 
-    ntfs_log_leave("\n");
+    C_LOG_VERB("\n");
+
     return ret;
 }
 

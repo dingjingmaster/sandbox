@@ -518,18 +518,21 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
 
     bs = ntfs_malloc(sizeof(NTFS_BOOT_SECTOR));
     if (!bs) {
+        C_LOG_WARNING("malloc failed");
         return NULL;
     }
 
     /* Allocate the volume structure. */
     vol = ntfs_volume_alloc();
     if (!vol) {
+        C_LOG_WARNING("ntfs_volume_alloc failed");
         goto error_exit;
     }
 
     /* Create the default upcase table. */
     vol->upcase_len = ntfs_upcase_build_default(&vol->upcase);
     if (!vol->upcase_len || !vol->upcase) {
+        C_LOG_WARNING("Failed to build upcase for $MFT/$DATA");
         goto error_exit;
     }
 
@@ -561,7 +564,7 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
                 goto error_exit;
             }
             else {
-                ntfs_log_info("Error opening '%s' read-write\n", dev->d_name);
+                C_LOG_WARNING("Error opening '%s' read-write\n", dev->d_name);
                 NVolSetReadOnly(vol);
             }
         }
@@ -580,9 +583,10 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
     if (br != sizeof(NTFS_BOOT_SECTOR)) {
         if (br != -1) {
             errno = EINVAL;
+            C_LOG_WARNING("Error reading '%s'", dev->d_name);
         }
         if (!br) {
-            ntfs_log_error("Failed to read bootsector (size=0)\n");
+            C_LOG_WARNING("Failed to read bootsector (size=0)\n");
         }
         else {
             C_LOG_WARNING("Error reading bootsector");
@@ -590,10 +594,12 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
         goto error_exit;
     }
     if (!ntfs_boot_sector_is_ntfs(bs)) {
+        C_LOG_WARNING("Error reading '%s'", dev->d_name);
         errno = EINVAL;
         goto error_exit;
     }
     if (ntfs_boot_sector_parse(vol, bs) < 0) {
+        C_LOG_WARNING("Failed to parse bootsector\n");
         goto error_exit;
     }
 
@@ -602,7 +608,7 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
 
     /* Now set the device block size to the sector size. */
     if (ntfs_device_block_size_set(vol->dev, vol->sector_size)) {
-        ntfs_log_debug("Failed to set the device block size to the sector size.  This may affect performance but should be harmless otherwise.  Error: %s\n", strerror(errno));
+        C_LOG_VERB("Failed to set the device block size to the sector size.  This may affect performance but should be harmless otherwise.  Error: %s\n", strerror(errno));
     }
 
     /* We now initialize the cluster allocator. */
@@ -611,7 +617,7 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
 
     /* Setup the mft zone. */
     vol->mft_zone_start = vol->mft_zone_pos = vol->mft_lcn;     // 4 逻辑块
-    ntfs_log_debug("mft_zone_pos = 0x%llx\n", (long long)vol->mft_zone_pos);
+    C_LOG_VERB("mft_zone_pos = 0x%llx\n", (long long)vol->mft_zone_pos);
 
     /*
      * Calculate the mft_lcn for an unmodified NTFS volume (see mkntfs
@@ -631,7 +637,7 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
         vol->mft_zone_start = 0;
     }
 
-    ntfs_log_debug("mft_zone_start = 0x%llx\n", (long long)vol->mft_zone_start);
+    C_LOG_VERB("mft_zone_start = 0x%llx\n", (long long)vol->mft_zone_start);
 
     /**
      * Need to cap the mft zone on non-standard volumes so that it does
@@ -647,16 +653,16 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
         }
         vol->mft_zone_end = vol->mft_lcn + mft_zone_size;
     }
-    ntfs_log_debug("mft_zone_end = 0x%llx\n", (long long)vol->mft_zone_end);
+    C_LOG_VERB("mft_zone_end = 0x%llx\n", (long long)vol->mft_zone_end);
 
     /**
      * Set the current position within each data zone to the start of the
      * respective zone.
      */
     vol->data1_zone_pos = vol->mft_zone_end; // data1 zone after mft
-    ntfs_log_debug("data1_zone_pos = %lld\n", (long long)vol->data1_zone_pos);
+    C_LOG_VERB("data1_zone_pos = %lld\n", (long long)vol->data1_zone_pos);
     vol->data2_zone_pos = 0;
-    ntfs_log_debug("data2_zone_pos = %lld\n", (long long)vol->data2_zone_pos);
+    C_LOG_VERB("data2_zone_pos = %lld\n", (long long)vol->data2_zone_pos);
 
     /* Set the mft data allocation position to mft record 24. */
     vol->mft_data_pos = 24;
@@ -976,6 +982,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     need_fallback_ro = FALSE;
     vol = ntfs_volume_startup(dev, flags);
     if (!vol) {
+        C_LOG_WARNING("Failed to get volume handle");
         return NULL;
     }
 
@@ -983,6 +990,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     m  = ntfs_malloc(vol->mftmirr_size << vol->mft_record_size_bits);
     m2 = ntfs_malloc(vol->mftmirr_size << vol->mft_record_size_bits);
     if (!m || !m2) {
+        C_LOG_WARNING("Failed to allocate memory");
         goto error_exit;
     }
 
@@ -993,7 +1001,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
             C_LOG_WARNING("Failed to read $MFT");
         }
         else {
-            ntfs_log_error("Failed to read $MFT, unexpected length (%lld != %d).\n", (long long)l, vol->mftmirr_size);
+            C_LOG_WARNING("Failed to read $MFT, unexpected length (%lld != %d).\n", (long long)l, vol->mftmirr_size);
             errno = EIO;
         }
         goto error_exit;
@@ -1001,6 +1009,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     // 16 个 MFT 记录？
     for (i = 0; (i < l) && (i < FILE_first_user); ++i) {
         if (ntfs_mft_record_check(vol, FILE_MFT + i, (MFT_RECORD*)(m + i * vol->mft_record_size))) {
+            C_LOG_WARNING("Fail mtf_record_check");
             goto error_exit;
         }
     }
@@ -1018,6 +1027,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     // 16 个 MFT 记录？
     for (i = 0; (i < l) && (i < FILE_first_user); ++i) {
         if (ntfs_mft_record_check(vol, FILE_MFT + i, (MFT_RECORD*)(m2 + i * vol->mft_record_size))) {
+            C_LOG_WARNING("Fail mft_record_check");
             goto error_exit;
         }
     }
@@ -1089,7 +1099,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     }
 
     if (vol->lcnbmp_na->data_size > vol->lcnbmp_na->allocated_size) {
-        ntfs_log_error("Corrupt cluster map size (%lld > %lld)\n", (long long)vol->lcnbmp_na->data_size, (long long)vol->lcnbmp_na->allocated_size);
+        C_LOG_WARNING("Corrupt cluster map size (%lld > %lld)\n", (long long)vol->lcnbmp_na->data_size, (long long)vol->lcnbmp_na->allocated_size);
         goto io_error_exit;
     }
 
@@ -1115,7 +1125,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
      * such characters.
      */
     if ((na->data_size - 2) & ~0x1fffeULL) {
-        ntfs_log_error("Error: Upcase table is invalid (want size even <= 131072).\n");
+        C_LOG_WARNING("Error: Upcase table is invalid (want size even <= 131072).\n");
         errno = EINVAL;
         goto bad_upcase;
     }
@@ -1125,6 +1135,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
         free(vol->upcase);
         vol->upcase = ntfs_malloc(na->data_size);
         if (!vol->upcase) {
+            C_LOG_WARNING("bad upcase");
             goto bad_upcase;
         }
     }
@@ -1132,7 +1143,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     /* Read in the $DATA attribute value into the buffer. */
     l = ntfs_attr_pread(na, 0, na->data_size, vol->upcase);
     if (l != na->data_size) {
-        ntfs_log_error("Failed to read $UpCase, unexpected length (%lld != %lld).\n", (long long)l, (long long)na->data_size);
+        C_LOG_WARNING("Failed to read $UpCase, unexpected length (%lld != %lld).\n", (long long)l, (long long)na->data_size);
         errno = EIO;
         goto bad_upcase;
     }
@@ -1151,7 +1162,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     }
 
     if (k < 0x7f) {
-        ntfs_log_error("Corrupted file $UpCase\n");
+        C_LOG_WARNING("Corrupted file $UpCase\n");
         goto io_error_exit;
     }
 
@@ -1169,6 +1180,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     /* Get a search context for the $Volume/$VOLUME_INFORMATION lookup. */
     ctx = ntfs_attr_get_search_ctx(vol->vol_ni, NULL);
     if (!ctx) {
+        C_LOG_WARNING("Fail get search ctx");
         goto error_exit;
     }
 
@@ -1181,7 +1193,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
 
     /* Has to be resident. */
     if (a->non_resident) {
-        ntfs_log_error("Attribute $VOLUME_INFORMATION must be resident but it isn't.\n");
+        C_LOG_WARNING("Attribute $VOLUME_INFORMATION must be resident but it isn't.\n");
         errno = EIO;
         goto error_exit;
     }
@@ -1190,7 +1202,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     vinf = (VOLUME_INFORMATION*)(le16_to_cpu(a->value_offset) + (char*)a);
     /* Sanity checks. */
     if ((char*)vinf + le32_to_cpu(a->value_length) > (char*)ctx->mrec + le32_to_cpu(ctx->mrec->bytes_in_use) || le16_to_cpu(a->value_offset) + le32_to_cpu(a->value_length) > le32_to_cpu(a->length)) {
-        ntfs_log_error("$VOLUME_INFORMATION in $Volume is corrupt.\n");
+        C_LOG_WARNING("$VOLUME_INFORMATION in $Volume is corrupt.\n");
         errno = EIO;
         goto error_exit;
     }
@@ -1219,6 +1231,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
          */
         vol->vol_name = ntfs_malloc(1);
         if (!vol->vol_name) {
+            C_LOG_WARNING("Failed to allocate $VOLUME_NAME");
             goto error_exit;
         }
         vol->vol_name[0] = '\0';
@@ -1227,7 +1240,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
         a = ctx->attr;
         /* Has to be resident. */
         if (a->non_resident) {
-            ntfs_log_error("$VOLUME_NAME must be resident.\n");
+            C_LOG_WARNING("$VOLUME_NAME must be resident.\n");
             errno = EIO;
             goto error_exit;
         }
@@ -1242,10 +1255,9 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
          */
         vol->vol_name = NULL;
         if (ntfs_ucstombs(vname, u, &vol->vol_name, 0) == -1) {
-            C_LOG_WARNING("Volume name could not be converted to current locale");
-            ntfs_log_debug("Forcing name into ASCII by replacing non-ASCII characters with underscores.\n");
             vol->vol_name = ntfs_malloc(u + 1);
             if (!vol->vol_name) {
+                C_LOG_WARNING("malloc error");
                 goto error_exit;
             }
 
@@ -1279,20 +1291,21 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
 
     /* Check we don't overflow 24-bits. */
     if ((u64)na->data_size > 0xffffffLL) {
-        ntfs_log_error("Attribute definition table is too big (max 24-bit allowed).\n");
+        C_LOG_WARNING("Attribute definition table is too big (max 24-bit allowed).\n");
         errno = EINVAL;
         goto error_exit;
     }
     vol->attrdef_len = na->data_size;
     vol->attrdef = ntfs_malloc(na->data_size);
     if (!vol->attrdef) {
+        C_LOG_WARNING("Failed to allocate $AttrDef");
         goto error_exit;
     }
 
     /* Read in the $DATA attribute value into the buffer. */
     l = ntfs_attr_pread(na, 0, na->data_size, vol->attrdef);
     if (l != na->data_size) {
-        ntfs_log_error("Failed to read $AttrDef, unexpected length (%lld != %lld).\n", (long long)l, (long long)na->data_size);
+        C_LOG_WARNING("Failed to read $AttrDef, unexpected length (%lld != %lld).\n", (long long)l, (long long)na->data_size);
         errno = EIO;
         goto error_exit;
     }
@@ -1306,6 +1319,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
 
     /* Open $Secure. */
     if (ntfs_open_secure(vol)) {
+        C_LOG_WARNING("Failed to open $AttrDef");
         goto error_exit;
     }
 
@@ -1318,9 +1332,11 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
             if (flags & NTFS_MNT_MAY_RDONLY) {
                 need_fallback_ro = TRUE;
             }
-            else
+            else {
+                C_LOG_WARNING("$VOLUME_INFORMATION attribute not found in $AttrDef");
                 goto error_exit;
             }
+        }
         if (ntfs_volume_check_logfile(vol) < 0) {
             /* Always reject cached metadata for now */
             if (!(flags & NTFS_MNT_RECOVER) || (errno == EPERM)) {
@@ -1328,12 +1344,13 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
                     need_fallback_ro = TRUE;
                 }
                 else {
+                    C_LOG_WARNING("$VOLUME_INFORMATION attribute not found in $AttrDef");
                     goto error_exit;
                 }
             }
             else {
-                ntfs_log_info("The file system wasn't safely closed on Windows. Fixing.\n");
                 if (ntfs_logfile_reset(vol)) {
+                    C_LOG_WARNING("Failed to reset $VOLUME_INFORMATION");
                     goto error_exit;
                 }
             }
@@ -1342,13 +1359,14 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
         /* make $TXF_DATA resident if present on the root directory */
         if (!(flags & NTFS_MNT_RDONLY) && !need_fallback_ro) {
             if (fix_txf_data(vol)) {
+                C_LOG_WARNING("Failed to fix $VOLUME_INFORMATION");
                 goto error_exit;
             }
         }
     }
     if (need_fallback_ro) {
         NVolSetReadOnly(vol);
-        ntfs_log_error("%s", fallback_readonly_msg);
+        C_LOG_WARNING("%s", fallback_readonly_msg);
     }
 
     return vol;

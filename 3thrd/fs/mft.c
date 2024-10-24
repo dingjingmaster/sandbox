@@ -57,6 +57,7 @@
 #include "mft.h"
 #include "logging.h"
 #include "misc.h"
+#include "c/log.h"
 
 /**
  * ntfs_mft_records_read - read records from the mft from disk
@@ -85,31 +86,28 @@ int ntfs_mft_records_read(const ntfs_volume *vol, const MFT_REF mref,
 	s64 br;
 	VCN m;
 
-	ntfs_log_trace("inode %llu\n", (unsigned long long)MREF(mref));
+	C_LOG_VERB("inode %llu\n", (unsigned long long)MREF(mref));
 	
 	if (!vol || !vol->mft_na || !b || count < 0) {
 		errno = EINVAL;
-		ntfs_log_perror("%s: b=%p  count=%lld  mft=%llu", __FUNCTION__,
-			b, (long long)count, (unsigned long long)MREF(mref));
+		C_LOG_WARNING("%s: b=%p  count=%lld  mft=%llu", __FUNCTION__, b, (long long)count, (unsigned long long)MREF(mref));
 		return -1;
 	}
 	m = MREF(mref);
 	/* Refuse to read non-allocated mft records. */
-	if (m + count > vol->mft_na->initialized_size >>
-			vol->mft_record_size_bits) {
+	if (m + count > vol->mft_na->initialized_size >> vol->mft_record_size_bits) {
 		errno = ESPIPE;
-		ntfs_log_perror("Trying to read non-allocated mft records "
+		C_LOG_WARNING("Trying to read non-allocated mft records "
 				"(%lld > %lld)", (long long)m + count,
 				(long long)vol->mft_na->initialized_size >>
 				vol->mft_record_size_bits);
 		return -1;
 	}
-	br = ntfs_attr_mst_pread(vol->mft_na, m << vol->mft_record_size_bits,
-			count, vol->mft_record_size, b);
+	br = ntfs_attr_mst_pread(vol->mft_na, m << vol->mft_record_size_bits, count, vol->mft_record_size, b);
 	if (br != count) {
 		if (br != -1)
 			errno = EIO;
-		ntfs_log_perror("Failed to read of MFT, mft=%llu count=%lld "
+		C_LOG_WARNING("Failed to read of MFT, mft=%llu count=%lld "
 				"br=%lld", (long long)m, (long long)count,
 				(long long)br);
 		return -1;
@@ -155,10 +153,9 @@ int ntfs_mft_records_write(const ntfs_volume *vol, const MFT_REF mref,
 	}
 	m = MREF(mref);
 	/* Refuse to write non-allocated mft records. */
-	if (m + count > vol->mft_na->initialized_size >>
-			vol->mft_record_size_bits) {
+	if (m + count > vol->mft_na->initialized_size >> vol->mft_record_size_bits) {
 		errno = ESPIPE;
-		ntfs_log_perror("Trying to write non-allocated mft records "
+		C_LOG_WARNING("Trying to write non-allocated mft records "
 				"(%lld > %lld)", (long long)m + count,
 				(long long)vol->mft_na->initialized_size >>
 				vol->mft_record_size_bits);
@@ -172,10 +169,9 @@ int ntfs_mft_records_write(const ntfs_volume *vol, const MFT_REF mref,
 		cnt = vol->mftmirr_size - m;
 		if (cnt > count)
 			cnt = count;
-		if ((m + cnt) > vol->mftmirr_na->initialized_size >>
-				vol->mft_record_size_bits) {
+		if ((m + cnt) > vol->mftmirr_na->initialized_size >> vol->mft_record_size_bits) {
 			errno = ESPIPE;
-			ntfs_log_perror("Trying to write non-allocated mftmirr"
+			C_LOG_WARNING("Trying to write non-allocated mftmirr"
 				" records (%lld > %lld)", (long long)m + cnt,
 				(long long)vol->mftmirr_na->initialized_size >>
 				vol->mft_record_size_bits);
@@ -186,36 +182,38 @@ int ntfs_mft_records_write(const ntfs_volume *vol, const MFT_REF mref,
 			return -1;
 		memcpy(bmirr, b, cnt * vol->mft_record_size);
 	}
-	bw = ntfs_attr_mst_pwrite(vol->mft_na, m << vol->mft_record_size_bits,
-			count, vol->mft_record_size, b);
+	bw = ntfs_attr_mst_pwrite(vol->mft_na, m << vol->mft_record_size_bits, count, vol->mft_record_size, b);
 	if (bw != count) {
-		if (bw != -1)
+		if (bw != -1) {
 			errno = EIO;
-		if (bw >= 0)
-			ntfs_log_debug("Error: partial write while writing $Mft "
-					"record(s)!\n");
-		else
+		}
+		if (bw >= 0) {
+			ntfs_log_debug("Error: partial write while writing $Mft record(s)!\n");
+		}
+		else {
 			ntfs_log_perror("Error writing $Mft record(s)");
+		}
 		res = errno;
 	}
 	if (bmirr && bw > 0) {
 		if (bw < cnt)
 			cnt = bw;
-		bw = ntfs_attr_mst_pwrite(vol->mftmirr_na,
-				m << vol->mft_record_size_bits, cnt,
-				vol->mft_record_size, bmirr);
+		bw = ntfs_attr_mst_pwrite(vol->mftmirr_na, m << vol->mft_record_size_bits, cnt, vol->mft_record_size, bmirr);
 		if (bw != cnt) {
-			if (bw != -1)
+			if (bw != -1) {
 				errno = EIO;
-			ntfs_log_debug("Error: failed to sync $MFTMirr! Run "
-					"chkdsk.\n");
+			}
+			C_LOG_VERB("Error: failed to sync $MFTMirr! Run chkdsk.\n");
 			res = errno;
 		}
 	}
 	free(bmirr);
-	if (!res)
+	if (!res) {
 		return res;
+	}
+
 	errno = res;
+
 	return -1;
 }
 
@@ -354,22 +352,26 @@ int ntfs_file_record_read(const ntfs_volume *vol, const MFT_REF mref, MFT_RECORD
 		if (!m)
 			return -1;
 	}
-	if (ntfs_mft_record_read(vol, mref, m))
+	if (ntfs_mft_record_read(vol, mref, m)) {
+		C_LOG_WARNING("");
 		goto err_out;
+	}
 
-	if (ntfs_mft_record_check(vol, mref, m))
+	if (ntfs_mft_record_check(vol, mref, m)) {
+		C_LOG_WARNING("");
 		goto err_out;
-	
+	}
+
 	if (MSEQNO(mref) && MSEQNO(mref) != le16_to_cpu(m->sequence_number)) {
-		ntfs_log_error("Record %llu has wrong SeqNo (%d <> %d)\n",
-			       (unsigned long long)MREF(mref), MSEQNO(mref),
-			       le16_to_cpu(m->sequence_number));
+		C_LOG_WARNING("Record %llu has wrong SeqNo (%d <> %d)\n",
+			       (unsigned long long)MREF(mref), MSEQNO(mref), le16_to_cpu(m->sequence_number));
 		errno = EIO;
 		goto err_out;
 	}
 	*mrec = m;
-	if (attr)
+	if (attr) {
 		*attr = (ATTR_RECORD*)((char*)m + le16_to_cpu(m->attrs_offset));
+	}
 	return 0;
 err_out:
 	if (m != *mrec)

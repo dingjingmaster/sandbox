@@ -30,7 +30,7 @@ C_BEGIN_EXTERN_C
 #endif
 
 #ifndef C_LOG_DIR
-#define C_LOG_DIR      "/tmp/"
+#define C_LOG_DIR      "/tmp"
 #endif
 
 #ifdef DEBUG

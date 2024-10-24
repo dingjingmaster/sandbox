@@ -55,6 +55,7 @@
 #include "logging.h"
 #include "misc.h"
 #include "xattrs.h"
+#include "c/log.h"
 
 ntfs_inode *ntfs_inode_base(ntfs_inode *ni)
 {
@@ -163,7 +164,7 @@ static ntfs_inode *ntfs_inode_real_open(ntfs_volume *vol, const MFT_REF mref)
 	le32 lthle;
 	int olderrno;
 
-	ntfs_log_enter("Entering for inode %lld\n", (long long)MREF(mref));
+	C_LOG_VERB("Entering for inode %lld\n", (long long)MREF(mref));
 	if (!vol) {
 		errno = EINVAL;
 		goto out;

@@ -551,7 +551,7 @@ s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
     {
         u64 size;
         if (dev->d_ops->ioctl(dev, BLKGETSIZE64, &size) >= 0) {
-            dev->d_ops->seek(dev, SANDBOX_EFS_HEADER_SIZE, SEEK_SET);
+            dev->d_ops->seek(dev, 0, SEEK_SET);
             C_LOG_VERB("BLKGETSIZE64 nr bytes = %llu (0x%llx)", (unsigned long long)size, (unsigned long long)size);
             return (s64)(size - SANDBOX_EFS_HEADER_SIZE) / block_size;
         }
@@ -561,7 +561,7 @@ s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
     {
         unsigned long size;
         if (dev->d_ops->ioctl(dev, BLKGETSIZE, &size) >= 0) {
-            dev->d_ops->seek(dev, SANDBOX_EFS_HEADER_SIZE, SEEK_SET);
+            dev->d_ops->seek(dev, 0, SEEK_SET);
             C_LOG_VERB("BLKGETSIZE nr 512 byte blocks = %lu (0x%lx)", size, size);
             return (s64)(size * 512 - SANDBOX_EFS_HEADER_SIZE) / block_size;
         }
@@ -571,7 +571,7 @@ s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
     {
         struct floppy_struct this_floppy;
         if (dev->d_ops->ioctl(dev, FDGETPRM, &this_floppy) >= 0) {
-            dev->d_ops->seek(dev, SANDBOX_EFS_HEADER_SIZE, SEEK_SET);
+            dev->d_ops->seek(dev, 0, SEEK_SET);
             C_LOG_VERB("FDGETPRM nr 512 byte blocks = %lu (0x%lx)", (unsigned long)this_floppy.size, (unsigned long)this_floppy.size);
             return (s64)(this_floppy.size * 512 - SANDBOX_EFS_HEADER_SIZE) / block_size;
         }
@@ -623,7 +623,7 @@ s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
             high = mid;
         }
     }
-    dev->d_ops->seek(dev, SANDBOX_EFS_HEADER_SIZE, SEEK_SET);
+    dev->d_ops->seek(dev, 0, SEEK_SET);
     return (low - SANDBOX_EFS_HEADER_SIZE + 1LL) / block_size;
 }
 

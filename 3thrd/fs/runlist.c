@@ -48,6 +48,7 @@
 #include "device.h"
 #include "logging.h"
 #include "misc.h"
+#include "c/log.h"
 
 /**
  * ntfs_rl_mm - runlist memmove
@@ -1199,39 +1200,39 @@ rl_err_out:
  * appropriately to the return code of ntfs_pwrite(), or to to EINVAL in case
  * of invalid arguments.
  */
-s64 ntfs_rl_pwrite(const ntfs_volume *vol, const runlist_element *rl,
-		s64 ofs, const s64 pos, s64 count, void *b)
+s64 ntfs_rl_pwrite(const ntfs_volume *vol, const runlist_element *rl, s64 ofs, const s64 pos, s64 count, void *b)
 {
 	s64 written, to_write, total = 0;
 	int err = EIO;
 
 	if (!vol || !rl || pos < 0 || count < 0) {
 		errno = EINVAL;
-		ntfs_log_perror("Failed to write runlist [vol: %p rl: %p "
-				"pos: %lld count: %lld]", vol, rl,
-				(long long)pos, (long long)count);
+		C_LOG_WARNING("Failed to write runlist [vol: %p rl: %p pos: %lld count: %lld]", vol, rl, (long long)pos, (long long)count);
 		goto errno_set;
 	}
-	if (!count)
+
+	if (!count) {
 		goto out;
+	}
+
 	/* Seek in @rl to the run containing @pos. */
-	while (rl->length && (ofs + (rl->length <<
-			vol->cluster_size_bits) <= pos)) {
+	while (rl->length && (ofs + (rl->length << vol->cluster_size_bits) <= pos)) {
 		ofs += (rl->length << vol->cluster_size_bits);
 		rl++;
 	}
+
 	/* Offset in the run at which to begin writing. */
 	ofs = pos - ofs;
 	for (total = 0LL; count; rl++, ofs = 0) {
-		if (!rl->length)
+		if (!rl->length) {
 			goto rl_err_out;
+		}
 		if (rl->lcn < (LCN)0) {
-
-			if (rl->lcn != (LCN)LCN_HOLE)
+			if (rl->lcn != (LCN)LCN_HOLE) {
 				goto rl_err_out;
-			
-			to_write = min(count, (rl->length <<
-					       vol->cluster_size_bits) - ofs);
+			}
+
+			to_write = min(count, (rl->length << vol->cluster_size_bits) - ofs);
 			
 			total += to_write;
 			count -= to_write;
@@ -1239,15 +1240,14 @@ s64 ntfs_rl_pwrite(const ntfs_volume *vol, const runlist_element *rl,
 			continue;
 		}
 		/* It is a real lcn, write it to the volume. */
-		to_write = min(count, (rl->length << vol->cluster_size_bits) -
-				ofs);
+		to_write = min(count, (rl->length << vol->cluster_size_bits) - ofs);
 retry:
-		if (!NVolReadOnly(vol))
-			written = ntfs_pwrite(vol->dev, (rl->lcn <<
-					vol->cluster_size_bits) + ofs,
-					to_write, b);
-		else
+		if (!NVolReadOnly(vol)) {
+			written = ntfs_pwrite(vol->dev, (rl->lcn << vol->cluster_size_bits) + ofs, to_write, b);
+		}
+		else {
 			written = to_write;
+		}
 		/* If everything ok, update progress counters and continue. */
 		if (written > 0) {
 			total += written;
@@ -1256,20 +1256,27 @@ retry:
 			continue;
 		}
 		/* If the syscall was interrupted, try again. */
-		if (written == (s64)-1 && errno == EINTR)
+		if (written == (s64)-1 && errno == EINTR) {
 			goto retry;
-		if (written == (s64)-1)
+		}
+		if (written == (s64)-1) {
 			err = errno;
+		}
 		goto rl_err_out;
 	}
+
 out:
 	return total;
+
 rl_err_out:
-	if (total)
+	if (total) {
 		goto out;
+	}
 	errno = err;
+
 errno_set:
 	total = -1;
+
 	goto out;
 }
 

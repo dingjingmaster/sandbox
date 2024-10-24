@@ -172,10 +172,9 @@ struct CACHED_GENERIC *ntfs_fetch_cache(struct CACHE_HEADER *cache,
 			 * or if hashing has just failed
 			 */
 			current = cache->most_recent_entry;
-			while (current
-				   && compare(current, wanted)) {
+			while (current && compare(current, wanted)) {
 				current = current->next;
-				}
+			}
 		}
 		if (current) {
 			previous = current->previous;

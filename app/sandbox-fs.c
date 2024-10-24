@@ -1536,31 +1536,34 @@ bool sandbox_fs_check(const SandboxFs* sandboxFs)
         goto end;
     }
 
+    C_LOG_VERB("Start Mount...");
+
     // at this point we know that the volume is valid enough for mounting.
     /* Call ntfs_device_mount() to do the actual mount. */
     vol = ntfs_device_mount(dev, NTFS_MNT_RDONLY);
     if (!vol) {
         ntfs_device_free(dev);
         hasError = true;
+        C_LOG_WARNING("Failed to mount the device.");
         goto end;
     }
 
     replay_log(vol);
 
     if (vol->flags & VOLUME_IS_DIRTY) {
-        C_LOG_WARNING("Volume is dirty.");
+        C_LOG_VERB("Volume is dirty.");
     }
 
     check_volume(vol);
 
     if (gsErrors) {
         hasError = true;
-        C_LOG_INFO("Errors found.");
+        C_LOG_WARNING("Errors found.");
     }
 
     if (gsUnsupported) {
         hasError = true;
-        C_LOG_INFO("Unsupported cases found.");
+        C_LOG_WARNING("Unsupported cases found.");
     }
 
     if (!gsErrors && !gsUnsupported) {
@@ -1570,6 +1573,7 @@ bool sandbox_fs_check(const SandboxFs* sandboxFs)
     ntfs_umount(vol, FALSE);
 
     if (gsErrors) {
+        C_LOG_WARNING("s");
         goto end;
     }
 
@@ -1731,7 +1735,10 @@ bool sandbox_fs_mount(SandboxFs* sandboxFs)
     }
 
     if (sandbox_fs_is_mounted(sandboxFs)) {
-        sandbox_fs_unmount(sandboxFs);
+        if (!sandbox_fs_unmount(sandboxFs)) {
+            C_LOG_WARNING("Sandbox fs unmounted failed");
+            return false;
+        }
     }
 
     errno = 0;
@@ -1788,15 +1795,17 @@ bool sandbox_fs_is_mounted(SandboxFs * sandboxFs)
 
 bool sandbox_fs_unmount()
 {
+    bool isOK = false;
     SANDBOX_FS_MUTEX_LOCK();
 
     if (gsFuse) {
+        isOK = true;
         fuse_exit(gsFuse);
     }
 
     SANDBOX_FS_MUTEX_UNLOCK();
 
-    return true;
+    return isOK;
 }
 
 void sandbox_fs_destroy(SandboxFs ** sandboxFs)
@@ -1944,8 +1953,8 @@ static void fs_sandbox_header_init (EfsFileHeader* header)
 {
     memset(header, 0, sizeof(EfsFileHeader));
 
-    header->magic = be32_to_cpu(SANDBOX_MAGIC);
-    header->magicID = be32_to_cpu(SANDBOX_MAGIC);
+    // header->magic = be32_to_cpu(SANDBOX_MAGIC);
+    // header->magicID = be32_to_cpu(SANDBOX_MAGIC);
     header->version = SANDBOX_VERSION;
     header->headSize = sizeof(EfsFileHeader);
     header->fileType = FILE_TYPE_SANDBOX;
@@ -1958,10 +1967,10 @@ bool fs_sandbox_header_check(EfsFileHeader * header)
         return false;
     }
 
-    if (be32_to_cpu(SANDBOX_MAGIC) != header->magic) {
-        C_LOG_WARNING("invalid magic");
-        return false;
-    }
+    // if (be32_to_cpu(SANDBOX_MAGIC) != header->magic) {
+        // C_LOG_WARNING("invalid magic");
+        // return false;
+    // }
 
     if (FILE_TYPE_SANDBOX != header->fileType) {
         C_LOG_WARNING("invalid file type");
@@ -4540,6 +4549,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
     opts.numSectors -= i;
 
     /* If user didn't specify the partition start sector, determine it. */
+    opts.partStartSect = 8;
     if (opts.partStartSect < 0) {
         opts.partStartSect = ntfs_device_partition_start_sector_get(vol->dev);    // linux/hdreg.h 中获取磁盘扇区开始位置
         if (opts.partStartSect < 0) {
@@ -5859,7 +5869,7 @@ static BOOL verify_boot_sector(struct ntfs_device *dev, ntfs_volume *rawvol)
         return FALSE;
     }
 
-    if ((buf[0]!=0xeb) || ((buf[1]!=0x0C) && (buf[1]!=0x5b)) || (buf[2]!=0x90)) {
+    if ((buf[0]!=0xeb) || ((buf[1]!=0x52) && (buf[1]!=0x5b)) || (buf[2]!=0x90)) {
         C_LOG_WARNING("Boot sector: Bad jump.");
         return FALSE;
     }
@@ -5891,6 +5901,8 @@ static BOOL verify_boot_sector(struct ntfs_device *dev, ntfs_volume *rawvol)
     // Initialize some values into rawvol. We will need those later.
     rawvol->dev = dev;
     ntfs_boot_sector_parse(rawvol, (NTFS_BOOT_SECTOR *)buf);
+
+    C_LOG_INFO("verfiy boot OK!");
 
     return TRUE;
 }
@@ -5943,7 +5955,7 @@ static int verify_mft_preliminary(ntfs_volume *rawvol)
     s64 mft_offset, mftmirr_offset;
     int res;
 
-    ntfs_log_trace("Entering verify_mft_preliminary().");
+    C_LOG_VERB("Entering verify_mft_preliminary().");
     // todo: get size_of_file_record from boot sector
     // Load the first segment of the $MFT/DATA runlist.
     mft_offset = rawvol->mft_lcn * rawvol->cluster_size;
@@ -5975,8 +5987,10 @@ static int verify_mft_preliminary(ntfs_volume *rawvol)
     }
 
     /* Load $MFT/Bitmap */
-    if ((res = mft_bitmap_load(rawvol)))
+    if ((res = mft_bitmap_load(rawvol))) {
         return res;
+    }
+
     return -1; /* FIXME: Just added to fix compiler warning without thinking about what should be here.  (Yura) */
 }
 
@@ -6277,23 +6291,31 @@ static int mft_bitmap_load(ntfs_volume *rawvol)
     vcn = get_last_vcn(gsMftBitmapRl);
     if (vcn<=LCN_EINVAL) {
         gsMftBitmapBuf = NULL;
+        C_LOG_WARNING("get_last_vcn error!");
         /* This case should not happen, not even with on-disk errors */
         goto error;
     }
 
     mft_bitmap_length = vcn * rawvol->cluster_size;
-    gsMftBitmapRecords = 8 * mft_bitmap_length * rawvol->cluster_size /
-        rawvol->mft_record_size;
+    gsMftBitmapRecords = 8 * mft_bitmap_length * rawvol->cluster_size / rawvol->mft_record_size;
 
     gsMftBitmapBuf = (u8*)ntfs_malloc(mft_bitmap_length);
-    if (!gsMftBitmapBuf)
+    if (!gsMftBitmapBuf) {
+        C_LOG_WARNING("malloc error!");
         goto error;
-    if (ntfs_rl_pread(rawvol, gsMftBitmapRl, 0, mft_bitmap_length, gsMftBitmapBuf)!=mft_bitmap_length)
+    }
+
+    if (ntfs_rl_pread(rawvol, gsMftBitmapRl, 0, mft_bitmap_length, gsMftBitmapBuf)!=mft_bitmap_length) {
+        C_LOG_WARNING("read error!");
         goto error;
+    }
+
     return 0;
-    error:
-        gsMftBitmapRecords = 0;
+
+error:
+    gsMftBitmapRecords = 0;
     C_LOG_WARNING("Could not load $MFT/Bitmap.");
+
     return RETURN_OPERATIONAL_ERROR;
 }
 
@@ -6349,9 +6371,8 @@ static runlist *load_runlist(ntfs_volume *rawvol, s64 offset_to_file_record, ATT
         //printf("Attr type: 0x%x.", attr_rec->type);
         // Check attribute record. (Only what is in the buffer)
         if (attr_rec->type==AT_END) {
-            C_LOG_WARNING("Attribute 0x%x not found in file record at offset %lld (0x%llx).", (int)le32_to_cpu(attr_rec->type),
-                    (long long)offset_to_file_record,
-                    (long long)offset_to_file_record);
+            C_LOG_WARNING("Attribute 0x%x not found in file record at offset %lld (0x%llx).",
+                (int)le32_to_cpu(attr_rec->type), (long long)offset_to_file_record, (long long)offset_to_file_record);
             return NULL;
         }
         if ((u8*)attr_rec>buf+size_of_file_record-8) {
@@ -6365,9 +6386,7 @@ static runlist *load_runlist(ntfs_volume *rawvol, s64 offset_to_file_record, ATT
         // Check that this attribute does not overflow the mft_record
         if ((u8*)attr_rec+length >= buf+size_of_file_record) {
             C_LOG_WARNING("Attribute (0x%x) is larger than FILE record at offset %lld (0x%llx).",
-                    (int)le32_to_cpu(attr_rec->type),
-                    (long long)offset_to_file_record,
-                    (long long)offset_to_file_record);
+                    (int)le32_to_cpu(attr_rec->type), (long long)offset_to_file_record, (long long)offset_to_file_record);
             return NULL;
         }
         // todo: what ATTRIBUTE_LIST (0x20)?

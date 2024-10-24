@@ -13,8 +13,8 @@
 
 const unsigned char boot_array[BOOTCODE_SIZE] =
 
-    "\xEB\x0C\x90"                  /* jump to code at 0x54 (0x7c54) */
-    "Andsec  \0"                    /* Andsec signature */
+    "\xEB\x52\x90"                  /* jump to code at 0x54 (0x7c54) */
+    "NTFS    \0"                    /* Andsec signature */
 
     "\0\0\0\0\0\0\0\0\0\0\0\0"                  /* 结构体 */
     "\0\0\0\0\0\0\0\0\0\0\0\0"
