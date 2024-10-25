@@ -8512,16 +8512,12 @@ static void update_bootsector(ntfs_resize_t *r)
 	 * the partition size is already defined or it will be
 	 * later defined with the same exact value.
 	 */
-#if 0
-	if (opt.ro_flag && opt.reliable_size && !(opt.bytes % vol->sector_size)) {
-		if (vol->dev->d_ops->seek(vol->dev, opt.bytes
-				- vol->sector_size, SEEK_SET) == (off_t)-1)
-			perr_exit("lseek");
-		if (vol->dev->d_ops->write(vol->dev, bs, bs_size) == -1)
-			perr_exit("write() error");
-	}
-#endif
-    C_LOG_WARNING("");
+    if (vol->dev->d_ops->seek(vol->dev, gVolumeSize + vol->sector_size, SEEK_SET) == (off_t)-1) {
+        C_LOG_WARNING("lseek error");
+    }
+    if (vol->dev->d_ops->write(vol->dev, bs, bs_size) == -1) {
+        C_LOG_WARNING("write() error");
+    }
 
 	free(bs);
 }
