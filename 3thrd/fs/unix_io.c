@@ -63,6 +63,7 @@
 #include "device.h"
 #include "logging.h"
 #include "misc.h"
+#include "c/log.h"
 
 #define DEV_FD(dev)    (*(int *)dev->d_private)
 
@@ -258,6 +259,9 @@ static s64 ntfs_device_unix_io_seek(struct ntfs_device *dev, s64 offset, int whe
  */
 static s64 ntfs_device_unix_io_read(struct ntfs_device *dev, void *buf, s64 count)
 {
+    if (count % 512) {
+        C_LOG_WARNING("Read not 512 整数倍[%d]", count);
+    }
     return read(DEV_FD(dev), buf, count);
 }
 
@@ -279,6 +283,10 @@ static s64 ntfs_device_unix_io_write(struct ntfs_device *dev, const void *buf, s
     }
     NDevSetDirty(dev);
 
+    if (count % 512) {
+        C_LOG_WARNING("Write not 512 整数倍[%d]", count);
+    }
+
     return write(DEV_FD(dev), buf, count);
 }
 
@@ -293,9 +301,11 @@ static s64 ntfs_device_unix_io_write(struct ntfs_device *dev, const void *buf, s
  *
  * Returns:
  */
-static s64 ntfs_device_unix_io_pread(struct ntfs_device *dev, void *buf,
-        s64 count, s64 offset)
+static s64 ntfs_device_unix_io_pread(struct ntfs_device *dev, void *buf, s64 count, s64 offset)
 {
+    if (count % 512) {
+        C_LOG_WARNING("Read not 512 整数倍[%d]", count);
+    }
     return pread(DEV_FD(dev), buf, count, offset);
 }
 
@@ -310,12 +320,15 @@ static s64 ntfs_device_unix_io_pread(struct ntfs_device *dev, void *buf,
  *
  * Returns:
  */
-static s64 ntfs_device_unix_io_pwrite(struct ntfs_device *dev, const void *buf,
-        s64 count, s64 offset)
+static s64 ntfs_device_unix_io_pwrite(struct ntfs_device *dev, const void *buf, s64 count, s64 offset)
 {
     if (NDevReadOnly(dev)) {
         errno = EROFS;
         return -1;
+    }
+
+    if (count % 512) {
+        C_LOG_WARNING("Write not 512 整数倍[%d]", count);
     }
     NDevSetDirty(dev);
     return pwrite(DEV_FD(dev), buf, count, offset);

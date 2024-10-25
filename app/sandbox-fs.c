@@ -6122,7 +6122,7 @@ static void verify_mft_record(ntfs_volume *vol, s64 mft_num)
 static void replay_log(ntfs_volume *vol __attribute__((unused)))
 {
     // At this time, only check that the log is fully replayed.
-    C_LOG_WARNING("Unsupported: replay_log()");
+    // C_LOG_WARNING("Unsupported: replay_log()");
     // todo: if logfile is clean, return success.
 }
 
