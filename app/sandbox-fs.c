@@ -1601,27 +1601,31 @@ bool sandbox_fs_resize(SandboxFs* sandboxFs, cuint64 sizeMB)
 {
     c_return_val_if_fail(sandboxFs && sandboxFs->dev, false);
 
-    struct stat         st;
-    int                 fd = 0;
-    ntfs_resize_t       resize;
-    ntfs_volume*        vol = NULL;
-    bool                hasError = false;
-    int64_t             newSize = sizeMB * 1024 * 1024;
+    ntfs_resize_t           resize;
+    ntfs_volume*            vol = NULL;
+    bool                    hasError = false;
+    int64_t                 oldSize = 0;
+    int64_t                 newSize = (int64_t) sizeMB * 1024 * 1024;
+    EfsSandboxFileHeader*   header = NULL;
 
     memset(&resize, 0, sizeof(resize));
     newSize = align_4096(newSize);
 
     SANDBOX_FS_MUTEX_LOCK();
 
-    errno = 0;
-    if (0 != stat(sandboxFs->dev, &st)) {
-        C_LOG_ERROR("Failed to stat '%s', error: %s", sandboxFs->dev, strerror(errno));
+    // check
+    vol = mount_volume(sandboxFs->dev);
+    if (NULL == vol) {
+        C_LOG_WARNING("Fail to mount volume: %s", sandboxFs->dev);
         hasError = true;
         goto end;
     }
 
-    if (st.st_size >= newSize) {
-        C_LOG_ERROR("Unable to reduce device size. old: %ul, new: %ul", st.st_size, newSize);
+    errno = 0;
+    oldSize = ntfs_device_size_get_all_size(vol->dev);
+
+    if (oldSize >= newSize) {
+        C_LOG_ERROR("Unable to reduce device size. old: %ul, new: %ul", oldSize, newSize);
         hasError = true;
         goto end;
     }
@@ -1632,52 +1636,46 @@ bool sandbox_fs_resize(SandboxFs* sandboxFs, cuint64 sizeMB)
         goto end;
     }
 
-    errno = 0;
-    fd = open(sandboxFs->dev, O_RDONLY|O_WRONLY);
-    if (fd < 0) {
-        C_LOG_ERROR("Failed to open '%s', error: %s", sandboxFs->dev, strerror(errno));
+    header = ntfs_malloc(sizeof(EfsSandboxFileHeader));
+    if (!header) {
+        C_LOG_WARNING("Failed to allocate memory for file header.");
+        hasError = true;
+        goto end;
+    }
+
+    if (!sandbox_fs_found_efs_header(vol, header)) {
+        C_LOG_WARNING("Failed to find file header.");
         hasError = true;
         goto end;
     }
 
     do {
-        int64_t size = newSize - st.st_size;
+        int64_t size = newSize - oldSize;
         size = align_4096(size);
-        if (lseek(fd, size - 1, SEEK_END) >= 0) {
-            if (write(fd, "", 1) >= 0) {
-                C_LOG_INFO("Successfully resized device to %lld bytes", size + st.st_size);
+        if (vol->dev->d_ops->seek(vol->dev, size - 1, SEEK_END) >= 0) {
+            if (vol->dev->d_ops->write(vol->dev, "", 1) >= 0) {
+                C_LOG_INFO("Successfully resized device to %lld bytes", size + oldSize);
             }
             else {
                 hasError = true;
-                C_LOG_WARNING("Failed to resize device to %lld bytes", size + st.st_size);
+                C_LOG_WARNING("Failed to resize device to %lld bytes", size + oldSize);
                 break;
             }
         }
         else {
             hasError = true;
-            C_LOG_ERROR("Failed to resize device to %lld bytes", size + st.st_size);
+            C_LOG_ERROR("Failed to resize device to %lld bytes", size + oldSize);
             break;
         }
     } while (0);
 
-    if (fd >= 0) {
-        close(fd);
-    }
-
     if (hasError) { goto end; }
-
-    // check
-    vol = mount_volume(sandboxFs->dev);
-    if (NULL == vol) {
-        C_LOG_WARNING("Fail to mount volume: %s", sandboxFs->dev);
-        hasError = true;
-        goto end;
-    }
 
     do {
         s64 device_size = ntfs_device_size_get(vol->dev, vol->sector_size);
         C_LOG_VERB("device size: %ul, sector size: %ul", device_size, vol->sector_size);
         device_size *= vol->sector_size;
+        gVolumeSize = device_size;
         C_LOG_VERB("device size: %ul", device_size);
         if (device_size <= 0) {
             hasError = true;
@@ -1685,6 +1683,12 @@ bool sandbox_fs_resize(SandboxFs* sandboxFs, cuint64 sizeMB)
             break;
         }
 
+        // 写入efs_header头
+        if (!sandbox_fs_write_efs_header(vol, header)) {
+            C_LOG_WARNING("Failed to write file header.");
+            hasError = true;
+            goto end;
+        }
         resize.vol = vol;
         resize.new_volume_size = newSize / vol->cluster_size;
         resize.badclusters = check_bad_sectors(vol);
@@ -1722,6 +1726,10 @@ bool sandbox_fs_resize(SandboxFs* sandboxFs, cuint64 sizeMB)
     } while (false);
 
 end:
+    if (header) {
+        free(header);
+    }
+
     if (resize.lcn_bitmap.bm) {
         free(resize.lcn_bitmap.bm);
     }
@@ -4846,6 +4854,32 @@ static BOOL mkntfs_initialize_bitmaps(void)
     return (bitmap_allocate(i, 1));
 }
 
+bool sandbox_fs_write_efs_header (ntfs_volume* vol, EfsSandboxFileHeader* header)
+{
+    g_return_val_if_fail(vol != NULL && vol->dev != NULL && header != NULL, false);
+
+    bool hasErr = false;
+
+    // 初始化最后磁盘内容
+    s64 sizeA = ntfs_device_size_get_all_size(vol->dev);
+    C_LOG_VERB("Sandbox size: %lld", sizeA);
+    s64 n = sizeA - gVolumeSize;
+    vol->dev->d_ops->seek(vol->dev, gVolumeSize, SEEK_SET);
+    for (; n > 0; n--) { vol->dev->d_ops->write(vol->dev, "\0", 1); };
+
+    errno = 0;
+    vol->dev->d_ops->seek(vol->dev, (int64_t) gVolumeSize + 1024, SEEK_SET);
+    if (vol->dev->d_ops->write(vol->dev, header, sizeof(EfsSandboxFileHeader)) != sizeof(EfsSandboxFileHeader)) {
+        C_LOG_WARNING("write efs header error: %s", strerror(errno));
+        hasErr = true;
+        goto done;
+    }
+    vol->dev->d_ops->sync(vol->dev);
+
+done:
+    return !hasErr;
+}
+
 bool mkntfs_init_sandbox_header(ntfs_volume *vol)
 {
     g_return_val_if_fail(vol != NULL && vol->dev != NULL, false);
@@ -4879,30 +4913,21 @@ bool mkntfs_init_sandbox_header(ntfs_volume *vol)
 
     C_LOG_VERB("Sandbox start: %d, end: %d", i, j);
 
-    // 初始化最后磁盘内容
-    s64 sizeA = ntfs_device_size_get_all_size(vol->dev);
-    C_LOG_VERB("Sandbox size: %lld", sizeA);
-    s64 n = (s64) sizeA - gVolumeSize;
-    vol->dev->d_ops->seek(vol->dev, (int64_t) gVolumeSize, SEEK_SET);
-    for (; n > 0; n--) { vol->dev->d_ops->write(vol->dev, "\0", 1); };
-
-    errno = 0;
-    vol->dev->d_ops->seek(vol->dev, (int64_t) gVolumeSize + 1024, SEEK_SET);
-    if (vol->dev->d_ops->write(vol->dev, header, sizeof(EfsSandboxFileHeader)) != sizeof(EfsSandboxFileHeader)) {
-        C_LOG_WARNING("write efs header error: %s", strerror(errno));
+    if (!sandbox_fs_write_efs_header(vol, header)) {
         hasErr = true;
+        C_LOG_WARNING("write efs header error: %s", strerror(errno));
         goto done;
     }
-    vol->dev->d_ops->sync(vol->dev);
 
 done:
     if (header) {
         ntfs_free(header);
     }
+
     return !hasErr;
 }
 
-static bool found_efs_header(ntfs_volume* vol, EfsSandboxFileHeader* header)
+bool sandbox_fs_found_efs_header (ntfs_volume* vol, EfsSandboxFileHeader* header)
 {
     g_return_val_if_fail(vol != NULL && vol->dev != NULL && NULL != header, false);
 
@@ -4920,7 +4945,7 @@ static bool found_efs_header(ntfs_volume* vol, EfsSandboxFileHeader* header)
 
         if (0 == strncmp(header->ps, SANDBOX_EFS_HEADER_START_STR, sizeof(SANDBOX_EFS_HEADER_START_STR) - 1)) {
             for (int j = 0; j < (int) sizeof(header->pe); j++) {
-                if (0 == strncmp(header->pe + j * (sizeof(SANDBOX_EFS_HEADER_END) - 1), SANDBOX_EFS_HEADER_END, sizeof(SANDBOX_EFS_HEADER_END) - 1)) {
+                if (0 == strncmp((const char*) header->pe + j * (sizeof(SANDBOX_EFS_HEADER_END) - 1), SANDBOX_EFS_HEADER_END, sizeof(SANDBOX_EFS_HEADER_END) - 1)) {
                     isOK = true;
                     break;
                 }
@@ -4938,7 +4963,7 @@ bool check_efs_header(ntfs_volume * vol)
 
     EfsSandboxFileHeader header;
 
-    if (!found_efs_header(vol, &header)) {
+    if (!sandbox_fs_found_efs_header(vol, &header)) {
         C_LOG_WARNING("Cannot find efs header");
         return false;
     }
