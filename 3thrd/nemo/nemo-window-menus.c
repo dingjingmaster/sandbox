@@ -1980,8 +1980,9 @@ nemo_window_initialize_menus (NemoWindow *window)
 	/* add the UI */
 	gtk_ui_manager_add_ui_from_resource (ui_manager, "/org/nemo/nemo-shell-ui.xml", NULL);
 
-    GtkWidget *menuitem, *submenu;
-    menuitem = gtk_ui_manager_get_widget (nemo_window_get_ui_manager (window), NEMO_VIEW_MENUBAR_FILE_PATH);
+    GtkWidget *menuitem = NULL, *submenu;
+	g_warning("menu_file_path: %s", NEMO_VIEW_MENUBAR_FILE_PATH);
+    // menuitem = gtk_ui_manager_get_widget (nemo_window_get_ui_manager (window), NEMO_VIEW_MENUBAR_FILE_PATH);
     submenu = gtk_menu_item_get_submenu (GTK_MENU_ITEM (menuitem));
     g_signal_connect (submenu, "show", G_CALLBACK (on_file_menu_show), window);
 

@@ -3,6 +3,7 @@ include(${CMAKE_SOURCE_DIR}/3thrd/fs/libsandbox-fs.cmake)
 #include(${CMAKE_SOURCE_DIR}/3thrd/fuse-lite/libfuse-lite.cmake)
 
 add_executable(test-format format.c ${C_SRC} ${SANDBOX_FS_SRC} ${FUSE_LITE_SRC}
+        ../app/rc4.c
         ../app/utils.c
         ../app/fs/sd.c
         ../app/fs/boot.c
@@ -32,6 +33,7 @@ target_compile_definitions(test-format PUBLIC
 )
 
 add_executable(test-check check.c ${C_SRC} ${SANDBOX_FS_SRC} ${FUSE_LITE_SRC}
+        ../app/rc4.c
         ../app/utils.c
         ../app/fs/sd.c
         ../app/fs/boot.c
@@ -61,6 +63,7 @@ target_compile_definitions(test-check PUBLIC
 )
 
 add_executable(test-resize resize.c ${C_SRC} ${SANDBOX_FS_SRC} ${FUSE_LITE_SRC}
+        ../app/rc4.c
         ../app/utils.c
         ../app/fs/sd.c
         ../app/fs/boot.c
@@ -90,6 +93,7 @@ target_compile_definitions(test-resize PUBLIC
 )
 
 add_executable(test-mount mount.c ${C_SRC} ${SANDBOX_FS_SRC} # ${FUSE_LITE_SRC}
+        ../app/rc4.c
         ../app/utils.c
         ../app/fs/sd.c
         ../app/fs/boot.c
@@ -119,6 +123,7 @@ target_compile_definitions(test-mount PUBLIC
 )
 
 add_executable(test-unmount umount.c ${C_SRC} ${SANDBOX_FS_SRC} # ${FUSE_LITE_SRC}
+        ../app/rc4.c
         ../app/fs/sd.c
         ../app/utils.c
         ../app/fs/boot.c
@@ -145,5 +150,26 @@ target_compile_definitions(test-unmount PUBLIC
         -D__CLIB_H_INSIDE__
         -D_FILE_OFFSET_BITS=64
         -DPACKAGE_NAME=\"test-check\"
+)
+
+add_executable(test-rc4 rc4.c
+        ../app/rc4.c
+)
+target_link_libraries(test-rc4 PUBLIC
+        ${GLIB_LIBRARIES}
+        ${CLIB_LIBRARIES}
+)
+
+target_include_directories(test-rc4 PUBLIC
+        ${GLIB_INCLUDE_DIRS}
+        ${CLIB_INCLUDE_DIRS}
+        ${CMAKE_SOURCE_DIR}/3thrd/clib
+)
+
+target_compile_definitions(test-rc4 PUBLIC
+        -D_GNU_SOURCE
+        -DHAVE_CONFIG_H
+        -D__CLIB_H_INSIDE__
+        -DPACKAGE_NAME=\"test-rc4\"
 )
 

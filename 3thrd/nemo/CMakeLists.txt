@@ -3,6 +3,8 @@ file(GLOB SANDBOX_NEMO_SRC
         nemo-main-application.c
         nemo-application.c
         nemo-main.c
+        ../clib/c/log.c
+        ../clib/c/glog.c
         nemo-cinnamon-dbus.c  nemo-cinnamon-dbus.h
         nemo-freedesktop-generated.c  nemo-freedesktop-generated.h
         #        nemo-autorun-software.c
@@ -193,8 +195,12 @@ target_include_directories(sandbox-nemo PUBLIC
         ${GTK_INCLUDE_DIRS}
         ${GLIB_INCLUDE_DIRS}
         ${GAIL_INCLUDE_DIRS}
+        -I ../clib
 )
 target_compile_definitions(sandbox-nemo PUBLIC
+        -DDEBUG
+        -D__CLIB_H_INSIDE__
+        -DC_LOG_TAG=\"sandbox-nemo\"
         -DLIBEXECDIR=\"/usr/local/libexec\"
         -DNEMO_DATADIR=\"/usr/local/share/nemo\"
 )

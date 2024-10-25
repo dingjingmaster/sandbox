@@ -51,6 +51,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "../clib/c/glog.h"
+
 #ifdef HAVE_EXEMPI
 #include <exempi/xmp.h>
 #endif
@@ -60,7 +62,7 @@ main (int argc, char *argv[])
 {
 	gint retval;
 	NemoApplication *application;
-	
+
 #if defined (HAVE_MALLOPT) && defined(M_MMAP_THRESHOLD)
 	/* Nemo uses lots and lots of small and medium size allocations,
 	 * and then a few large ones for the desktop background. By default
@@ -101,8 +103,9 @@ main (int argc, char *argv[])
         g_application_hold (G_APPLICATION (application));
     }
 
-	retval = g_application_run (G_APPLICATION (application),
-				    argc, argv);
+	g_log_set_writer_func(c_glog_handler, NULL, NULL);
+
+	retval = g_application_run (G_APPLICATION (application), argc, argv);
 
 	g_object_unref (application);
 
