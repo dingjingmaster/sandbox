@@ -46,6 +46,8 @@
 #include "logging.h"
 #include "c/log.h"
 
+extern uint64_t gVolumeSize;
+
 /**
  * ntfs_boot_sector_is_ntfs - check if buffer contains a valid ntfs boot sector
  * @b:        buffer containing putative boot sector to analyze
@@ -218,6 +220,8 @@ int ntfs_boot_sector_parse(ntfs_volume *vol, const NTFS_BOOT_SECTOR *bs)
         C_LOG_WARNING("Volume size is set to zero.");
         return -1;
     }
+
+    gVolumeSize = sectors * vol->sector_size + 1024;
 
     // 最后一个扇区
     if (vol->dev->d_ops->seek(vol->dev, (sectors - 1) << vol->sector_size_bits, SEEK_SET) == -1) {

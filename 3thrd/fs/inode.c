@@ -183,8 +183,7 @@ static ntfs_inode *ntfs_inode_real_open(ntfs_volume *vol, const MFT_REF mref)
 	if (!ctx)
 		goto err_out;
 	/* Receive some basic information about inode. */
-	if (ntfs_attr_lookup(AT_STANDARD_INFORMATION, AT_UNNAMED,
-				0, CASE_SENSITIVE, 0, NULL, 0, ctx)) {
+	if (ntfs_attr_lookup(AT_STANDARD_INFORMATION, AT_UNNAMED, 0, CASE_SENSITIVE, 0, NULL, 0, ctx)) {
 		if (!ni->mrec->base_mft_record)
 			ntfs_log_perror("No STANDARD_INFORMATION in base record"
 					" %lld", (long long)MREF(mref));
@@ -192,13 +191,10 @@ static ntfs_inode *ntfs_inode_real_open(ntfs_volume *vol, const MFT_REF mref)
 	}
 	lthle = ctx->attr->value_length;
 	if (le32_to_cpu(lthle) < offsetof(STANDARD_INFORMATION, owner_id)) {
-		ntfs_log_error("Corrupt STANDARD_INFORMATION in base"
-			" record %lld\n",
-			(long long)MREF(mref));
+		ntfs_log_error("Corrupt STANDARD_INFORMATION in base record %lld\n", (long long)MREF(mref));
 		goto put_err_out;
 	}
-	std_info = (STANDARD_INFORMATION *)((u8 *)ctx->attr +
-			le16_to_cpu(ctx->attr->value_offset));
+	std_info = (STANDARD_INFORMATION *)((u8 *)ctx->attr + le16_to_cpu(ctx->attr->value_offset));
 	ni->flags = std_info->file_attributes;
 	ni->creation_time = std_info->creation_time;
 	ni->last_data_change_time = std_info->last_data_change_time;
@@ -264,13 +260,10 @@ get_size:
 	} else {
 		if (ctx->attr->non_resident) {
 			ni->data_size = sle64_to_cpu(ctx->attr->data_size);
-			if (ctx->attr->flags &
-					(ATTR_IS_COMPRESSED | ATTR_IS_SPARSE))
-				ni->allocated_size = sle64_to_cpu(
-						ctx->attr->compressed_size);
+			if (ctx->attr->flags & (ATTR_IS_COMPRESSED | ATTR_IS_SPARSE))
+				ni->allocated_size = sle64_to_cpu( ctx->attr->compressed_size);
 			else
-				ni->allocated_size = sle64_to_cpu(
-						ctx->attr->allocated_size);
+				ni->allocated_size = sle64_to_cpu(ctx->attr->allocated_size);
 		} else {
 			ni->data_size = le32_to_cpu(ctx->attr->value_length);
 			ni->allocated_size = (ni->data_size + 7) & ~7;

@@ -277,11 +277,9 @@ extern const char *ntfs_home;
 
 extern ntfs_volume *ntfs_volume_alloc(void);
 
-extern ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev,
-        ntfs_mount_flags flags);
+extern ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags);
 
-extern ntfs_volume *ntfs_device_mount(struct ntfs_device *dev,
-        ntfs_mount_flags flags);
+extern ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags);
 
 extern ntfs_volume *ntfs_mount(const char *name, ntfs_mount_flags flags);
 extern int ntfs_umount(ntfs_volume *vol, const BOOL force);
@@ -296,11 +294,9 @@ extern int ntfs_volume_error(int err);
 extern void ntfs_mount_error(const char *vol, const char *mntpoint, int err);
 
 extern int ntfs_volume_get_free_space(ntfs_volume *vol);
-extern int ntfs_volume_rename(ntfs_volume *vol, const ntfschar *label,
-        int label_len);
+extern int ntfs_volume_rename(ntfs_volume *vol, const ntfschar *label, int label_len);
 
-extern int ntfs_set_shown_files(ntfs_volume *vol,
-        BOOL show_sys_files, BOOL show_hid_files, BOOL hide_dot_files);
+extern int ntfs_set_shown_files(ntfs_volume *vol, BOOL show_sys_files, BOOL show_hid_files, BOOL hide_dot_files);
 extern int ntfs_set_locale(void);
 extern int ntfs_set_ignore_case(ntfs_volume *vol);
 

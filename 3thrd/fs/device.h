@@ -124,6 +124,7 @@ extern s64 ntfs_mst_pwrite(struct ntfs_device *dev, const s64 pos, s64 count, co
 extern s64 ntfs_cluster_read(const ntfs_volume *vol, const s64 lcn, const s64 count, void *b);
 extern s64 ntfs_cluster_write(const ntfs_volume *vol, const s64 lcn, const s64 count, const void *b);
 
+extern s64 ntfs_device_size_get_all_size(struct ntfs_device* dev);
 extern s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size);
 extern s64 ntfs_device_partition_start_sector_get(struct ntfs_device *dev);
 extern int ntfs_device_heads_get(struct ntfs_device *dev);

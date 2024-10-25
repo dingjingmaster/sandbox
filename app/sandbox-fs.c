@@ -576,8 +576,9 @@ static int write_bootsector                     (expand_t *expand);
 static int ntfs_fuse_rmdir                      (const char *path);
 static int xattr_namespace                      (const char *name);
 static ntfs_inode *get_parent_dir               (const char *path);
-static s64 ntfs_get_nr_free_mft_records         (ntfs_volume *vol);
+static s64 ntfs_get_nr_free_mft_records         (ntfs_volume* vol);
 static bool mkntfs_init_sandbox_header          (ntfs_volume* vol);
+static bool check_efs_header                    (ntfs_volume* vol);
 static void deallocate_scattered_clusters       (const runlist *rl);
 static int ntfs_open                            (const char *device);
 static ntfs_volume *mount_volume                (const char* volume);
@@ -1521,7 +1522,7 @@ bool sandbox_fs_check(const SandboxFs* sandboxFs)
         goto end;
     }
 
-    if (TRUE != (ret = verify_boot_sector(dev,&rawvol))) {
+    if (TRUE != (ret = verify_boot_sector(dev, &rawvol))) {
         dev->d_ops->close(dev);
         hasError = true;
         C_LOG_WARNING("Error verifying boot_sector");
@@ -1557,6 +1558,13 @@ bool sandbox_fs_check(const SandboxFs* sandboxFs)
     }
 
     check_volume(vol);
+
+    // check andsec efs header
+    if (!check_efs_header(vol)) {
+        hasError = true;
+        C_LOG_WARNING("Checking if the volume is not a valid filesystem");
+        goto end;
+    }
 
     if (gsErrors) {
         hasError = true;
@@ -4845,7 +4853,7 @@ bool mkntfs_init_sandbox_header(ntfs_volume *vol)
     bool hasErr = false;
     EfsSandboxFileHeader* header = ntfs_malloc(sizeof(EfsSandboxFileHeader));
     if (!header) {
-        C_LOG_WARNING("malloc error!");
+        C_LOG_ERROR("Failed to allocate memory for EfsSandboxFileHeader");
         goto done;
     }
 
@@ -4855,29 +4863,89 @@ bool mkntfs_init_sandbox_header(ntfs_volume *vol)
     header->fileHeader.headSize = sizeof(EfsSandboxFileHeader);
     header->fileHeader.fileType = FILE_TYPE_SANDBOX;
 
-    C_LOG_VERB("header->ps: %d", sizeof(header->ps));
-    for (int i = 0; i < sizeof(header->ps); i += 16) {
-        memcpy(((char*)header->ps) + i, "Andsec Start....", 16);
+    C_LOG_WARNING("sandbox: %d, %d, %d, %d, %d",
+        sizeof (EfsSandboxFileHeader), sizeof(header->ps), sizeof(header->pe), sizeof(SANDBOX_EFS_HEADER_START), sizeof(SANDBOX_EFS_HEADER_END));
+
+    char* bufT = header->ps;
+    int i = 0, j = 0;
+    for (i = 0; i < sizeof(header->ps); i += (sizeof(SANDBOX_EFS_HEADER_START) - 1)) {
+        memcpy(bufT + i, SANDBOX_EFS_HEADER_START, sizeof(SANDBOX_EFS_HEADER_START) - 1);
     }
 
-    for (int i = 0; i < sizeof(header->pe); i += 16) {
-        memcpy(((char*)header->pe) + i, "Andsec End!!!!!!", 16);
+    char* bufE = header->pe;
+    for (j = 0; j < sizeof(header->pe); j += (sizeof(SANDBOX_EFS_HEADER_END) - 1)) {
+        memcpy(bufE + j, SANDBOX_EFS_HEADER_END, sizeof(SANDBOX_EFS_HEADER_END) -1);
     }
+
+    C_LOG_VERB("Sandbox start: %d, end: %d", i, j);
+
+    // 初始化最后磁盘内容
+    s64 sizeA = ntfs_device_size_get_all_size(vol->dev);
+    C_LOG_VERB("Sandbox size: %lld", sizeA);
+    s64 n = (s64) sizeA - gVolumeSize;
+    vol->dev->d_ops->seek(vol->dev, (int64_t) gVolumeSize, SEEK_SET);
+    for (; n > 0; n--) { vol->dev->d_ops->write(vol->dev, "\0", 1); };
 
     errno = 0;
-    C_LOG_WARNING("sandbox: %d", sizeof (EfsSandboxFileHeader));
-    vol->dev->d_ops->seek(vol->dev, gVolumeSize, SEEK_SET);
-    if (vol->dev->d_ops->write(vol->dev, header, sizeof(EfsSandboxFileHeader)) <= 0) {
+    vol->dev->d_ops->seek(vol->dev, (int64_t) gVolumeSize + 1024, SEEK_SET);
+    if (vol->dev->d_ops->write(vol->dev, header, sizeof(EfsSandboxFileHeader)) != sizeof(EfsSandboxFileHeader)) {
         C_LOG_WARNING("write efs header error: %s", strerror(errno));
         hasErr = true;
         goto done;
     }
+    vol->dev->d_ops->sync(vol->dev);
 
 done:
     if (header) {
         ntfs_free(header);
     }
     return !hasErr;
+}
+
+static bool found_efs_header(ntfs_volume* vol, EfsSandboxFileHeader* header)
+{
+    g_return_val_if_fail(vol != NULL && vol->dev != NULL && NULL != header, false);
+
+    s64 dSize = ntfs_device_size_get_all_size(vol->dev);
+    s64 startP = dSize - (s64) sizeof(EfsSandboxFileHeader);
+
+    bool isOK = false;
+    do {
+        vol->dev->d_ops->seek(vol->dev, startP, SEEK_SET);
+        s64 rS = vol->dev->d_ops->read(vol->dev, header, sizeof(EfsSandboxFileHeader));
+        if (rS != sizeof(EfsSandboxFileHeader)) {
+            C_LOG_WARNING("read error");
+            break;
+        }
+
+        if (0 == strncmp(header->ps, SANDBOX_EFS_HEADER_START_STR, sizeof(SANDBOX_EFS_HEADER_START_STR) - 1)) {
+            for (int j = 0; j < (int) sizeof(header->pe); j++) {
+                if (0 == strncmp(header->pe + j * (sizeof(SANDBOX_EFS_HEADER_END) - 1), SANDBOX_EFS_HEADER_END, sizeof(SANDBOX_EFS_HEADER_END) - 1)) {
+                    isOK = true;
+                    break;
+                }
+            }
+        }
+        --startP;
+    } while (startP >= gVolumeSize);
+
+    return isOK;
+}
+
+bool check_efs_header(ntfs_volume * vol)
+{
+    g_return_val_if_fail(vol != NULL && vol->dev != NULL, false);
+
+    EfsSandboxFileHeader header;
+
+    if (!found_efs_header(vol, &header)) {
+        C_LOG_WARNING("Cannot find efs header");
+        return false;
+    }
+
+    // fixme:// 比较
+
+    return true;
 }
 
 /**
@@ -5277,12 +5345,14 @@ static int create_backup_boot_sector(u8 *buff)
      * is how big $Boot is (and how big our buffer is)..
      */
     size = 512;
-    if (size < opts.sectorSize)
+    if (size < opts.sectorSize) {
         size = opts.sectorSize;
-    if (gsVol->dev->d_ops->seek(gsVol->dev, (opts.numSectors + 1) * opts.sectorSize - size, SEEK_SET) == (off_t)-1) {
+    }
+    if (gsVol->dev->d_ops->seek(gsVol->dev, (opts.numSectors + 1) * opts.sectorSize - size, SEEK_SET) == (off_t) -1) {
         C_LOG_WARNING("Seek failed");
         goto bb_err;
     }
+
     if (size > 8192) {
         size = 8192;
     }
@@ -5880,13 +5950,6 @@ static BOOL verify_boot_sector(struct ntfs_device *dev, ntfs_volume *rawvol)
         C_LOG_WARNING("Boot sector: Bytes per sector is not a multiple of 512.");
     }
     gsSectorsPerCluster = ntfs_boot->bpb.sectors_per_cluster;
-
-    // // 检测 Andsec 头部
-    // EfsFileHeader* efsHeader = (EfsFileHeader*)((char*)buf + SANDBOX_EFS_HEADER_OFFSET);
-    // if (!fs_sandbox_header_check(efsHeader)) {
-    //     C_LOG_WARNING("Andsec EfsHeader Check error!");
-    //     return FALSE;
-    // }
 
     // todo: if partition, query bios and match heads/tracks? */
 

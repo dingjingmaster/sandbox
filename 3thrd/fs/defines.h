@@ -12,6 +12,9 @@
 
 // Boot
 #define SANDBOX_EFS_HEADER_SIZE                     10240               // 尾部 10KB
+#define SANDBOX_EFS_HEADER_START                    "Andsec Start...\0"
+#define SANDBOX_EFS_HEADER_END                      "Andsec End!!!!!\0"
+#define SANDBOX_EFS_HEADER_START_STR                "Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start....\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0Andsec Start...\0"
 
 #define SANDBOX_MSG_OFFSET                          3
 #define SANDBOX_ORDER_OFFSET                        14

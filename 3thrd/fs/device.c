@@ -542,12 +542,11 @@ static int ntfs_device_offset_valid(struct ntfs_device *dev, s64 ofs)
  */
 s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
 {
-    s64 high, low;
-
     if (!dev || block_size <= 0 || (block_size - 1) & block_size) {
         errno = EINVAL;
         return -1;
     }
+#if 0
 #ifdef BLKGETSIZE64
     {
         u64 size;
@@ -607,10 +606,28 @@ s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
     }
 #endif
 #endif
+#endif
     /*
      * We couldn't figure it out by using a specialized ioctl,
      * so do binary search to find the size of the device.
      */
+
+    s64 size = ntfs_device_size_get_all_size(dev);
+
+    s64 remain = (sizeof(EfsSandboxFileHeader) + 512 + 1024) / block_size * block_size;
+
+    return (size - remain) / block_size;
+}
+
+s64 ntfs_device_size_get_all_size(struct ntfs_device * dev)
+{
+    s64 high, low;
+
+    if (!dev) {
+        errno = EINVAL;
+        return -1;
+    }
+
     low = 0LL;
     for (high = 1024LL; !ntfs_device_offset_valid(dev, high); high <<= 1) {
         low = high;
@@ -624,8 +641,8 @@ s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
             high = mid;
         }
     }
-    C_LOG_WARNING("4 size: %lu, block size: %lu", low, block_size);
-    return (low - (sizeof(EfsSandboxFileHeader) / block_size + 1) * block_size + 1LL) / block_size;
+
+    return low + 1;
 }
 
 /**

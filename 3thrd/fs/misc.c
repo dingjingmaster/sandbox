@@ -34,6 +34,7 @@
 #include "types.h"
 #include "misc.h"
 #include "logging.h"
+#include "c/log.h"
 
 /**
  * ntfs_calloc
@@ -55,8 +56,9 @@ void *ntfs_malloc(size_t size)
     void *p;
 
     p = malloc(size);
-    if (!p)
-        ntfs_log_perror("Failed to malloc %lld bytes", (long long)size);
+    if (!p) {
+        C_LOG_WARNING("Failed to malloc %lld bytes", (long long)size);
+    }
     return p;
 }
 
