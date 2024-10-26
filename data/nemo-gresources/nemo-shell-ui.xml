@@ -1,5 +1,5 @@
 <ui>
-<accelerator action="Search"/>
+<!--<accelerator action="Search"/>-->
 <accelerator action="SplitViewNextPane"/>
 <accelerator action="TabsPrevious"/>
 <accelerator action="TabsNext"/>
@@ -18,7 +18,7 @@
 		<placeholder name="Open Placeholder"/>
 		<separator/>
 		<placeholder name="Location Placeholder"/>
-		<menuitem name="Connect to Server" action="Connect to Server"/>
+<!--		<menuitem name="Connect to Server" action="Connect to Server"/>-->
 		<separator/>
 		<placeholder name="File Items Placeholder"/>
 		<separator/>
@@ -34,8 +34,7 @@
 	<menu action="Edit">
 		<placeholder name="Undostack Actions"/>
 		<separator/>
-		<placeholder name="Clipboard Actions">
-                </placeholder>
+		<placeholder name="Clipboard Actions"></placeholder>
 		<separator/>
 		<placeholder name="Copy Move to Placeholder"/>
 		<separator/>
@@ -49,8 +48,8 @@
 		<placeholder name="Global Edit Items Placeholder"/>
 		<separator/>
 		<placeholder name="Extension Actions"/>
-		<separator/>
-		<menuitem name="Preferences" action="Preferences"/>
+<!--		<separator/>-->
+<!--		<menuitem name="Preferences" action="Preferences"/>-->
 	</menu>
 	<menu action="View">
 		<menuitem name="Stop" action="Stop"/>
@@ -93,20 +92,20 @@
 		</placeholder>
 	</menu>
 	<placeholder name="Other Menus">
-	        <menu action="Go">
-                        <placeholder name="Navigation Items">
-			<menuitem name="Up" action="Up"/>
-			<menuitem name="Back" action="Back"/>
-			<menuitem name="Forward"  action="Forward"/>
-			<menuitem name="SplitViewSameLocationMenu" action="SplitViewSameLocation"/>
-	                </placeholder>
-	                <separator/>
+		<menu action="Go">
+			<placeholder name="Navigation Items">
+				<menuitem name="Up" action="Up"/>
+				<menuitem name="Back" action="Back"/>
+				<menuitem name="Forward"  action="Forward"/>
+				<menuitem name="SplitViewSameLocationMenu" action="SplitViewSameLocation"/>
+			</placeholder>
+			<separator/>
 			<menuitem name="Home" action="Home"/>
 			<menuitem name="Computer" action="Go to Computer"/>
 			<menuitem name="Go to Templates" action="Go to Templates"/>
 			<menuitem name="Go to Trash" action="Go to Trash"/>
-		        <menuitem name="Go to Network" action="Go to Network"/>
-			<menuitem name="Search" action="Search"/>
+<!--			<menuitem name="Go to Network" action="Go to Network"/>-->
+<!--			<menuitem name="Search" action="Search"/>-->
 		</menu>
 		<menu action="Bookmarks">
 			<menuitem name="Add Bookmark" action="Add Bookmark"/>
@@ -114,18 +113,17 @@
 			<separator/>
 			<placeholder name="Bookmarks Placeholder"/>
 		</menu>
-
 	</placeholder>
-	<menu action="Help">
-		<menuitem action="NemoHelp"/>
-        <menuitem action="NemoShortcuts"/>
-<!--		<menuitem action="NemoHelpSearch"/>
-		<menuitem action="NemoHelpSort"/>
-		<menuitem action="NemoHelpLost"/>
-		<menuitem action="NemoHelpShare"/>    -->
-		<separator/>
-		<menuitem name="About Nemo" action="About Nemo"/>
-	</menu>
+<!--	<menu action="Help">-->
+<!--		<menuitem action="NemoHelp"/>-->
+<!--        <menuitem action="NemoShortcuts"/>-->
+<!--&lt;!&ndash;		<menuitem action="NemoHelpSearch"/>-->
+<!--		<menuitem action="NemoHelpSort"/>-->
+<!--		<menuitem action="NemoHelpLost"/>-->
+<!--		<menuitem action="NemoHelpShare"/>    &ndash;&gt;-->
+<!--		<separator/>-->
+<!--		<menuitem name="About Nemo" action="About Nemo"/>-->
+<!--	</menu>-->
 </menubar>
 <popup name="background">
 	<placeholder name="Before Zoom Items">

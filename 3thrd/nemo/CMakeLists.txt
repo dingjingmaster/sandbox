@@ -202,7 +202,6 @@ target_include_directories(sandbox-nemo PUBLIC
 target_compile_definitions(sandbox-nemo PUBLIC
         -DDEBUG
         -D__CLIB_H_INSIDE__
-        -DC_LOG_TAG=\"sandbox-nemo\"
         -DINSTALL_DIR=\"/usr/local/andsec/\"
         -DLIBEXECDIR=\"/usr/local/libexec\"
         -DNEMO_DATADIR=\"/usr/local/share/nemo\"

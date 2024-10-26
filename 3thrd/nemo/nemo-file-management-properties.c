@@ -385,6 +385,8 @@ update_caption_combo_box (GtkBuilder *builder,
 	column_names = g_object_get_data (G_OBJECT (combo_box), 
 					  "column_names");
 
+	g_return_if_fail(column_names);
+
 	for (i = 0; i < column_names->len; ++i) {
 		if (!strcmp (name, g_ptr_array_index (column_names, i))) {
 			gtk_combo_box_set_active (GTK_COMBO_BOX (combo_box), i);
