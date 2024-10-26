@@ -304,7 +304,7 @@ merge_in_clipboard_menu_items (GObject *widget_as_object,
 
 	set_paste_sensitive_if_clipboard_contains_data (target_data->action_group);
 	
-	g_signal_connect (gtk_clipboard_get (GDK_SELECTION_CLIPBOARD), "owner_change",
+	g_signal_connect (gtk_clipboard_get (gdk_atom_intern_static_string(SANDBOX_CLIPBOARD)), "owner_change",
 			  G_CALLBACK (owner_change_callback), target_data);
 	
 	if (add_selection_callback) {
@@ -585,7 +585,7 @@ nemo_clipboard_get_uri_list_from_selection_data (GtkSelectionData *selection_dat
 GtkClipboard *
 nemo_clipboard_get (GtkWidget *widget)
 {
-	return gtk_clipboard_get_for_display (gtk_widget_get_display (GTK_WIDGET (widget)), GDK_SELECTION_CLIPBOARD);
+	return gtk_clipboard_get_for_display (gtk_widget_get_display (GTK_WIDGET (widget)), gdk_atom_intern_static_string(SANDBOX_CLIPBOARD));
 }
 
 void
