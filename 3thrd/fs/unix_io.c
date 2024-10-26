@@ -260,16 +260,22 @@ static s64 ntfs_device_unix_io_seek(struct ntfs_device *dev, s64 offset, int whe
  */
 static s64 ntfs_device_unix_io_read(struct ntfs_device *dev, void *buf, s64 count)
 {
-    uint8_t bufT[512] = {0};
-    s64 offset = ntfs_device_unix_io_seek(dev, 0, SEEK_CUR);
-
-    s64 ret = read(DEV_FD(dev), buf, count);
-
-    if (offset == 0 && count == 512) {
-        return ret;
+    if (count == 1) {
+        return read(DEV_FD(dev), buf, count);
     }
 
-    lock_file_buffer(buf, offset + 1, ret, "12345678", 8, bufT, sizeof(bufT), false);
+    s64 ret = 0;
+    uint8_t bufT[512] = {0};
+
+    s64 offset = 0;
+    uint8_t* key = "12345678";
+
+    ret = read(DEV_FD(dev), buf, count);
+    if (count % 512) {
+        offset = 1 + ntfs_device_unix_io_seek(dev, 0, SEEK_CUR);
+    }
+
+    lock_file_buffer(buf, offset, ret, key, strlen((char*)key), bufT, sizeof(bufT), false);
 
     return ret;
 }
@@ -290,20 +296,33 @@ static s64 ntfs_device_unix_io_write(struct ntfs_device *dev, const void *buf, s
         errno = EROFS;
         return -1;
     }
+
     NDevSetDirty(dev);
 
-    s64 offset = ntfs_device_unix_io_seek(dev, 0, SEEK_CUR);
+    s64 ret = 0;
+    s64 offset = 0;
+
+    if (count == 1) {
+        ret = write(DEV_FD(dev), buf, count);
+        return ret;
+    }
+
+    uint8_t bufT[512] = {0};
+    uint8_t* key = "12345678";
 
     uint8_t* bufTT = (uint8_t*) malloc(count);
     if (!bufTT) {
         return -1;
     }
-
-    uint8_t bufT[512] = {0};
     memcpy(bufTT, buf, count);
-    lock_file_buffer(bufTT, offset + 1, count, "12345678", 8, bufT, sizeof(bufT), true);
 
-    s64 ret = write(DEV_FD(dev), bufTT, count);
+    if (count % 512) {
+        offset = 1 + ntfs_device_unix_io_seek(dev, 0, SEEK_CUR);
+    }
+
+    lock_file_buffer(bufTT, offset, count, key, strlen((char*)key), bufT, sizeof(bufT), true);
+
+    ret = write(DEV_FD(dev), bufTT, count);
 
     free(bufTT);
 
@@ -323,15 +342,22 @@ static s64 ntfs_device_unix_io_write(struct ntfs_device *dev, const void *buf, s
  */
 static s64 ntfs_device_unix_io_pread(struct ntfs_device *dev, void *buf, s64 count, s64 offset)
 {
-    s64 ret = pread(DEV_FD(dev), buf, count, offset);
-
-    if (offset == 0 && count == 512) {
-        return ret;
+    if (count == 1) {
+        return pread(DEV_FD(dev), buf, count, offset);
     }
 
+    s64 ret = 0;
+    s64 offsetT = 0;
     uint8_t bufT[512] = {0};
+    uint8_t* key = "12345678";
 
-    lock_file_buffer(buf, offset, ret, "12345678", 8, bufT, sizeof(bufT), false);
+    ret = pread(DEV_FD(dev), buf, count, offset);
+
+    if (count % 512) {
+        offsetT = offset;
+    }
+
+    lock_file_buffer(buf, offsetT, ret, key, strlen((char*)key), bufT, sizeof(bufT), false);
 
     return ret;
 }
@@ -354,18 +380,30 @@ static s64 ntfs_device_unix_io_pwrite(struct ntfs_device *dev, const void *buf, 
         return -1;
     }
 
+    NDevSetDirty(dev);
+
+    if (1 == count) {
+        return pwrite(DEV_FD(dev), buf, count, offset);
+    }
+
+    s64 ret = 0;
+    s64 offsetT = 0;
+    uint8_t bufT[512] = {0};
+    uint8_t* key = "12345678";
+
     uint8_t* bufTT = (uint8_t*) malloc(count);
     if (!bufTT) {
         return -1;
     }
-
     memcpy(bufTT, buf, count);
 
-    uint8_t bufT[512] = {0};
-    lock_file_buffer(bufTT, offset, count, "12345678", 8, bufT, sizeof(bufT), true);
+    if (count % 512) {
+        offsetT = offset;
+    }
 
-    NDevSetDirty(dev);
-    s64 ret = pwrite(DEV_FD(dev), buf, count, offset);
+    lock_file_buffer(bufTT, offsetT, count, key, strlen((char*)key), bufT, sizeof(bufT), true);
+
+    ret = pwrite(DEV_FD(dev), bufTT, count, offset);
 
     free(bufTT);
 
