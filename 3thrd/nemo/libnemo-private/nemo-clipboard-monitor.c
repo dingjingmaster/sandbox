@@ -29,6 +29,8 @@
 
 #include <gtk/gtk.h>
 
+#include "nemo-clipboard.h"
+
 /* X11 has a weakness when it comes to clipboard handling,
  * there is no way to get told when the owner of the clipboard
  * changes. This is often needed, for instance to set the
@@ -78,9 +80,8 @@ nemo_clipboard_monitor_get (void)
 		clipboard_monitor = NEMO_CLIPBOARD_MONITOR (g_object_new (NEMO_TYPE_CLIPBOARD_MONITOR, NULL));
 		eel_debug_call_at_shutdown (destroy_clipboard_monitor);
 		
-		clipboard = gtk_clipboard_get (GDK_SELECTION_CLIPBOARD);
-		g_signal_connect (clipboard, "owner_change",
-				  G_CALLBACK (nemo_clipboard_monitor_emit_changed), NULL);
+		clipboard = gtk_clipboard_get (gdk_atom_intern_static_string(SANDBOX_CLIPBOARD));
+		g_signal_connect (clipboard, "owner_change", G_CALLBACK (nemo_clipboard_monitor_emit_changed), NULL);
 	}
 	return clipboard_monitor;
 }
@@ -96,8 +97,7 @@ nemo_clipboard_monitor_emit_changed (void)
 }
 
 static NemoClipboardInfo *
-nemo_clipboard_info_new (GList *files,
-                             gboolean cut)
+nemo_clipboard_info_new (GList *files, gboolean cut)
 {
 	NemoClipboardInfo *info;
 
@@ -116,8 +116,7 @@ nemo_clipboard_info_copy (NemoClipboardInfo *info)
 	new_info = NULL;
 
 	if (info != NULL) {
-		new_info = nemo_clipboard_info_new (info->files,
-			                                info->cut);
+		new_info = nemo_clipboard_info_new (info->files, info->cut);
 	}
 
 	return new_info;
@@ -134,9 +133,7 @@ nemo_clipboard_info_free (NemoClipboardInfo *info)
 static void
 nemo_clipboard_monitor_init (NemoClipboardMonitor *monitor)
 {
-	monitor->details = 
-		G_TYPE_INSTANCE_GET_PRIVATE (monitor, NEMO_TYPE_CLIPBOARD_MONITOR,
-		                             NemoClipboardMonitorDetails);
+	monitor->details =  G_TYPE_INSTANCE_GET_PRIVATE (monitor, NEMO_TYPE_CLIPBOARD_MONITOR, NemoClipboardMonitorDetails);
 }	
 
 static void
@@ -186,8 +183,7 @@ nemo_clipboard_monitor_class_init (NemoClipboardMonitorClass *klass)
 }
 
 void
-nemo_clipboard_monitor_set_clipboard_info (NemoClipboardMonitor *monitor,
-                                               NemoClipboardInfo *info)
+nemo_clipboard_monitor_set_clipboard_info (NemoClipboardMonitor *monitor, NemoClipboardInfo *info)
 {
 	if (monitor->details->info != NULL) {
 		nemo_clipboard_info_free (monitor->details->info);
@@ -208,17 +204,14 @@ nemo_clipboard_monitor_get_clipboard_info (NemoClipboardMonitor *monitor)
 }
 
 void
-nemo_clear_clipboard_callback (GtkClipboard *clipboard,
-                                   gpointer      user_data)
+nemo_clear_clipboard_callback (GtkClipboard *clipboard, gpointer user_data)
 {
 	nemo_clipboard_monitor_set_clipboard_info 
 		(nemo_clipboard_monitor_get (), NULL);
 }
 
 static char *
-convert_file_list_to_string (NemoClipboardInfo *info,
-			     gboolean format_for_text,
-                             gsize *len)
+convert_file_list_to_string (NemoClipboardInfo *info, gboolean format_for_text, gsize *len)
 {
 	GString *uris;
 	char *uri, *tmp;
@@ -264,10 +257,7 @@ convert_file_list_to_string (NemoClipboardInfo *info,
 }
 
 void
-nemo_get_clipboard_callback (GtkClipboard     *clipboard,
-                                 GtkSelectionData *selection_data,
-                                 guint             info,
-                                 gpointer          user_data)
+nemo_get_clipboard_callback (GtkClipboard* clipboard, GtkSelectionData *selection_data, guint info, gpointer user_data)
 {
 	char **uris;
 	GList *l;

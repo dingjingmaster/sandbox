@@ -30,13 +30,13 @@
 #include <gtk/gtk.h>
 
 /* Drag & Drop target names. */
-#define NEMO_ICON_DND_GNOME_ICON_LIST_TYPE	"x-special/gnome-icon-list"
-#define NEMO_ICON_DND_URI_LIST_TYPE		"text/uri-list"
-#define NEMO_ICON_DND_NETSCAPE_URL_TYPE	"_NETSCAPE_URL"
-#define NEMO_ICON_DND_BGIMAGE_TYPE		"property/bgimage"
-#define NEMO_ICON_DND_ROOTWINDOW_DROP_TYPE	"application/x-rootwindow-drop"
-#define NEMO_ICON_DND_XDNDDIRECTSAVE_TYPE	"XdndDirectSave0" /* XDS Protocol Type */
-#define NEMO_ICON_DND_RAW_TYPE	"application/octet-stream"
+#define NEMO_ICON_DND_GNOME_ICON_LIST_TYPE		"x-special/sandbox-icon-list"
+#define NEMO_ICON_DND_URI_LIST_TYPE				"sandbox/uri-list"
+#define NEMO_ICON_DND_NETSCAPE_URL_TYPE			"_NETSCAPE_URL"
+#define NEMO_ICON_DND_BGIMAGE_TYPE				"property/sandbox-bgimage"
+#define NEMO_ICON_DND_ROOTWINDOW_DROP_TYPE		"application/sandbox-rootwindow-drop"
+#define NEMO_ICON_DND_XDNDDIRECTSAVE_TYPE		"SandboxXdndDirectSave0" /* XDS Protocol Type */
+#define NEMO_ICON_DND_RAW_TYPE					"application/sandbox-octet-stream"
 
 /* Item of the drag selection list */
 typedef struct {

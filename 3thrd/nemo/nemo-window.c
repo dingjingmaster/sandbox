@@ -154,10 +154,9 @@ static const struct {
 };
 
 void
-nemo_window_push_status (NemoWindow *window,
-			     const char *text)
+nemo_window_push_status (NemoWindow *window, const char *text)
 {
-	g_return_if_fail (NEMO_IS_WINDOW (window));
+	g_return_if_fail (NEMO_IS_WINDOW (window) && window->details && window->details->statusbar);
 
 	/* clear any previous message, underflow is allowed */
 	gtk_statusbar_pop (GTK_STATUSBAR (window->details->statusbar), 0);

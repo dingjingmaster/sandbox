@@ -36,13 +36,11 @@ nemo_ui_unmerge_ui (GtkUIManager *ui_manager,
 			GtkActionGroup **action_group)
 {
 	if (*merge_id != 0) {
-		gtk_ui_manager_remove_ui (ui_manager,
-					  *merge_id);
+		gtk_ui_manager_remove_ui (ui_manager, *merge_id);
 		*merge_id = 0;
 	}
 	if (*action_group != NULL) {
-		gtk_ui_manager_remove_action_group (ui_manager,
-						    *action_group);
+		gtk_ui_manager_remove_action_group (ui_manager, *action_group);
 		*action_group = NULL;
 	}
 }

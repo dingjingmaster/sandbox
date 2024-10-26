@@ -103,7 +103,7 @@ main (int argc, char *argv[])
         g_application_hold (G_APPLICATION (application));
     }
 
-	g_log_set_writer_func(c_glog_handler, NULL, NULL);
+	// g_log_set_writer_func(c_glog_handler, NULL, NULL);
 
 	retval = g_application_run (G_APPLICATION (application), argc, argv);
 

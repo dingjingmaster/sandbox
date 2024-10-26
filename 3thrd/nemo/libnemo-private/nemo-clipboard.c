@@ -35,17 +35,14 @@
 #include <gtk/gtk.h>
 #include <string.h>
 
+
 typedef struct _TargetCallbackData TargetCallbackData;
 
 typedef void (* SelectAllCallback)    (gpointer target);
-typedef void (* ConnectCallbacksFunc) (GObject            *object,
-				       TargetCallbackData *target_data);
+typedef void (* ConnectCallbacksFunc) (GObject* object, TargetCallbackData *target_data);
 
-static void selection_changed_callback            (GtkWidget *widget,
-						   gpointer callback_data);
-static void owner_change_callback (GtkClipboard        *clipboard,
-				   GdkEventOwnerChange *event,
-				   gpointer callback_data);
+static void selection_changed_callback				(GtkWidget *widget, gpointer callback_data);
+static void owner_change_callback					(GtkClipboard* clipboard, GdkEventOwnerChange *event, gpointer callback_data);
 struct _TargetCallbackData {
 	GtkUIManager *ui_manager;
 	GtkActionGroup *action_group;
@@ -109,22 +106,19 @@ action_cut_callback (GtkAction *action,
 }
 
 static void
-action_copy_callback (GtkAction *action,
-		      gpointer callback_data)
+action_copy_callback (GtkAction *action, gpointer callback_data)
 {
 	copy_callback (callback_data);
 }
 
 static void
-action_paste_callback (GtkAction *action,
-		       gpointer callback_data)
+action_paste_callback (GtkAction *action, gpointer callback_data)
 {
 	paste_callback (callback_data);
 }
 
 static void
-action_select_all_callback (GtkAction *action,
-			    gpointer callback_data)
+action_select_all_callback (GtkAction *action, gpointer callback_data)
 {
 	TargetCallbackData *target_data;
 
@@ -137,20 +131,16 @@ action_select_all_callback (GtkAction *action,
 }
 
 static void
-received_clipboard_contents (GtkClipboard     *clipboard,
-			     GtkSelectionData *selection_data,
-			     gpointer          data)
+received_clipboard_contents (GtkClipboard* clipboard, GtkSelectionData *selection_data, gpointer data)
 {
 	GtkActionGroup *action_group;
 	GtkAction *action;
 
 	action_group = data;
 
-	action = gtk_action_group_get_action (action_group,
-					      "Paste");
+	action = gtk_action_group_get_action (action_group, "Paste");
 	if (action != NULL) {
-		gtk_action_set_sensitive (action,
-					  gtk_selection_data_targets_include_text (selection_data));
+		gtk_action_set_sensitive (action, gtk_selection_data_targets_include_text (selection_data));
 	}
 
 	g_object_unref (action_group);
@@ -161,15 +151,15 @@ static void
 set_paste_sensitive_if_clipboard_contains_data (GtkActionGroup *action_group)
 {
 	GtkAction *action;
+	GdkAtom atom = gdk_atom_intern_static_string(SANDBOX_CLIPBOARD);
 	if (gdk_display_supports_selection_notification (gdk_display_get_default ())) {
-		gtk_clipboard_request_contents (gtk_clipboard_get (GDK_SELECTION_CLIPBOARD),
+		gtk_clipboard_request_contents (gtk_clipboard_get (atom),
 						gdk_atom_intern ("TARGETS", FALSE),
 						received_clipboard_contents,
 						g_object_ref (action_group));
 	} else {
 		/* If selection notification isn't supported, always activate Paste */
-		action = gtk_action_group_get_action (action_group,
-						      "Paste");
+		action = gtk_action_group_get_action (action_group, "Paste");
 		gtk_action_set_sensitive (action, TRUE);
 	}
 }
@@ -208,8 +198,7 @@ clipboard_items_are_merged_in (GtkWidget *widget)
 }
 
 static void
-set_clipboard_items_are_merged_in (GObject *widget_as_object,
-				   gboolean merged_in)
+set_clipboard_items_are_merged_in (GObject *widget_as_object, gboolean merged_in)
 {
 	g_object_set_data (widget_as_object,
 			   "Nemo:clipboard_menu_items_merged",
@@ -217,8 +206,7 @@ set_clipboard_items_are_merged_in (GObject *widget_as_object,
 }
 
 static void
-editable_connect_callbacks (GObject *object,
-			    TargetCallbackData *target_data)
+editable_connect_callbacks (GObject *object, TargetCallbackData *target_data)
 {
 	g_signal_connect_after (object, "selection_changed",
 				G_CALLBACK (selection_changed_callback), target_data);
@@ -227,8 +215,7 @@ editable_connect_callbacks (GObject *object,
 }
 
 static void
-editable_disconnect_callbacks (GObject *object,
-			       TargetCallbackData *target_data)
+editable_disconnect_callbacks (GObject *object, TargetCallbackData *target_data)
 {
 	g_signal_handlers_disconnect_matched (object,
 					      G_SIGNAL_MATCH_FUNC | G_SIGNAL_MATCH_DATA,
@@ -238,8 +225,7 @@ editable_disconnect_callbacks (GObject *object,
 }
 
 static void
-text_buffer_update_sensitivity (GtkTextBuffer *buffer,
-				TargetCallbackData *target_data)
+text_buffer_update_sensitivity (GtkTextBuffer *buffer, TargetCallbackData *target_data)
 {
 	g_assert (GTK_IS_TEXT_BUFFER (buffer));
 	g_assert (target_data != NULL);
@@ -339,10 +325,10 @@ merge_out_clipboard_menu_items (GObject *widget_as_object,
 
 	g_assert (target_data != NULL);
 
-	gtk_ui_manager_remove_action_group (target_data->ui_manager,
-					    target_data->action_group);
+	gtk_ui_manager_remove_action_group (target_data->ui_manager, target_data->action_group);
 
-	g_signal_handlers_disconnect_matched (gtk_clipboard_get (GDK_SELECTION_CLIPBOARD),
+	GdkAtom atom = gdk_atom_intern_static_string(SANDBOX_CLIPBOARD);
+	g_signal_handlers_disconnect_matched (gtk_clipboard_get (atom),
 					      G_SIGNAL_MATCH_FUNC | G_SIGNAL_MATCH_DATA,
 					      0, 0, NULL,
 					      G_CALLBACK (owner_change_callback),
@@ -357,9 +343,7 @@ merge_out_clipboard_menu_items (GObject *widget_as_object,
 }
 
 static gboolean
-focus_changed_callback (GtkWidget *widget,
-			GdkEventAny *event,
-			gpointer callback_data)
+focus_changed_callback (GtkWidget *widget, GdkEventAny *event, gpointer callback_data)
 {
 	/* Connect the component to the container if the widget has focus. */
 	if (gtk_widget_has_focus (widget)) {
@@ -376,8 +360,7 @@ focus_changed_callback (GtkWidget *widget,
 }
 
 static void
-selection_changed_callback (GtkWidget *widget,
-			    gpointer callback_data)
+selection_changed_callback (GtkWidget *widget, gpointer callback_data)
 {
 	TargetCallbackData *target_data;
 	GtkEditable *editable;
@@ -397,9 +380,7 @@ selection_changed_callback (GtkWidget *widget,
 }
 
 static void
-owner_change_callback (GtkClipboard        *clipboard,
-		       GdkEventOwnerChange *event,
-		       gpointer callback_data)
+owner_change_callback (GtkClipboard* clipboard, GdkEventOwnerChange *event, gpointer callback_data)
 {
 	TargetCallbackData *target_data;
 
@@ -604,32 +585,26 @@ nemo_clipboard_get_uri_list_from_selection_data (GtkSelectionData *selection_dat
 GtkClipboard *
 nemo_clipboard_get (GtkWidget *widget)
 {
-	return gtk_clipboard_get_for_display (gtk_widget_get_display (GTK_WIDGET (widget)),
-					      GDK_SELECTION_CLIPBOARD);
+	return gtk_clipboard_get_for_display (gtk_widget_get_display (GTK_WIDGET (widget)), GDK_SELECTION_CLIPBOARD);
 }
 
 void
-nemo_clipboard_clear_if_colliding_uris (GtkWidget *widget,
-					    const GList *item_uris,
-					    GdkAtom copied_files_atom)
+nemo_clipboard_clear_if_colliding_uris (GtkWidget *widget, const GList *item_uris, GdkAtom copied_files_atom)
 {
 	GtkSelectionData *data;
 	GList *clipboard_item_uris, *l;
 	gboolean collision;
 
 	collision = FALSE;
-	data = gtk_clipboard_wait_for_contents (nemo_clipboard_get (widget),
-						copied_files_atom);
+	data = gtk_clipboard_wait_for_contents (nemo_clipboard_get (widget), copied_files_atom);
 	if (data == NULL) {
 		return;
 	}
 
-	clipboard_item_uris = nemo_clipboard_get_uri_list_from_selection_data (data, NULL,
-										   copied_files_atom);
+	clipboard_item_uris = nemo_clipboard_get_uri_list_from_selection_data (data, NULL, copied_files_atom);
 
 	for (l = (GList *) item_uris; l; l = l->next) {
-		if (g_list_find_custom ((GList *) item_uris, l->data,
-					(GCompareFunc) g_strcmp0)) {
+		if (g_list_find_custom ((GList *) item_uris, l->data, (GCompareFunc) g_strcmp0)) {
 			collision = TRUE;
 			break;
 		}

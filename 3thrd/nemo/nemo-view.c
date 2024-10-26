@@ -6347,6 +6347,8 @@ determine_visibility (gpointer data, gpointer callback_data)
     GList *selection;
     NemoView *view;
 
+    g_return_if_fail(NEMO_IS_ACTION(action));
+
     view = av_data->view;
     selection = av_data->selection;
 
@@ -6392,6 +6394,8 @@ add_action_to_action_menus (NemoView *directory_view,
                           const char *popup_bg_path)
 {
     GtkUIManager *ui_manager;
+
+    g_return_if_fail (NEMO_IS_ACTION(action));
 
     const gchar *action_name = gtk_action_get_name (GTK_ACTION (action));
 
@@ -7073,6 +7077,8 @@ paste_clipboard_received_callback (GtkClipboard     *clipboard,
 
     view_uri = nemo_view_get_backing_uri (view);
 
+    printf("%s: %s\n", __FUNCTION__, view_uri ? view_uri : "<nul>");
+
     if (view->details->window != NULL) {
         paste_clipboard_data (view, selection_data, view_uri);
     }
@@ -7103,6 +7109,7 @@ paste_into_clipboard_received_callback (GtkClipboard     *clipboard,
     if (view->details->window != NULL) {
         directory_uri = nemo_file_get_activation_uri (data->target);
 
+        printf("%s: %s\n", __FUNCTION__, directory_uri ? directory_uri : "<nul>");
         paste_clipboard_data (view, selection_data, directory_uri);
 
         g_free (directory_uri);
@@ -7172,21 +7179,21 @@ open_as_admin (NemoView *view, const gchar *path) {
 static void
 open_as_root (NemoView *view, const gchar *path)
 {
-    if (eel_check_is_wayland ()) {
-        open_as_admin (view, path);
-        return;
-    }
-
-    gchar *argv[4];
-    argv[0] = (gchar *)"pkexec";
-    argv[1] = (gchar *)"nemo";
-    argv[2] = g_strdup (path);
-    argv[3] = NULL;
-    GPid pid;
-    g_spawn_async(NULL, argv, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
-                  NULL, NULL, &pid, NULL);
-    g_child_watch_add(pid, (GChildWatchFunc)cb_open_as_root_watch, NULL);
-    g_free (argv[2]);
+    // if (eel_check_is_wayland ()) {
+    //     open_as_admin (view, path);
+    //     return;
+    // }
+    //
+    // gchar *argv[4];
+    // argv[0] = (gchar *)"pkexec";
+    // argv[1] = (gchar *)"nemo";
+    // argv[2] = g_strdup (path);
+    // argv[3] = NULL;
+    // GPid pid;
+    // g_spawn_async(NULL, argv, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
+    //               NULL, NULL, &pid, NULL);
+    // // g_child_watch_add(pid, (GChildWatchFunc)cb_open_as_root_watch, NULL);
+    // g_free (argv[2]);
 }
 
 static void
@@ -8982,6 +8989,8 @@ update_restore_from_trash_action (GtkAction *action,
                   GList *files,
                   gboolean is_self)
 {
+    g_return_if_fail(action);
+
     NemoFile *original_file;
     NemoFile *original_dir;
     GHashTable *original_dirs_hash;
@@ -9637,10 +9646,14 @@ update_configurable_context_menu_items (NemoView *view)
     GtkAction *action;
     gint i;
 
+    g_return_if_fail(view && view->details && view->details->window);
+
     ui_manager = nemo_window_get_ui_manager (view->details->window);
 
+    g_return_if_fail(ui_manager);
+
     for (i = 0; i < CONFIGURABLE_MENU_ITEM_COUNT; i++) {
-        if (!CONFIGURABLE_MENU_ITEM_INFO[i].action_name) {
+        if (!CONFIGURABLE_MENU_ITEM_INFO[i].action_name || !CONFIGURABLE_MENU_ITEM_INFO[i].ui_path) {
             continue;
         }
 
@@ -9687,7 +9700,7 @@ real_update_menus (NemoView *view)
     gboolean show_open_in_new_tab;
     gboolean can_open;
     gboolean show_app;
-    gboolean showing_search;
+    // gboolean showing_search;
     gboolean show_desktop_target;
     gboolean is_desktop_view;
     GtkAction *action;
@@ -9722,8 +9735,10 @@ real_update_menus (NemoView *view)
     is_desktop_view = get_is_desktop_view (view);
     trash_supported = eel_vfs_supports_uri_scheme ("trash");
 
-    action = gtk_action_group_get_action (view->details->dir_action_group,
-                                          NEMO_ACTION_RENAME);
+    action = gtk_action_group_get_action (view->details->dir_action_group, NEMO_ACTION_RENAME);
+
+    g_return_if_fail(action);
+
     /* rename sensitivity depending on selection */
     if (selection_count > 1) {
         GList *ptr;
@@ -9753,10 +9768,6 @@ real_update_menus (NemoView *view)
                                         selection_count == 0);
 
     action = gtk_action_group_get_action (view->details->dir_action_group,
-                                         NEMO_ACTION_OPEN_AS_ROOT);
-    gtk_action_set_visible (action, (!(nemo_user_is_root () || showing_admin_enabled_directory (view))) && no_selection_or_one_dir);
-
-    action = gtk_action_group_get_action (view->details->dir_action_group,
                                          NEMO_ACTION_OPEN_IN_TERMINAL);
     gtk_action_set_visible (action, no_selection_or_one_dir);
 
@@ -9771,6 +9782,9 @@ real_update_menus (NemoView *view)
         NemoFile *file;
 
         file = NEMO_FILE (selection->data);
+        if (!NEMO_IS_FILE(file)) {
+            continue;
+        }
 
         if (!nemo_mime_file_opens_in_external_app (file)) {
             show_app = FALSE;
@@ -9899,8 +9913,7 @@ real_update_menus (NemoView *view)
     gtk_action_set_sensitive (action, can_delete_files);
     gtk_action_set_visible (action, trash_supported && !(selection_contains_favorites || selection_contains_recent));
 
-    action = gtk_action_group_get_action (view->details->dir_action_group,
-                          NEMO_ACTION_DELETE);
+    action = gtk_action_group_get_action (view->details->dir_action_group, NEMO_ACTION_DELETE);
     gtk_action_set_visible (action, show_separate_delete_command && !selection_contains_favorites);
 
     if (selection_contains_recent) {
@@ -9966,7 +9979,7 @@ real_update_menus (NemoView *view)
     gtk_action_set_sensitive (action, !nemo_trash_monitor_is_empty ());
     gtk_action_set_visible (action, should_show_empty_trash (view));
 
-    showing_search = view->details->model && NEMO_IS_SEARCH_DIRECTORY (view->details->model);
+    // showing_search = view->details->model && NEMO_IS_SEARCH_DIRECTORY (view->details->model);
 
     action = gtk_action_group_get_action (view->details->dir_action_group,
                           NEMO_ACTION_SELECT_ALL);
@@ -10068,7 +10081,7 @@ real_update_menus (NemoView *view)
 
     gtk_action_set_visible (action,
                             selection_count == 1 &&
-                            (selection_contains_recent || selection_contains_favorites || showing_search));
+                            (selection_contains_recent || selection_contains_favorites || 0));
 
     first_selected_is_pinned = selection_count > 0 &&
                                nemo_file_get_pinning (NEMO_FILE (selection->data));

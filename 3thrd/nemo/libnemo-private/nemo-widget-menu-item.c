@@ -455,6 +455,7 @@ nemo_widget_menu_item_size_allocate (GtkWidget     *widget,
   GtkWidget *child;
   GtkWidget *parent;
 
+  g_return_if_fail(widget);
   g_return_if_fail (GTK_IS_MENU_ITEM (widget));
   g_return_if_fail (allocation != NULL);
 

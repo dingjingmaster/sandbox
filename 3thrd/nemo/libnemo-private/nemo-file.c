@@ -262,13 +262,10 @@ nemo_file_set_display_name (NemoFile *file,
             g_free(file->details->display_name);
             file->details->display_name = NULL;
         }
-        // g_clear_pointer (&file->details->display_name, g_ref_string_release);
 
         if (g_strcmp0 (file->details->name, display_name) == 0) {
-            // file->details->display_name = g_ref_string_acquire (file->details->name);
             file->details->display_name = g_strdup(file->details->name);
         } else {
-            // file->details->display_name = g_ref_string_new (display_name);
             file->details->display_name = g_strdup(display_name);
         }
 
@@ -297,9 +294,20 @@ nemo_file_set_display_name (NemoFile *file,
 static void
 nemo_file_clear_display_name (NemoFile *file)
 {
-    g_free(file->details->display_name);
-    g_free(file->details->display_name_collation_key);
-    g_free(file->details->edit_name);
+    if (file->details->display_name) {
+        g_free(file->details->display_name);
+        file->details->display_name = NULL;
+    }
+
+    if (file->details->display_name_collation_key) {
+        g_free(file->details->display_name_collation_key);
+        file->details->display_name_collation_key = NULL;
+    }
+
+    if (file->details->edit_name) {
+        g_free(file->details->edit_name);
+        file->details->edit_name = NULL;
+    }
 }
 
 static gboolean
@@ -819,39 +827,61 @@ finalize (GObject *object)
     }
 
     nemo_directory_unref (directory);
-    g_clear_pointer (&file->details->name, g_free);
-    g_clear_pointer (&file->details->display_name, g_free);
-    g_free (file->details->display_name_collation_key);
-    g_clear_pointer (&file->details->edit_name, g_free);
+    if (file->details->name) {g_free(file->details->name); file->details->name = NULL;}
+    if (file->details->display_name) {g_free(file->details->display_name); file->details->display_name = NULL;}
+    if (file->details->display_name_collation_key) {
+        g_free (file->details->display_name_collation_key);
+        file->details->display_name_collation_key = NULL;
+    }
+    if (file->details->edit_name) {
+        g_free (file->details->edit_name);
+        file->details->edit_name = NULL;
+    }
+
     if (file->details->icon) {
         g_object_unref (file->details->icon);
     }
-    g_free (file->details->thumbnail_path);
-    g_free (file->details->symlink_name);
-    g_clear_pointer (&file->details->mime_type, g_free);
-    g_clear_pointer (&file->details->owner, g_free);
-    g_clear_pointer (&file->details->owner_real, g_free);
-    g_clear_pointer (&file->details->group, g_free);
-    g_free (file->details->selinux_context);
-    g_free (file->details->description);
-    g_free (file->details->activation_uri);
-    g_clear_object (&file->details->custom_icon);
+    if (file->details->thumbnail_path) {
+        g_free (file->details->thumbnail_path);
+        file->details->thumbnail_path = NULL;
+    }
 
-    g_clear_object (&file->details->thumbnail);
+    if (file->details->symlink_name) {g_free(file->details->symlink_name); file->details->symlink_name = NULL;}
+    if (file->details->mime_type) {g_free(file->details->mime_type); file->details->mime_type = NULL;}
+    if (file->details->owner) {g_free(file->details->owner); file->details->owner = NULL;}
+    if (file->details->owner_real) {g_free(file->details->owner_real); file->details->owner_real = NULL;}
+    if (file->details->group) {g_free(file->details->group); file->details->group = NULL;}
+    if (file->details->selinux_context) {g_free(file->details->selinux_context); file->details->selinux_context = NULL;}
+    if (file->details->description) {g_free(file->details->description); file->details->description = NULL;}
+    if (file->details->activation_uri) {g_free(file->details->activation_uri); file->details->activation_uri = NULL;}
+    if (file->details->custom_icon) {g_object_unref (file->details->custom_icon); file->details->custom_icon = NULL;}
+    if (file->details->thumbnail) {g_object_unref (file->details->thumbnail); file->details->thumbnail = NULL;}
 
     if (file->details->mount) {
         g_signal_handlers_disconnect_by_func (file->details->mount, file_mount_unmounted, file);
         g_object_unref (file->details->mount);
     }
 
-	g_clear_pointer (&file->details->filesystem_id, g_free);
-	g_free (file->details->trash_orig_path);
+    if (file->details->filesystem_id) {g_free(file->details->filesystem_id); file->details->filesystem_id = NULL;}
+    if (file->details->trash_orig_path) {g_free(file->details->trash_orig_path); file->details->trash_orig_path = NULL;}
 
-    g_list_free_full (file->details->mime_list, g_free);
-    g_list_free_full (file->details->pending_extension_emblems, g_free);
-    g_list_free_full (file->details->extension_emblems, g_free);
-    g_list_free_full (file->details->pending_info_providers, g_object_unref);
+    if (file->details->mime_list) {
+        g_list_free_full (file->details->mime_list, g_free);
+        file->details->mime_list = NULL;
+    }
 
+    if (file->details->pending_extension_attributes) {
+        g_list_free_full (file->details->pending_extension_attributes, g_free);
+        file->details->pending_extension_attributes = NULL;
+    }
+    if (file->details->extension_emblems) {
+        g_list_free_full (file->details->extension_emblems, g_free);
+        file->details->extension_emblems = NULL;
+    }
+    if (file->details->pending_info_providers) {
+        g_list_free_full (file->details->pending_info_providers, g_object_unref);
+        file->details->pending_info_providers = NULL;
+    }
     if (file->details->pending_extension_attributes) {
         g_hash_table_destroy (file->details->pending_extension_attributes);
     }
