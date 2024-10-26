@@ -7193,10 +7193,33 @@ static void
 open_in_terminal (const gchar *path)
 {
     gchar *argv[2];
-    argv[0] = "sandbox-mate-termnal"; //g_settings_get_string (gnome_terminal_preferences,
-                  //   GNOME_DESKTOP_TERMINAL_EXEC);
     argv[1] = NULL;
-    g_spawn_async(path, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
+
+    if (g_file_test(INSTALL_DIR"/sandbox/bin/sandbox-mate-terminal", G_FILE_TEST_IS_EXECUTABLE)) {
+        argv[0] = INSTALL_DIR"/sandbox/bin/sandbox-mate-termnal";
+    }
+    else if (g_file_test("/bin/sandbox-mate-terminal", G_FILE_TEST_IS_EXECUTABLE)) {
+        argv[0] = "/bin/sandbox-mate-terminal";
+    }
+    else if (g_file_test("/usr/bin/sandbox-mate-terminal", G_FILE_TEST_IS_EXECUTABLE)) {
+        argv[0] = "/usr/bin/sandbox-mate-terminal";
+    }
+    else if (g_file_test("/usr/bin/mate-terminal", G_FILE_TEST_IS_EXECUTABLE)) {
+        argv[0] = "/usr/bin/mate-terminal";
+    }
+    else if (g_file_test("/bin/mate-terminal", G_FILE_TEST_IS_EXECUTABLE)) {
+        argv[0] = "/bin/mate-terminal";
+    }
+    else if (g_file_test("/usr/bin/terminator", G_FILE_TEST_IS_EXECUTABLE)) {
+        argv[0] = "/usr/bin/terminator";
+    }
+    else if (g_file_test("/bin/terminator", G_FILE_TEST_IS_EXECUTABLE)) {
+        argv[0] = "/bin/mate-terminator";
+    }
+
+    if (argv[0]) {
+        g_spawn_async(path, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
+    }
 }
 
 static void

@@ -222,9 +222,6 @@ static const ConfigurableMenuItemInfo CONFIGURABLE_MENU_ITEM_INFO [] = {
     { NEMO_ACTION_OPEN_IN_TERMINAL, "selection_menu__open_in_terminal_check",
      "/selection/OpenInTerminal", "selection-menu-open-in-terminal" },
 
-    { NEMO_ACTION_OPEN_AS_ROOT, "selection_menu__open_as_root_check",
-     "/selection/OpenAsRoot", "selection-menu-open-as-root" },
-
     { NEMO_ACTION_TRASH, "selection_menu__move_to_trash_check",
      "/selection/Dangerous File Actions/Trash", "selection-menu-move-to-trash" },
 
@@ -241,9 +238,6 @@ static const ConfigurableMenuItemInfo CONFIGURABLE_MENU_ITEM_INFO [] = {
 
     { NEMO_ACTION_OPEN_IN_TERMINAL, "background_menu__open_in_terminal_check",
      "/background/Before Zoom Items/OpenInTerminal", "background-menu-open-in-terminal" },
-
-    { NEMO_ACTION_OPEN_AS_ROOT, "background_menu__open_as_root_check",
-     "/background/Before Zoom Items/OpenAsRoot", "background-menu-open-as-root" },
 
     { NEMO_ACTION_SHOW_HIDDEN_FILES, "background_menu__show_hidden_files_check",
      "/background/Before Zoom Items/Show Hidden Files", "background-menu-show-hidden-files" },
