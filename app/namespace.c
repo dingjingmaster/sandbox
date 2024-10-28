@@ -40,11 +40,11 @@ bool namespace_enter()
 
     {
         signal(SIGKILL, signal_process);
-        signal(SIGINT, signal_process);
+        signal(SIGINT,  signal_process);
         signal(SIGTERM, signal_process);
         signal(SIGQUIT, signal_process);
         signal(SIGSEGV, signal_process);
-        signal(SIGILL, signal_process);
+        signal(SIGILL,  signal_process);
         signal(SIGABRT, signal_process);
         signal(SIGUSR1, signal_process);
     }
@@ -88,7 +88,7 @@ bool namespace_enter()
         C_LOG_VERB("[parent] process");
         if (-1 == waitpid(pid, &status, 0)) {
             C_LOG_ERROR("[parent] waitpid failed!");
-            return false;
+            exit(-1);
         }
 
         if (WIFEXITED(status)) {
@@ -100,7 +100,7 @@ bool namespace_enter()
             int termsig = WTERMSIG(status);
             if (termsig != SIGKILL && signal(termsig, SIG_DFL) == SIG_ERR) {
                 C_LOG_ERROR("[parent] signal handler reset failed.");
-                return false;
+                exit(-1);
             }
             if (0 != sigemptyset(&sigset)
                 || 0 != sigaddset(&sigset, termsig)
@@ -127,6 +127,7 @@ bool namespace_enter()
 static void namespace_set_propagation (unsigned long flags)
 {
     if (flags == 0) {
+        C_LOG_ERROR("[child] namespace_set_propagation flags is not set!");
         return;
     }
 

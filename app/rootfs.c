@@ -202,7 +202,7 @@ static bool mkbind(const char* src, const char* dest)
     errno = 0;
     int ret = mount(src, dest, NULL, flags, NULL);
     if (ret != 0) {
-        C_LOG_ERROR("error: %d -- %s", ret, c_strerror(errno));
+        C_LOG_ERROR("error: %d -- %s, src: '%s' dst: '%s'", ret, c_strerror(errno), src, dest);
         return false;
     }
 

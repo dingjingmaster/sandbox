@@ -7,7 +7,8 @@
 
 int main (void)
 {
-    const char* isoPath = "/tmp/test-demo.iso";
+    //const char* isoPath = "/tmp/test-demo.iso";
+    const char* isoPath = "/usr/local/andsec/sandbox/data/sandbox.box";
 
     SandboxFs* fs = sandbox_fs_init(isoPath, "/home/dingjing/a");
     g_return_val_if_fail(fs, -1);

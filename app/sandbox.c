@@ -16,8 +16,8 @@
 #include <sys/socket.h>
 #include <linux/sched.h>
 
-#include "namespace.h"
 #include "rootfs.h"
+#include "namespace.h"
 #include "sandbox-fs.h"
 #include "proto/ipc-message.h"
 
@@ -145,6 +145,7 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
     // 初始化
     sc->deviceInfo.sandboxFs = sandbox_fs_init(sc->deviceInfo.isoFullPath, sc->deviceInfo.mountPoint);
     if (!sc->deviceInfo.sandboxFs) {
+        C_LOG_WARNING("sandbox_fs_init error!");
         goto end;
     }
 
@@ -208,7 +209,6 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
 
             sc->mCleanThread = g_thread_new("cleanThread", sandbox_clean, sc);
 
-            // c_assert(!sc->socket.listener && !sc->socket.socket);
             c_chmod (sc->socket.sandboxSock, 0777);
             g_signal_connect (G_SOCKET_LISTENER(sc->socket.listener), "incoming", (GCallback) sandbox_new_req, sc);
         }
@@ -733,16 +733,28 @@ static void sandbox_process_req (gpointer data, gpointer udata)
     SandboxContext* sc = (SandboxContext*) udata;
     GSocket* socket = g_socket_connection_get_socket (conn);
 
-    C_LOG_VERB("Check sandbox iso is exists");
-    if (!c_file_test(sc->deviceInfo.isoFullPath, C_FILE_TEST_EXISTS)) {
-        if (!sandbox_fs_generated_box(sc->deviceInfo.sandboxFs, sc->deviceInfo.isoSize)) {
-            C_LOG_WARNING("sandbox fs generation failed");
-            return;
-        }
+    C_LOG_INFO("mkdir mount point");
+    if (!c_file_test(sc->deviceInfo.mountPoint, C_FILE_TEST_EXISTS)) {
+        c_mkdir_with_parents(sc->deviceInfo.mountPoint, 0755);
+    }
 
-        if (!sandbox_fs_format(sc->deviceInfo.sandboxFs)) {
-            C_LOG_WARNING("sandbox fs format failed");
-            return;
+    C_LOG_VERB("Check sandbox iso is exists");
+    if (!sandbox_fs_is_mounted(sc->deviceInfo.sandboxFs)) {
+        if (!c_file_test(sc->deviceInfo.isoFullPath, C_FILE_TEST_EXISTS)) {
+            if (!sandbox_fs_generated_box(sc->deviceInfo.sandboxFs, sc->deviceInfo.isoSize)) {
+                C_LOG_WARNING("sandbox fs generation failed");
+                return;
+            }
+
+            if (!sandbox_fs_format(sc->deviceInfo.sandboxFs)) {
+                C_LOG_WARNING("sandbox fs format failed");
+                return;
+            }
+
+            if (sandbox_fs_check(sc->deviceInfo.sandboxFs)) {
+                C_LOG_WARNING("sandbox fs check failed");
+                return;
+            }
         }
     }
 
@@ -754,7 +766,7 @@ static void sandbox_process_req (gpointer data, gpointer udata)
 
     C_LOG_VERB("Check sandbox is mounted?");
     if (!sandbox_fs_is_mounted(sc->deviceInfo.sandboxFs)) {
-        C_LOG_VERB("Sandbox is not mounted");
+        C_LOG_VERB("Sandbox is not mounted, start mount...");
         if (sandbox_fs_mount(sc->deviceInfo.sandboxFs)) {
             C_LOG_VERB("Sandbox mount OK!");
         }
@@ -763,6 +775,15 @@ static void sandbox_process_req (gpointer data, gpointer udata)
             goto out;
         }
     }
+    else {
+        C_LOG_INFO("Sandbox is mounted!");
+    }
+
+    if (!sandbox_fs_is_mounted(sc->deviceInfo.sandboxFs)) {
+        C_LOG_ERROR("[Check] Sandbox is unmounted!");
+        return;
+    }
+    C_LOG_VERB("Sandbox is mounted OK!");
 
     // make rootfs
     C_LOG_VERB("Sandbox make rootfs");
@@ -772,7 +793,6 @@ static void sandbox_process_req (gpointer data, gpointer udata)
     else {
         C_LOG_WARNING("Sandbox make rootfs error!");
     }
-    C_LOG_VERB("Sandbox is mounted!");
 
     cuint64 strLen = read_all_data (socket, &binStr);
     if (strLen <= 0) {
@@ -821,6 +841,8 @@ out:
     if (binStr) { g_free(binStr); }
     if (cmd)    { ipc_message_data_free(&cmd); }
     if (conn)   { g_object_unref (conn); }
+
+    pthread_exit(0);
 
     (void) udata;
 }

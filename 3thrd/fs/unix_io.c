@@ -57,13 +57,15 @@
 #include <linux/fs.h>
 #endif
 
-#include "types.h"
+#include <glib.h>
+
 #include "mst.h"
+#include "misc.h"
+#include "types.h"
+#include "c/log.h"
 #include "debug.h"
 #include "device.h"
 #include "logging.h"
-#include "misc.h"
-#include "c/log.h"
 #include "../../app/rc4.h"
 
 #define DEV_FD(dev)    (*(int *)dev->d_private)
@@ -260,9 +262,9 @@ static s64 ntfs_device_unix_io_seek(struct ntfs_device *dev, s64 offset, int whe
  */
 static s64 ntfs_device_unix_io_read(struct ntfs_device *dev, void *buf, s64 count)
 {
-    if (count == 1) {
-        return read(DEV_FD(dev), buf, count);
-    }
+    // if (count == 1) {
+        // return read(DEV_FD(dev), buf, count);
+    // }
 
     s64 ret = 0;
     uint8_t bufT[512] = {0};
@@ -271,9 +273,16 @@ static s64 ntfs_device_unix_io_read(struct ntfs_device *dev, void *buf, s64 coun
     uint8_t* key = "12345678";
 
     ret = read(DEV_FD(dev), buf, count);
-    if (count % 512) {
-        offset = 1 + ntfs_device_unix_io_seek(dev, 0, SEEK_CUR);
-    }
+
+    // if (count % 512) {
+        offset = ntfs_device_unix_io_seek(dev, 0, SEEK_CUR);
+    // }
+    // else {
+    // }
+
+    char* offsetStr = g_format_size(offset);
+    C_LOG_WARNING("read offset: %s[%d] count: %d", offsetStr, offset, count);
+    g_free(offsetStr);
 
     lock_file_buffer(buf, offset, ret, key, strlen((char*)key), bufT, sizeof(bufT), false);
 
@@ -302,10 +311,10 @@ static s64 ntfs_device_unix_io_write(struct ntfs_device *dev, const void *buf, s
     s64 ret = 0;
     s64 offset = 0;
 
-    if (count == 1) {
-        ret = write(DEV_FD(dev), buf, count);
-        return ret;
-    }
+    // if (count == 1) {
+        // ret = write(DEV_FD(dev), buf, count);
+        // return ret;
+    // }
 
     uint8_t bufT[512] = {0};
     uint8_t* key = "12345678";
@@ -316,9 +325,15 @@ static s64 ntfs_device_unix_io_write(struct ntfs_device *dev, const void *buf, s
     }
     memcpy(bufTT, buf, count);
 
-    if (count % 512) {
-        offset = 1 + ntfs_device_unix_io_seek(dev, 0, SEEK_CUR);
-    }
+    // if (count % 512) {
+        offset = ntfs_device_unix_io_seek(dev, 0, SEEK_CUR);
+    // }
+    // else {
+    // }
+
+    char* offsetStr = g_format_size(offset);
+    C_LOG_WARNING("write offset: %s[%d] count: %d", offsetStr, offset, count);
+    g_free(offsetStr);
 
     lock_file_buffer(bufTT, offset, count, key, strlen((char*)key), bufT, sizeof(bufT), true);
 
@@ -342,9 +357,9 @@ static s64 ntfs_device_unix_io_write(struct ntfs_device *dev, const void *buf, s
  */
 static s64 ntfs_device_unix_io_pread(struct ntfs_device *dev, void *buf, s64 count, s64 offset)
 {
-    if (count == 1) {
-        return pread(DEV_FD(dev), buf, count, offset);
-    }
+    // if (count == 1) {
+        // return pread(DEV_FD(dev), buf, count, offset);
+    // }
 
     s64 ret = 0;
     s64 offsetT = 0;
@@ -353,11 +368,16 @@ static s64 ntfs_device_unix_io_pread(struct ntfs_device *dev, void *buf, s64 cou
 
     ret = pread(DEV_FD(dev), buf, count, offset);
 
-    if (count % 512) {
+    // if (count % 512) {
         offsetT = offset;
-    }
+    // }
+    // else {
+    // }
+    char* offsetStr = g_format_size(offsetT);
+    C_LOG_WARNING("read offset: %s[%d] count: %d", offsetStr, offsetT, count);
+    g_free(offsetStr);
 
-    lock_file_buffer(buf, offsetT, ret, key, strlen((char*)key), bufT, sizeof(bufT), false);
+    lock_file_buffer(buf, offsetT, count, key, strlen((char*)key), bufT, sizeof(bufT), false);
 
     return ret;
 }
@@ -382,9 +402,9 @@ static s64 ntfs_device_unix_io_pwrite(struct ntfs_device *dev, const void *buf, 
 
     NDevSetDirty(dev);
 
-    if (1 == count) {
-        return pwrite(DEV_FD(dev), buf, count, offset);
-    }
+    // if (1 == count) {
+        // return pwrite(DEV_FD(dev), buf, count, offset);
+    // }
 
     s64 ret = 0;
     s64 offsetT = 0;
@@ -397,12 +417,19 @@ static s64 ntfs_device_unix_io_pwrite(struct ntfs_device *dev, const void *buf, 
     }
     memcpy(bufTT, buf, count);
 
-    if (count % 512) {
+    // if (count % 512) {
         offsetT = offset;
-    }
+    // }
+    // else {
+    // }
+
+    char* offsetStr = g_format_size(offsetT);
+    C_LOG_WARNING("write offset: %s[%d] count: %d", offsetStr, offsetT, count);
+    g_free(offsetStr);
 
     lock_file_buffer(bufTT, offsetT, count, key, strlen((char*)key), bufT, sizeof(bufT), true);
 
+// out:
     ret = pwrite(DEV_FD(dev), bufTT, count, offset);
 
     free(bufTT);

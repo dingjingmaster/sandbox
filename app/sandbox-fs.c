@@ -1516,7 +1516,7 @@ bool sandbox_fs_check(const SandboxFs* sandboxFs)
     }
 
     if (-1 >= dev->d_ops->open(dev, O_RDONLY)) {
-        C_LOG_WARNING("Error opening partition device");
+        C_LOG_WARNING("Error opening partition device: '%s'", dev->d_name);
         ntfs_device_free(dev);
         hasError = true;
         goto end;
@@ -1652,6 +1652,9 @@ bool sandbox_fs_resize(SandboxFs* sandboxFs, cuint64 sizeMB)
     do {
         int64_t size = newSize - oldSize;
         size = align_4096(size);
+
+
+
         if (vol->dev->d_ops->seek(vol->dev, size - 1, SEEK_END) >= 0) {
             if (vol->dev->d_ops->write(vol->dev, "", 1) >= 0) {
                 C_LOG_INFO("Successfully resized device to %lld bytes", size + oldSize);
@@ -1758,6 +1761,9 @@ bool sandbox_fs_mount(SandboxFs* sandboxFs)
             return false;
         }
     }
+    else {
+        C_LOG_INFO("Sandbox not mounted! start mount...");
+    }
 
     errno = 0;
     pid_t pid = fork();
@@ -1794,10 +1800,10 @@ bool sandbox_fs_is_mounted(SandboxFs * sandboxFs)
         return true;
     }
 
-    sandboxFs->isMounted = utils_check_is_mounted(sandboxFs->dev, sandboxFs->mountPoint);
-    if (sandboxFs->isMounted) {
-        C_LOG_WARNING("Not mounted!");
-    }
+    // sandboxFs->isMounted = utils_check_is_mounted(sandboxFs->dev, sandboxFs->mountPoint);
+    // if (sandboxFs->isMounted) {
+        // C_LOG_WARNING("Not mounted!");
+    // }
 
     sandboxFs->isMounted = utils_check_is_mounted(sandboxFs->dev, NULL);
     if (sandboxFs->isMounted) {
@@ -4929,6 +4935,7 @@ done:
 
 bool sandbox_fs_found_efs_header (ntfs_volume* vol, EfsSandboxFileHeader* header)
 {
+    return true;
     g_return_val_if_fail(vol != NULL && vol->dev != NULL && NULL != header, false);
 
     s64 dSize = ntfs_device_size_get_all_size(vol->dev);
@@ -4937,6 +4944,7 @@ bool sandbox_fs_found_efs_header (ntfs_volume* vol, EfsSandboxFileHeader* header
     bool isOK = false;
     do {
         vol->dev->d_ops->seek(vol->dev, startP, SEEK_SET);
+
         s64 rS = vol->dev->d_ops->read(vol->dev, header, sizeof(EfsSandboxFileHeader));
         if (rS != sizeof(EfsSandboxFileHeader)) {
             C_LOG_WARNING("read error");
@@ -13954,7 +13962,7 @@ static gpointer mount_fs_thread (gpointer data)
 	register_internal_reparse_plugins();
 #endif /* DISABLE_PLUGINS */
 
-    C_LOG_VERB("parsed options: %s", parsed_options ? parsed_options : "null");
+    C_LOG_INFO("parsed options: %s", parsed_options ? parsed_options : "null");
 	gsFuse = mount_fuse(parsed_options, sf->mountPoint);
 	if (!gsFuse) {
 		err = NTFS_VOLUME_FUSE_ERROR;
@@ -13964,7 +13972,7 @@ static gpointer mount_fs_thread (gpointer data)
 
 	ctx->mounted = TRUE;
     sf->isMounted = true;
-    C_LOG_VERB("mounted!");
+    C_LOG_INFO("mounted!");
 
 #if defined(linux) || defined(__uClinux__)
 	if (S_ISBLK(sbuf.st_mode) && (fstype == FSTYPE_FUSE)) {
@@ -13987,6 +13995,8 @@ static gpointer mount_fs_thread (gpointer data)
     SANDBOX_FS_MUTEX_UNLOCK();
 
 	fuse_loop(gsFuse);
+
+    C_LOG_INFO("Mount stop!");
 
     SANDBOX_FS_MUTEX_LOCK();
 

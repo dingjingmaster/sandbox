@@ -192,10 +192,10 @@ int ntfs_boot_sector_parse(ntfs_volume *vol, const NTFS_BOOT_SECTOR *bs)
 
     vol->sector_size = le16_to_cpu(bs->bpb.bytes_per_sector);           // 512B
     vol->sector_size_bits = ffs(vol->sector_size) - 1;                  //
-    C_LOG_INFO("parse boot:\n"
-               "SectorSize = 0x%x\n"
-               "SectorSizeBits = %u",
-               vol->sector_size, vol->sector_size_bits);
+    // C_LOG_INFO("parse boot:\n"
+               // "SectorSize = 0x%x\n"
+               // "SectorSizeBits = %u",
+               // vol->sector_size, vol->sector_size_bits);
     /*
      * The bounds checks on mft_lcn and mft_mirr_lcn (i.e. them being
      * below or equal the number_of_clusters) really belong in the
@@ -256,12 +256,12 @@ int ntfs_boot_sector_parse(ntfs_volume *vol, const NTFS_BOOT_SECTOR *bs)
      * 需要获取每个mft记录的集群，如果它是负的，则处理它。然后计算mft_record_size。值0x80是非法的，因此signed char实际上是可以的!
      */
     c = bs->clusters_per_mft_record;                                    // 1KiB
-    C_LOG_INFO(""
-               "ClusterSize = 0x%x\n"
-                "ClusterSizeBits = %u\n",
-                "ClustersPerMftRecord = 0x%x\n",
-                (unsigned)vol->cluster_size,
-                vol->cluster_size_bits, c);
+    // C_LOG_INFO(""
+               // "ClusterSize = 0x%x\n"
+                // "ClusterSizeBits = %u\n",
+                // "ClustersPerMftRecord = 0x%x\n",
+                // (unsigned)vol->cluster_size,
+                // vol->cluster_size_bits, c);
     /*
      * When clusters_per_mft_record is negative, it means that it is to
      * be taken to be the negative base 2 logarithm of the mft_record_size
@@ -280,14 +280,14 @@ int ntfs_boot_sector_parse(ntfs_volume *vol, const NTFS_BOOT_SECTOR *bs)
         return -1;
     }
     vol->mft_record_size_bits = ffs(vol->mft_record_size) - 1;          // 10
-    C_LOG_INFO("MftRecordSizeBits = %u\n"
-               "MftRecordSize = 0x%x",
-                vol->mft_record_size_bits,
-               (unsigned)vol->mft_record_size);
+    // C_LOG_INFO("MftRecordSizeBits = %u\n"
+               // "MftRecordSize = 0x%x",
+                // vol->mft_record_size_bits,
+               // (unsigned)vol->mft_record_size);
 
     /* Same as above for INDX record. */
     c = bs->clusters_per_index_record;                                  // 1
-    C_LOG_INFO("ClustersPerINDXRecord = 0x%x", c);
+    // C_LOG_INFO("ClustersPerINDXRecord = 0x%x", c);
     if (c < 0) {
         vol->indx_record_size = 1 << -c;
     }
@@ -295,8 +295,8 @@ int ntfs_boot_sector_parse(ntfs_volume *vol, const NTFS_BOOT_SECTOR *bs)
         vol->indx_record_size = c << vol->cluster_size_bits;            // 1 << 12, 4KiB
     }
     vol->indx_record_size_bits = ffs(vol->indx_record_size) - 1;        // 12
-    C_LOG_INFO("INDXRecordSize = 0x%x", (unsigned)vol->indx_record_size);
-    C_LOG_INFO("INDXRecordSizeBits = %u", vol->indx_record_size_bits);
+    // C_LOG_INFO("INDXRecordSize = 0x%x", (unsigned)vol->indx_record_size);
+    // C_LOG_INFO("INDXRecordSizeBits = %u", vol->indx_record_size_bits);
 
     /**
      * Work out the size of the MFT mirror in number of mft records. If the
