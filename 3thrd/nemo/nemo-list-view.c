@@ -2536,8 +2536,8 @@ create_and_set_up_tree_view (NemoListView *view)
 				 G_CALLBACK (list_view_handle_netscape_url), view, 0);
 	g_signal_connect_object (view->details->drag_dest, "handle_uri_list",
 				 G_CALLBACK (list_view_handle_uri_list), view, 0);
-	g_signal_connect_object (view->details->drag_dest, "handle_text",
-				 G_CALLBACK (list_view_handle_text), view, 0);
+	// g_signal_connect_object (view->details->drag_dest, "handle_text",
+				 // G_CALLBACK (list_view_handle_text), view, 0);
 	g_signal_connect_object (view->details->drag_dest, "handle_raw",
 				 G_CALLBACK (list_view_handle_raw), view, 0);
 

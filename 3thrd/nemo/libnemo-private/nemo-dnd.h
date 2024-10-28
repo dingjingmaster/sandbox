@@ -30,7 +30,7 @@
 #include <gtk/gtk.h>
 
 /* Drag & Drop target names. */
-#define NEMO_ICON_DND_GNOME_ICON_LIST_TYPE		"x-special/sandbox-icon-list"
+#define NEMO_ICON_DND_GNOME_ICON_LIST_TYPE		"x-special/icon-list"
 #define NEMO_ICON_DND_URI_LIST_TYPE				"sandbox/uri-list"
 #define NEMO_ICON_DND_NETSCAPE_URL_TYPE			"_NETSCAPE_URL"
 #define NEMO_ICON_DND_BGIMAGE_TYPE				"property/sandbox-bgimage"

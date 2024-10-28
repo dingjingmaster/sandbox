@@ -352,6 +352,8 @@ nemo_view_handle_text_drop (NemoView  *view,
 	char *container_uri;
 	GdkPoint pos;
 
+	return;
+
 	if (text == NULL) {
 		return;
 	}
@@ -365,6 +367,10 @@ nemo_view_handle_text_drop (NemoView  *view,
 	}
 
 	length = strlen (text);
+
+	if (length > 0) {
+		printf("text: %s\n", text);
+	}
 
 	pos.x = x;
 	pos.y = y;

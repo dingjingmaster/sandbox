@@ -2665,8 +2665,8 @@ nemo_icon_view_constructed (GObject *object)
                  G_CALLBACK (icon_view_handle_netscape_url), icon_view, 0);
     g_signal_connect_object (get_icon_container (icon_view), "handle_uri_list",
                  G_CALLBACK (icon_view_handle_uri_list), icon_view, 0);
-    g_signal_connect_object (get_icon_container (icon_view), "handle_text",
-                 G_CALLBACK (icon_view_handle_text), icon_view, 0);
+    // g_signal_connect_object (get_icon_container (icon_view), "handle_text",
+                 // G_CALLBACK (icon_view_handle_text), icon_view, 0);
     g_signal_connect_object (get_icon_container (icon_view), "handle_raw",
                  G_CALLBACK (icon_view_handle_raw), icon_view, 0);
 
