@@ -299,8 +299,7 @@ merge_in_clipboard_menu_items (GObject *widget_as_object,
 	
 	add_selection_callback = target_data->shares_selection_changes;
 
-	gtk_ui_manager_insert_action_group (target_data->ui_manager,
-					    target_data->action_group, 0);
+	gtk_ui_manager_insert_action_group (target_data->ui_manager, target_data->action_group, 0);
 
 	set_paste_sensitive_if_clipboard_contains_data (target_data->action_group);
 	

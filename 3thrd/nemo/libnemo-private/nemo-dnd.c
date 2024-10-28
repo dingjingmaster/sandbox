@@ -64,6 +64,7 @@ nemo_drag_init (NemoDragInfo     *drag_info,
 		    int                   drag_type_count,
 		    gboolean              add_text_targets)
 {
+	printf("%s\n", __FUNCTION__);
 	drag_info->target_list = gtk_target_list_new (drag_types,
 						   drag_type_count);
 
@@ -108,6 +109,7 @@ drag_selection_item_destroy (NemoDragSelectionItem *item)
 void
 nemo_drag_destroy_selection_list (GList *list)
 {
+	printf("%s\n", __FUNCTION__);
 	GList *p;
 
 	if (list == NULL)
@@ -122,6 +124,7 @@ nemo_drag_destroy_selection_list (GList *list)
 char **
 nemo_drag_uri_array_from_selection_list (const GList *selection_list)
 {
+	printf("%s\n", __FUNCTION__);
 	GList *uri_list;
 	char **uris;
 
@@ -135,6 +138,7 @@ nemo_drag_uri_array_from_selection_list (const GList *selection_list)
 GList *
 nemo_drag_uri_list_from_selection_list (const GList *selection_list)
 {
+	printf("%s\n", __FUNCTION__);
 	NemoDragSelectionItem *selection_item;
 	GList *uri_list;
 	const GList *l;
@@ -153,6 +157,7 @@ nemo_drag_uri_list_from_selection_list (const GList *selection_list)
 char **
 nemo_drag_uri_array_from_list (const GList *uri_list)
 {
+	printf("%s\n", __FUNCTION__);
 	const GList *l;
 	char **uris;
 	int i;
@@ -173,6 +178,7 @@ nemo_drag_uri_array_from_list (const GList *uri_list)
 GList *
 nemo_drag_uri_list_from_array (const char **uris)
 {
+	printf("%s\n", __FUNCTION__);
 	GList *uri_list;
 	int i;
 
@@ -192,9 +198,12 @@ nemo_drag_uri_list_from_array (const char **uris)
 GList *
 nemo_drag_build_selection_list (GtkSelectionData *data)
 {
+	printf("%s\n", __FUNCTION__);
 	GList *result;
 	const guchar *p, *oldp;
 	int size;
+
+	printf("%s\n", __FUNCTION__);
 
 	result = NULL;
 	oldp = gtk_selection_data_get_data (data);
@@ -275,6 +284,7 @@ static gboolean
 nemo_drag_file_local_internal (const char *target_uri_string,
 				   const char *first_source_uri)
 {
+	printf("%s\n", __FUNCTION__);
 	/* check if the first item on the list has target_uri_string as a parent
 	 * FIXME:
 	 * we should really test each item but that would be slow for large selections
@@ -303,24 +313,25 @@ nemo_drag_file_local_internal (const char *target_uri_string,
 }	
 
 gboolean
-nemo_drag_uris_local (const char *target_uri,
-			  const GList *source_uri_list)
+nemo_drag_uris_local (const char *target_uri, const GList *source_uri_list)
 {
 	/* must have at least one item */
 	g_assert (source_uri_list);
 	
+	printf("%s\n", __FUNCTION__);
+
 	return nemo_drag_file_local_internal (target_uri, source_uri_list->data);
 }
 
 gboolean
-nemo_drag_items_local (const char *target_uri_string,
-			   const GList *selection_list)
+nemo_drag_items_local (const char *target_uri_string, const GList *selection_list)
 {
 	/* must have at least one item */
 	g_assert (selection_list);
 
-	return nemo_drag_file_local_internal (target_uri_string,
-						  ((NemoDragSelectionItem *)selection_list->data)->uri);
+	printf("%s\n", __FUNCTION__);
+
+	return nemo_drag_file_local_internal (target_uri_string, ((NemoDragSelectionItem *)selection_list->data)->uri);
 }
 
 gboolean
@@ -372,6 +383,7 @@ nemo_drag_items_on_desktop (const GList *selection_list)
 GdkDragAction
 nemo_drag_default_drop_action_for_netscape_url (GdkDragContext *context)
 {
+	printf("drop2\n");
 	/* Mozilla defaults to copy, but unless thats the
 	   only allowed thing (enforced by ctrl) we want to LINK */
 	if (gdk_drag_context_get_suggested_action (context) == GDK_ACTION_COPY &&
@@ -646,9 +658,21 @@ nemo_drag_default_drop_action_for_icons (GdkDragContext *context,
 }
 
 GdkDragAction
-nemo_drag_default_drop_action_for_uri_list (GdkDragContext *context,
-						const char *target_uri_string)
+nemo_drag_default_drop_action_for_uri_list (GdkDragContext *context, const char *target_uri_string)
 {
+	g_return_val_if_fail (context != NULL && target_uri_string != NULL, GDK_ACTION_DEFAULT);
+
+	printf("AAA\n");
+	GdkWindow* destWin = gdk_drag_context_get_dest_window(context);
+	if (destWin != NULL) {
+		gpointer udata = NULL;
+		gdk_window_get_user_data (destWin, &udata);
+		if (GTK_IS_WINDOW(udata)) {
+			GtkWindow *window = GTK_WINDOW(udata);
+			printf("title: %s\n", gtk_window_get_title (window));
+		}
+	}
+
 	if (eel_uri_is_trash (target_uri_string) && (gdk_drag_context_get_actions (context) & GDK_ACTION_MOVE)) {
 		/* Only move to Trash */
 		return GDK_ACTION_MOVE;
@@ -751,7 +775,11 @@ add_one_uri (const char *uri, int x, int y, int w, int h, gpointer data)
 {
 	GString *result;
 	
+	printf("%s\n",__FUNCTION__);
+
 	result = (GString *) data;
+
+	printf("%s: %s\n", __FUNCTION__, uri);
 
 	g_string_append (result, uri);
 	g_string_append (result, "\r\n");
@@ -769,6 +797,9 @@ nemo_drag_drag_data_get (GtkWidget *widget,
 			NemoDragEachSelectedItemIterator each_selected_item_iterator)
 {
 	GString *result;
+
+	printf("%d -- %d -- %d\n", NEMO_ICON_DND_GNOME_ICON_LIST, NEMO_ICON_DND_URI_LIST, NEMO_ICON_DND_TEXT);
+	printf("%s， info: %d\n",__FUNCTION__, info);
 		
 	switch (info) {
 	case NEMO_ICON_DND_GNOME_ICON_LIST:
@@ -777,15 +808,16 @@ nemo_drag_drag_data_get (GtkWidget *widget,
 		break;
 		
 	case NEMO_ICON_DND_URI_LIST:
-	case NEMO_ICON_DND_TEXT:
+	// case NEMO_ICON_DND_TEXT:
 		result = g_string_new (NULL);
-		(* each_selected_item_iterator) (add_one_uri, container_context, result);
+		(*each_selected_item_iterator) (add_one_uri, container_context, result);
 		break;
 
 	default:
+		printf("get\n");
 		return FALSE;
 	}
-	
+
 	gtk_selection_data_set (selection_data,
 				gtk_selection_data_get_target (selection_data),
 				8, (guchar *) result->str, result->len);
@@ -801,8 +833,7 @@ typedef struct
 } DropActionMenuData;
 
 static void
-menu_deactivate_callback (GtkWidget *menu,
-			  gpointer   data)
+menu_deactivate_callback (GtkWidget *menu, gpointer data)
 {
 	DropActionMenuData *damd;
 	
@@ -820,8 +851,9 @@ drop_action_activated_callback (GtkWidget  *menu_item,
 	
 	damd = data;
 
-	damd->chosen = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (menu_item),
-							   "action"));
+	printf("drop1\n");
+
+	damd->chosen = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (menu_item), "action"));
 
 	if (g_main_loop_is_running (damd->loop))
 		g_main_loop_quit (damd->loop);
@@ -840,6 +872,8 @@ append_drop_action_menu_item (GtkWidget          *menu,
 	gtk_widget_set_sensitive (menu_item, sensitive);
 	gtk_menu_shell_append (GTK_MENU_SHELL (menu), menu_item);
 
+	printf("drop\n");
+
 	g_object_set_data (G_OBJECT (menu_item),
 			   "action",
 			   GINT_TO_POINTER (action));
@@ -853,12 +887,13 @@ append_drop_action_menu_item (GtkWidget          *menu,
 
 /* Pops up a menu of actions to perform on dropped files */
 GdkDragAction
-nemo_drag_drop_action_ask (GtkWidget *widget,
-			       GdkDragAction actions)
+nemo_drag_drop_action_ask (GtkWidget *widget, GdkDragAction actions)
 {
 	GtkWidget *menu;
 	GtkWidget *menu_item;
 	DropActionMenuData damd;
+
+	printf("drop action\n");
 	
 	/* Create the menu and set the sensitivity of the items based on the
 	 * allowed actions.

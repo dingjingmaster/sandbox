@@ -65,8 +65,7 @@ nemo_drag_can_accept_files (NemoFile *drop_target_item)
 }
 
 gboolean
-nemo_drag_can_accept_item (NemoFile *drop_target_item,
-			       const char *item_uri)
+nemo_drag_can_accept_item (NemoFile *drop_target_item, const char *item_uri)
 {
 	if (nemo_file_matches_uri (drop_target_item, item_uri)) {
 		/* can't accept itself */
@@ -77,8 +76,7 @@ nemo_drag_can_accept_item (NemoFile *drop_target_item,
 }
 				       
 gboolean
-nemo_drag_can_accept_items (NemoFile *drop_target_item,
-				const GList *items)
+nemo_drag_can_accept_items (NemoFile *drop_target_item, const GList *items)
 {
 	int max;
 
@@ -92,8 +90,8 @@ nemo_drag_can_accept_items (NemoFile *drop_target_item,
 	 * result
 	 */
 	for (max = 100; items != NULL && max >= 0; items = items->next, max--) {
-		if (!nemo_drag_can_accept_item (drop_target_item, 
-			((NemoDragSelectionItem *)items->data)->uri)) {
+		printf("%s\n", ((NemoDragSelectionItem*)items->data)->uri);
+		if (!nemo_drag_can_accept_item (drop_target_item, ((NemoDragSelectionItem *)items->data)->uri)) {
 			return FALSE;
 		}
 	}
@@ -102,9 +100,7 @@ nemo_drag_can_accept_items (NemoFile *drop_target_item,
 }
 
 gboolean
-nemo_drag_can_accept_info (NemoFile *drop_target_item,
-			       NemoIconDndTargetType drag_type,
-			       const GList *items)
+nemo_drag_can_accept_info (NemoFile *drop_target_item, NemoIconDndTargetType drag_type, const GList *items)
 {
 	switch (drag_type) {
 		case NEMO_ICON_DND_GNOME_ICON_LIST:

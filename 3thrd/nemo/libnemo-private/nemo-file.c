@@ -2151,6 +2151,7 @@ nemo_file_matches_uri (NemoFile *file, const char *match_uri)
 
     location = nemo_file_get_location (file);
     match_file = g_file_new_for_uri (match_uri);
+
     result = g_file_equal (location, match_file);
     g_object_unref (location);
     g_object_unref (match_file);
@@ -2159,8 +2160,7 @@ nemo_file_matches_uri (NemoFile *file, const char *match_uri)
 }
 
 int
-nemo_file_compare_location (NemoFile *file_1,
-                                NemoFile *file_2)
+nemo_file_compare_location (NemoFile *file_1, NemoFile *file_2)
 {
     GFile *loc_a, *loc_b;
     gboolean res;
@@ -2768,23 +2768,19 @@ update_info_internal (NemoFile *file,
 }
 
 static gboolean
-update_info_and_name (NemoFile *file,
-              GFileInfo *info)
+update_info_and_name (NemoFile *file, GFileInfo *info)
 {
     return update_info_internal (file, info, TRUE);
 }
 
 gboolean
-nemo_file_update_info (NemoFile *file,
-               GFileInfo *info)
+nemo_file_update_info (NemoFile *file, GFileInfo *info)
 {
     return update_info_internal (file, info, FALSE);
 }
 
 static gboolean
-update_name_internal (NemoFile *file,
-              const char *name,
-              gboolean in_directory)
+update_name_internal (NemoFile *file, const char *name, gboolean in_directory)
 {
     GList *node;
 
@@ -2800,8 +2796,7 @@ update_name_internal (NemoFile *file,
 
     node = NULL;
     if (in_directory) {
-        node = nemo_directory_begin_file_name_change
-            (file->details->directory, file);
+        node = nemo_directory_begin_file_name_change (file->details->directory, file);
     }
 
     g_clear_pointer (&file->details->name, g_free);

@@ -276,8 +276,7 @@ nemo_x_content_bar_init (NemoXContentBar *bar)
 }
 
 GtkWidget *
-nemo_x_content_bar_new (GMount *mount, 
-			    const char *x_content_type)
+nemo_x_content_bar_new (GMount *mount, const char *x_content_type)
 {
 	return g_object_new (NEMO_TYPE_X_CONTENT_BAR, 
 			     "mount", mount,
