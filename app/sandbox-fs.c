@@ -4935,7 +4935,6 @@ done:
 
 bool sandbox_fs_found_efs_header (ntfs_volume* vol, EfsSandboxFileHeader* header)
 {
-    return true;
     g_return_val_if_fail(vol != NULL && vol->dev != NULL && NULL != header, false);
 
     s64 dSize = ntfs_device_size_get_all_size(vol->dev);
