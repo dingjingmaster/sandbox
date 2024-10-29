@@ -222,7 +222,7 @@ SandboxContext* sandbox_init(int C_UNUSED argc, char** C_UNUSED argv)
                 break;
             }
 
-            sc->socket.worker = g_thread_pool_new (sandbox_process_req, sc, 100, true, &error);
+            sc->socket.worker = g_thread_pool_new (sandbox_process_req, sc, -1, false, &error);
             if (error) {
                 ret = false;
                 C_LOG_ERROR("g_thread_pool_new error: %s", error->message);
@@ -332,6 +332,7 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
             break;
         }
         default: {
+            wait(NULL);
             return true;
         }
     }
@@ -341,7 +342,7 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
     errno = 0;
     if (0 != chdir(context->deviceInfo.mountPoint)) {
         C_LOG_ERROR("chdir error: %s", c_strerror(errno));
-        exit(-1);
+        goto end;
     }
     C_LOG_VERB("chdir done");
 
@@ -350,7 +351,7 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
     errno = 0;
     if ( 0 != chroot(context->deviceInfo.mountPoint)) {
         C_LOG_ERROR("chroot error: %s", c_strerror(errno));
-        exit(-1);
+        goto end;
     }
     C_LOG_VERB("chroot done");
 
@@ -423,7 +424,10 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
         C_LOG_VERB("run cmd: '%s'", cmd);
         errno = 0;
         execvpe(cmd, NULL, env);
-        if (0 != errno) { C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno)); exit(0); }
+        if (0 != errno) {
+            C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno));
+            goto end;
+        }
     }
     else {
         do {
@@ -441,6 +445,7 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
         } while (0);
     }
 
+end:
     C_LOG_INFO("execute cmd '%s' Finished!", cmd);
 
     exit(0);
@@ -462,6 +467,7 @@ bool sandbox_execute_cmd_no_chroot(SandboxContext * context, const char ** env, 
             break;
         }
         default: {
+            wait(NULL);
             return true;
         }
     }
@@ -962,8 +968,6 @@ out:
     if (binStr) { g_free(binStr); }
     if (cmd)    { ipc_message_data_free(&cmd); }
     if (conn)   { g_object_unref (conn); }
-
-    pthread_exit(0);
 
     (void) udata;
 }
