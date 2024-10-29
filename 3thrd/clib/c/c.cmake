@@ -60,7 +60,7 @@ file(GLOB C_SRC
         ${CMAKE_SOURCE_DIR}/3thrd/clib/c/global.c
 
         ${CMAKE_SOURCE_DIR}/3thrd/clib/c/source.h
-	${CMAKE_SOURCE_DIR}/3thrd/clib/c/source.c
+		${CMAKE_SOURCE_DIR}/3thrd/clib/c/source.c
 
         ${CMAKE_SOURCE_DIR}/3thrd/clib/c/thread.h
         ${CMAKE_SOURCE_DIR}/3thrd/clib/c/thread.c

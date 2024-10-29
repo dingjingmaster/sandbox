@@ -12,9 +12,9 @@ G_BEGIN_DECLS
 #include <stdlib.h>
 #include <string.h>
 
-bool utils_check_is_mounted_by_mount_point  (const char* mountPoint);
-bool utils_check_is_mounted                 (const char* dev, const char* mountPoint);
-
+char*   utils_file_path_normalization           (const char* path);
+bool    utils_check_is_mounted_by_mount_point   (const char* mountPoint);
+bool    utils_check_is_mounted                  (const char* dev, const char* mountPoint);
 
 G_END_DECLS
 

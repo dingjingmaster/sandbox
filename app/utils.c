@@ -5,8 +5,26 @@
 #include "utils.h"
 
 #include <stdint.h>
+#include <gio/gio.h>
 
+
+static GFile* get_gfile(const char* path);
 static bool check_is_mounted_by_config_path (const char* configPath, const char* dev, const char* mountPoint);
+
+char * utils_file_path_normalization(const char * path)
+{
+    g_return_val_if_fail(path != NULL, NULL);
+
+    GFile* file = get_gfile (path);
+
+    g_return_val_if_fail(file && G_IS_FILE (file), NULL);
+
+    char* filePath = g_file_get_path(file);
+
+    g_object_unref (file);
+
+    return filePath;
+}
 
 bool utils_check_is_mounted_by_mount_point(const char * mountPoint)
 {
@@ -40,6 +58,31 @@ bool utils_check_is_mounted(const char * dev, const char * mountPoint)
     }
 
     return false;
+}
+
+static GFile* get_gfile(const char* path)
+{
+    g_return_val_if_fail(path, NULL);
+
+    GFile* file = NULL;
+    if (g_str_has_prefix(path, "file://")) {
+        file = g_file_new_for_uri (path);
+    }
+    else if (g_str_has_prefix(path, "/")) {
+        file = g_file_new_for_path (path);
+    }
+    else if (g_str_has_prefix(path, "~")) {
+        char* p = g_canonicalize_filename (path, NULL);
+        file = g_file_new_for_path (p);
+        if (p) { g_free(p); }
+    }
+    else {
+        char* p = g_canonicalize_filename (path, g_get_current_dir());
+        file = g_file_new_for_path (p);
+        if (p) { g_free(p); }
+    }
+
+    return file;
 }
 
 static bool check_is_mounted_by_config_path (const char* configPath, const char* dev, const char* mountPoint)
@@ -144,3 +187,4 @@ static bool check_is_mounted_by_config_path (const char* configPath, const char*
 
     return hasMounted;
 }
+
