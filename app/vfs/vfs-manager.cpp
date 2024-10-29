@@ -37,7 +37,7 @@ VFSManager::VFSManager(QObject *parent)
     }
 
     // register
-    registerUriSchema ("dsm", sandbox_vfs_lookup, sandbox_vfs_parse_name);
+    registerUriSchema ("sandbox", sandbox_vfs_lookup, sandbox_vfs_parse_name);
 }
 
 VFSManager *VFSManager::getInstance()

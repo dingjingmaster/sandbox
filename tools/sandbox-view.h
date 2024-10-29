@@ -15,6 +15,8 @@ public:
 
 Q_SIGNALS:
     void selectDir(const QString& uri);
+
+private:
 };
 
 

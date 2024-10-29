@@ -62,7 +62,7 @@ GFile* sandbox_vfs_file_new_for_uri(const char* uri)
 
 gboolean sandbox_vfs_file_is_exist(const char *uri)
 {
-    if (g_str_has_prefix(uri, "dsm://")) {
+    if (g_str_has_prefix(uri, "sandbox://")) {
         return false;
     }
     else if (g_str_has_prefix(uri, "/")) {
@@ -82,7 +82,7 @@ GFileEnumerator* sandbox_vfs_file_enumerate_children(GFile *file, const char *at
     (void) attribute;
 
     char* uri = g_file_get_uri(file);
-    if (g_str_has_prefix(uri, "dsm://")) {
+    if (g_str_has_prefix(uri, "sandbox://")) {
         g_free(uri);
         return G_FILE_ENUMERATOR(g_object_new (SANDBOX_VFS_FILE_ENUMERATOR_TYPE, "container", file, nullptr));
     }
@@ -110,7 +110,7 @@ static void sandbox_vfs_file_iface_init (GFileIface* iface)
 
 GFile* sandbox_vfs_file_dup (GFile* file)
 {
-    g_return_val_if_fail(SANDBOX_VFS_IS_FILE (file), g_file_new_for_uri ("dsm:///"));
+    g_return_val_if_fail(SANDBOX_VFS_IS_FILE (file), g_file_new_for_uri ("sandbox:///"));
 
     SandboxVFSFile* vfsFile = SANDBOX_VFS_FILE(file);
     auto* vfsFilePri = (SandboxVFSFilePrivate*) sandbox_vfs_file_get_instance_private (vfsFile);
@@ -133,8 +133,6 @@ gboolean sandbox_vfs_file_move (GFile* src, GFile* dest, GFileCopyFlags flags, G
     return FALSE;
 }
 
-const char* dsmRegexStr = R"(_\(\d\d\d\d-\d\d-\d\d\).dsm$)";
-
 gboolean sandbox_vfs_file_copy (GFile* src, GFile* dest, GFileCopyFlags flags, GCancellable* cancel, GFileProgressCallback progress, gpointer udata, GError** error)
 {
     g_return_val_if_fail(G_IS_FILE (src) && G_IS_FILE (dest), false);
@@ -154,8 +152,6 @@ gboolean sandbox_vfs_file_copy (GFile* src, GFile* dest, GFileCopyFlags flags, G
     g_autofree char* destUriTT = g_file_get_uri (dest);
 
     if (0 == g_strcmp0 (destUriTT, "file:///")) {
-        QRegExp regex(dsmRegexStr);
-        destT = destT.replace (regex, ".dsm");                                      // 修整后还原文件全路径
         destFile = g_file_new_for_uri (destT.toUtf8().constData());                 // 还原的文件对象
     }
     else {
@@ -226,13 +222,13 @@ char* sandbox_vfs_file_get_uri_schema (GFile* file)
 
 char* sandbox_vfs_file_get_uri (GFile* file)
 {
-    g_return_val_if_fail(SANDBOX_VFS_IS_FILE (file), g_strdup ("dsm:///"));
+    g_return_val_if_fail(SANDBOX_VFS_IS_FILE (file), g_strdup ("sandbox:///"));
 
     auto vfsFile = SANDBOX_VFS_FILE(file);
 
     auto* priv = (SandboxVFSFilePrivate*) sandbox_vfs_file_get_instance_private (vfsFile);
 
-    g_autofree char* uri = priv->uri ? g_strdup(priv->uri) : g_strdup("dsm:///");
+    g_autofree char* uri = priv->uri ? g_strdup(priv->uri) : g_strdup("sandbox:///");
 
     return g_uri_unescape_string (uri, ":/");
 }
@@ -304,6 +300,10 @@ char* sandbox_vfs_file_get_basename (GFile* file)
     g_autofree char* uri = g_file_info_get_attribute_as_string (fileInfo, G_FILE_ATTRIBUTE_STANDARD_TARGET_URI);
     if (uri) {
         g_autoptr(GFile) file = g_file_new_for_uri (uri);
+        g_autofree char* path = g_file_get_path(file);
+        if (0 == strcmp(path, SANDBOX_MOUNT_POINT)) {
+            return g_strdup("/");
+        }
         return g_file_get_basename (file);
     }
 

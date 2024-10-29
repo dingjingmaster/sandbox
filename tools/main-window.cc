@@ -71,5 +71,5 @@ MainWindow::MainWindow(QWidget * parent)
 
     // 初始化根目录
     mHost->setRootDir("file:///");
-    // Q_EMIT mSandbox->setRootDir("sandbox:///");
+    mSandbox->setRootDir("sandbox:///");
 }

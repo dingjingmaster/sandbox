@@ -38,7 +38,7 @@ bool SandboxItem::isDir()
         g_object_unref(fileInfo);
     }
 
-    // qDebug() << "SandboxItem::uri: " << mUri << " isDir: " << isDir;
+    qDebug() << "SandboxItem::uri: " << mUri << " isDir: " << isDir;
 
     return isDir;
 }
@@ -81,7 +81,7 @@ QIcon SandboxItem::icon()
 {
     QIcon icon;
     QString uri = getUri();
-    if (nullptr != uri && "" != uri && !uri.startsWith("sandbox:///")) {
+    if (nullptr != uri && "" != uri) {
         icon = isDir() ? QIcon::fromTheme (":/icons/dir.png") : (isLink() ? QIcon(":/icons/link.png") : QIcon(":/icons/file.png"));
     }
 
@@ -104,8 +104,6 @@ int SandboxItem::findChildren()
 {
     g_return_val_if_fail(isDir(), 0);
 
-    // qDebug() << "SandboxItem::findChildren: " << mUri;
-
     int add = 0;
     GFileEnumerator* em = g_file_enumerate_children (mFile, "*", G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, nullptr, nullptr);
     if (G_IS_FILE_ENUMERATOR(em)) {
@@ -115,7 +113,6 @@ int SandboxItem::findChildren()
                 char* path = g_file_info_get_attribute_as_string (info, G_FILE_ATTRIBUTE_STANDARD_TARGET_URI);
                 if (path) {
                     pathUri = path;
-                    // qInfo() << "get path: " << path;
                     g_free(path);
                 }
                 else {
