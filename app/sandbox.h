@@ -21,6 +21,7 @@ void                sandbox_destroy                 (SandboxContext** context);
 bool                sandbox_is_mounted              (SandboxContext* context);
 bool                sandbox_make_rootfs             (SandboxContext* context);
 bool                sandbox_execute_cmd             (SandboxContext* context, const char** env, const char* cmd);
+bool                sandbox_execute_cmd_no_chroot   (SandboxContext* context, const char** env, const char* cmd);
 
 
 // bool                sandbox_namespace_exists        (SandboxContext* context);

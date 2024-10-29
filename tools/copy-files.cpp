@@ -32,13 +32,7 @@ int main(int argc, char *argv[])
     SingletonApp app (argc, argv, PACKAGE_NAME"-GUI");
 
     MainWindow win;
-
-    if (app.isSync()) {
-        win.show();
-    }
-    else {
-        app.showHelp();
-    }
+    win.show();
 
     int ret = app.exec();
 

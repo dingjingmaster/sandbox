@@ -1000,6 +1000,9 @@ const struct DEFOPTION optionlist[] = {
 pid_t mountPid = 0;
 struct fuse* gsFuse;
 
+static GMainLoop* gsWaitMount = NULL;
+
+static void sandbox_mount_finished(int sig);
 
 SandboxFs* sandbox_fs_init(const char* devPath, const char* mountPoint)
 {
@@ -1785,6 +1788,10 @@ bool sandbox_fs_mount(SandboxFs* sandboxFs)
             break;
         }
     }
+
+    gsWaitMount = g_main_loop_new(NULL, 0);
+    signal(SIGUSR2, sandbox_mount_finished);
+    g_main_loop_run(gsWaitMount);
 
     return true;
 }
@@ -13993,6 +14000,8 @@ static gpointer mount_fs_thread (gpointer data)
 
     SANDBOX_FS_MUTEX_UNLOCK();
 
+    kill(getppid(), SIGUSR2);
+
 	fuse_loop(gsFuse);
 
     C_LOG_INFO("Mount stop!");
@@ -14026,10 +14035,17 @@ err2:
 	    free(parsed_options);
     }
 
+    kill(getppid(), SIGUSR2);
+
     return NULL;
 }
 
 static void umount_signal_process (int signum)
 {
     sandbox_fs_unmount();
+}
+
+static void sandbox_mount_finished(int sig)
+{
+    g_main_loop_quit(gsWaitMount);
 }

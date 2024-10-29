@@ -14,6 +14,7 @@
 #include <sys/wait.h>
 #include <sys/mount.h>
 #include <sys/socket.h>
+#include <glib/gi18n.h>
 #include <linux/sched.h>
 
 #include "rootfs.h"
@@ -28,6 +29,25 @@
 #define DEBUG_ISO_PATH              DEBUG_ROOT"/data/sandbox.box"
 #define DEBUG_SOCKET_PATH           DEBUG_ROOT"/data/sandbox.sock"
 #define DEBUG_LOCK_PATH             DEBUG_ROOT"/data/sandbox.lock"
+
+
+#define CHECK_AND_RUN(dir)                              \
+do {                                                    \
+    char* cmdPath = c_strdup_printf("%s/%s", dir, cmd); \
+    C_LOG_VERB("Found cmd: '%s'", cmdPath);             \
+    if (c_file_test(cmdPath, C_FILE_TEST_EXISTS)) {     \
+        C_LOG_VERB("run cmd: '%s'", cmdPath);           \
+        errno = 0;                                      \
+        execvpe(cmdPath, NULL, env);                    \
+        if (0 != errno) {                               \
+            C_LOG_ERROR("execute cmd '%s' error: %s",   \
+                cmdPath, c_strerror(errno));            \
+            c_free(cmdPath);                            \
+            exit(-1);                                   \
+        }                                               \
+    }                                                   \
+    c_free(cmdPath);                                    \
+} while (0); break
 
 
 struct _SandboxContext
@@ -63,6 +83,7 @@ struct _SandboxContext
 
 typedef struct
 {
+    gboolean            sync;                       // 同步
     gboolean            quit;                       // 退出
     gboolean            terminator;                 // 打开终端
     gboolean            fileManager;                // 打开文件管理器
@@ -82,9 +103,10 @@ static CmdLine gsCmdline = {0};
 
 
 static GOptionEntry gsEntry[] = {
-    {"terminator", 't', 0, C_OPTION_ARG_NONE, &(gsCmdline.terminator), "Open with the terminator", NULL},
-    {"file-manager", 'f', 0, C_OPTION_ARG_NONE, &(gsCmdline.fileManager), "Open with the file manager", NULL},
-    {"quit", 'q', 0, C_OPTION_ARG_NONE, &(gsCmdline.quit), "exit daemon", NULL},
+    {"sync", 's', 0, C_OPTION_ARG_NONE, &(gsCmdline.sync), N_("Exchange files between the host and the sandbox"), NULL},
+    {"terminator", 't', 0, C_OPTION_ARG_NONE, &(gsCmdline.terminator), N_("Open with the terminator"), NULL},
+    {"file-manager", 'f', 0, C_OPTION_ARG_NONE, &(gsCmdline.fileManager), N_("Open with the file manager"), NULL},
+    {"quit", 'q', 0, C_OPTION_ARG_NONE, &(gsCmdline.quit), N_("Exit daemon"), NULL},
     {NULL},
 };
 
@@ -396,24 +418,127 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
 #endif
 
     // run command
-#define CHECK_AND_RUN(dir)                              \
-do {                                                    \
-    char* cmdPath = c_strdup_printf("%s/%s", dir, cmd); \
-    C_LOG_VERB("Found cmd: '%s'", cmdPath);             \
-    if (c_file_test(cmdPath, C_FILE_TEST_EXISTS)) {     \
-        C_LOG_VERB("run cmd: '%s'", cmdPath);           \
-        errno = 0;                                      \
-        execvpe(cmdPath, NULL, env);                    \
-        if (0 != errno) {                               \
-            C_LOG_ERROR("execute cmd '%s' error: %s",   \
-                cmdPath, c_strerror(errno));            \
-            c_free(cmdPath);                            \
-            exit(-1);                                   \
-        }                                               \
-    }                                                   \
-    c_free(cmdPath);                                    \
-} while (0); break
+    C_LOG_VERB("Start execute cmd '%s' ...", cmd);
+    if (cmd[0] == '/') {
+        C_LOG_VERB("run cmd: '%s'", cmd);
+        errno = 0;
+        execvpe(cmd, NULL, env);
+        if (0 != errno) { C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno)); exit(0); }
+    }
+    else {
+        do {
+            CHECK_AND_RUN("/usr/local/andsec/sandbox/bin");
 
+            CHECK_AND_RUN("/bin");
+            CHECK_AND_RUN("/usr/bin");
+            CHECK_AND_RUN("/usr/local/bin");
+
+            CHECK_AND_RUN("/sbin");
+            CHECK_AND_RUN("/usr/sbin");
+            CHECK_AND_RUN("/usr/local/sbin");
+
+            C_LOG_ERROR("Cannot found binary path");
+        } while (0);
+    }
+
+    C_LOG_INFO("execute cmd '%s' Finished!", cmd);
+
+    exit(0);
+}
+
+bool sandbox_execute_cmd_no_chroot(SandboxContext * context, const char ** env, const char * cmd)
+{
+    g_return_val_if_fail(context, false);
+    g_return_val_if_fail(context->deviceInfo.sandboxFs, false);
+    g_return_val_if_fail(context->deviceInfo.mountPoint, false);
+    g_return_val_if_fail(context->deviceInfo.isoFullPath, false);
+
+    pid_t pid = fork();
+    switch (pid) {
+        case -1: {
+            return false;
+        }
+        case 0: {
+            break;
+        }
+        default: {
+            return true;
+        }
+    }
+
+    // chdir
+    C_LOG_VERB("Start chdir...");
+    errno = 0;
+    if (0 != chdir(context->deviceInfo.mountPoint)) {
+        C_LOG_ERROR("chdir error: %s", c_strerror(errno));
+        exit(-1);
+    }
+    C_LOG_VERB("chdir done");
+
+    // set env
+    C_LOG_VERB("Start merge environment profile");
+    if (env) {
+        for (int i = 0; env[i]; ++i) {
+            char** arr = c_strsplit(env[i], "=", 2);
+            if (c_strv_length(arr) != 2) {
+                c_strfreev(arr);
+                continue;
+            }
+
+            char* key = arr[0];
+            char* val = arr[1];
+            C_LOG_VERB("[ENV] set %s", key);
+            c_setenv(key, val, true);
+            c_strfreev(arr);
+        }
+    }
+    C_LOG_VERB("Merge environment profile done");
+
+    // change user
+    C_LOG_VERB("Start change user");
+    if (c_getenv("USER")) {
+        errno = 0;
+        do {
+            struct passwd* pwd = getpwnam(c_getenv("USER"));
+            if (!pwd) {
+                C_LOG_ERROR("get struct passwd error: %s", c_strerror(errno));
+                break;
+            }
+            if (!c_file_test(pwd->pw_dir, C_FILE_TEST_EXISTS)) {
+                errno = 0;
+                if (!c_file_test("/home", C_FILE_TEST_EXISTS)) {
+                    c_mkdir("/home", 0755);
+                }
+                if (0 != c_mkdir(pwd->pw_dir, 0700)) {
+                    C_LOG_ERROR("mkdir error: %s", c_strerror(errno));
+                }
+                chown(pwd->pw_dir, pwd->pw_uid, pwd->pw_gid);
+            }
+
+            if (pwd->pw_dir) {
+                c_setenv("HOME", pwd->pw_dir, true);
+
+                // change dir
+                chdir(pwd->pw_dir);
+            }
+
+            setuid(pwd->pw_uid);
+            seteuid(pwd->pw_uid);
+
+            setgid(pwd->pw_gid);
+            setegid(pwd->pw_gid);
+        } while (0);
+    }
+    C_LOG_VERB("Change user OK!");
+
+#ifdef DEBUG
+    cchar** envs = c_get_environ();
+    for (int i = 0; envs[i]; ++i) {
+        c_log_raw(C_LOG_LEVEL_VERB, "%s", envs[i]);
+    }
+#endif
+
+    // run command
     C_LOG_VERB("Start execute cmd '%s' ...", cmd);
     if (cmd[0] == '/') {
         C_LOG_VERB("run cmd: '%s'", cmd);
@@ -575,23 +700,6 @@ static void sandbox_chroot_execute (const char* cmd, const char* mountPoint, cha
 #endif
 
     // run command
-#define CHECK_AND_RUN(dir)                              \
-do {                                                    \
-    char* cmdPath = c_strdup_printf("%s/%s", dir, cmd); \
-    C_LOG_VERB("Found cmd: '%s'", cmdPath);             \
-    if (c_file_test(cmdPath, C_FILE_TEST_EXISTS)) {     \
-        C_LOG_VERB("run cmd: '%s'", cmdPath);           \
-        errno = 0;                                      \
-        execvpe(cmdPath, NULL, env);                    \
-        if (0 != errno) {                               \
-            C_LOG_ERROR("execute cmd '%s' error: %s",   \
-                cmdPath, c_strerror(errno));            \
-            return;                                     \
-        }                                               \
-    }                                                   \
-    c_free(cmdPath);                                    \
-} while (0); break
-
     if (cmd[0] == '/') {
         C_LOG_VERB("run cmd: '%s'", cmd);
         errno = 0;
@@ -653,6 +761,10 @@ static void sandbox_req(SandboxContext *context)
         // 关闭守护进程
         ipc_message_set_type(cmd, IPC_TYPE_QUIT);
         C_LOG_INFO("[Client] quit[%d]", IPC_TYPE_QUIT);
+    }
+    else if (gsCmdline.sync) {
+        ipc_message_set_type(cmd, IPC_TYPE_SYNC);
+        C_LOG_INFO("[Client] sync[%d]", IPC_TYPE_SYNC);
     }
     else {
         C_LOG_INFO("[Client] other cmd [%d]", IPC_TYPE_NONE);
@@ -733,6 +845,18 @@ static void sandbox_process_req (gpointer data, gpointer udata)
     SandboxContext* sc = (SandboxContext*) udata;
     GSocket* socket = g_socket_connection_get_socket (conn);
 
+    cuint64 strLen = read_all_data (socket, &binStr);
+    if (strLen <= 0) {
+        C_LOG_ERROR("read client data null");
+        goto out;
+    }
+    C_LOG_VERB("read client len: %u", strLen);
+
+    if (!ipc_message_unpack(cmd, binStr, strLen)) {
+        C_LOG_ERROR("CommandLine parse error!");
+        goto out;
+    }
+
     C_LOG_INFO("mkdir mount point");
     if (!c_file_test(sc->deviceInfo.mountPoint, C_FILE_TEST_EXISTS)) {
         c_mkdir_with_parents(sc->deviceInfo.mountPoint, 0755);
@@ -794,17 +918,6 @@ static void sandbox_process_req (gpointer data, gpointer udata)
         C_LOG_WARNING("Sandbox make rootfs error!");
     }
 
-    cuint64 strLen = read_all_data (socket, &binStr);
-    if (strLen <= 0) {
-        C_LOG_ERROR("read client data null");
-        goto out;
-    }
-    C_LOG_VERB("read client len: %u", strLen);
-
-    if (!ipc_message_unpack(cmd, binStr, strLen)) {
-        C_LOG_ERROR("CommandLine parse error!");
-        goto out;
-    }
     switch (ipc_message_type(cmd)) {
         case IPC_TYPE_OPEN_TERMINATOR: {
             C_LOG_INFO("Open terminator");
@@ -821,6 +934,14 @@ static void sandbox_process_req (gpointer data, gpointer udata)
             bool ret = sandbox_execute_cmd(sc, env, FILE_MANAGER);
             C_LOG_INFO("return: %s", ret ? "true" : "false");
 
+            c_strfreev(env);
+            break;
+        }
+        case IPC_TYPE_SYNC: {
+            C_LOG_INFO("Open sync");
+            char** env = sandbox_get_client_env(sc->status.env, ipc_message_get_env_list(cmd));
+            bool ret = sandbox_execute_cmd_no_chroot(sc, env, SANDBOX_SYNC);
+            C_LOG_INFO("return: %s", ret ? "true" : "false");
             c_strfreev(env);
             break;
         }

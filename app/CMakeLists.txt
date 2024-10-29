@@ -67,6 +67,7 @@ target_compile_definitions(sandbox PUBLIC
         -DPACKAGE_NAME=\"sandbox\"
         -DTERMINATOR=\"sandbox-mate-terminal\"
         -DFILE_MANAGER=\"sandbox-nemo\"
+        -DSANDBOX_SYNC=\"copy-files\"
 )
 
 install(TARGETS sandbox DESTINATION /usr/local/andsec/sandbox/bin)

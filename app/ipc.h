@@ -8,6 +8,7 @@
 typedef enum
 {
     IPC_TYPE_NONE = 0,
+    IPC_TYPE_SYNC,
     IPC_TYPE_OPEN_FM,
     IPC_TYPE_OPEN_TERMINATOR,
     IPC_TYPE_QUIT,
