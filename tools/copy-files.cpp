@@ -2,9 +2,11 @@
 // Created by dingjing on 10/29/24.
 //
 #include <QApplication>
+#include <QResource>
 
 #include "singleton-app-gui.h"
 
+#include "main-window.h"
 #include "../3thrd/clib/c/clib.h"
 #include "../3thrd/clib/c/glog.h"
 #include "../app/vfs/vfs-manager.h"
@@ -17,6 +19,7 @@ int main(int argc, char *argv[])
     g_log_set_writer_func(c_glog_handler, nullptr, nullptr);
     qInstallMessageHandler (messageOutput);
 
+    QGuiApplication::setApplicationName("Andsec");
     QGuiApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
     QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 
@@ -28,8 +31,10 @@ int main(int argc, char *argv[])
 
     SingletonApp app (argc, argv, PACKAGE_NAME"-GUI");
 
+    MainWindow win;
+
     if (app.isSync()) {
-        //
+        win.show();
     }
     else {
         app.showHelp();

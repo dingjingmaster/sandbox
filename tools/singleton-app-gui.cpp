@@ -127,11 +127,13 @@ SingletonApp::~SingletonApp()
 
 bool SingletonApp::isPrimary()
 {
+    printf("is primary\n");
     return nullptr != mServer;
 }
 
 bool SingletonApp::isSecondary()
 {
+    printf("is secondary\n");
     return mServer == nullptr;
 }
 
