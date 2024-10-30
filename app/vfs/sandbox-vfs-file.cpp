@@ -241,6 +241,8 @@ char* sandbox_vfs_file_get_path (GFile* file)
 
     QUrl url = QString(uri);
 
+    printf("[VFS] %s\n", url.path().toUtf8().constData());
+
     return g_strdup(url.path().toUtf8().constData());
 }
 

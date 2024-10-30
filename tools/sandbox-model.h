@@ -16,21 +16,35 @@ class SandboxItem : public QObject
     Q_OBJECT
     friend class SandboxModel;
 public:
+    typedef enum {
+        SI_STATUS_NONE = 0,
+        SI_STATUS_PREPARE,
+        SI_STATUS_PROCESSING,
+        SI_STATUS_FINISHED,
+    } SandboxItemStatus;
+
     explicit SandboxItem(const QString& uri, SandboxItem* parent = nullptr);
 
-    int             row             () const;
-    QString         getUri          ();
-    bool            isDir           ();
-    bool            isFile          ();
-    bool            isLink          ();
-    QIcon           icon            ();
-    QString         fileName        ();
-    int             findChildren    ();
-    SandboxItem*    child           (int row);
-    void            setRootDir      (const QString& uri);
+    QString             getUri          ();
+    bool                isDir           ();
+    bool                isFile          ();
+    bool                isLink          ();
+    QIcon               icon            ();
+    int                 findChildren    ();
+    int                 row             () const;
+    QString             fileName        () const;
+    SandboxItem*        child           (int row);
+    void                setRootDir      (const QString& uri);
+    SandboxItemStatus   status          () const;
+    void                setProgress     (float process);
+
+private:
+    void                setStatus       (SandboxItemStatus status);
 
 private:
     QString                         mUri;
+    SandboxItemStatus               mStatus;
+    float                           mProgress;
     GFile*                          mFile = nullptr;
     SandboxItem*                    mParent = nullptr;
     QMap<QString, SandboxItem*>     mIndex;
@@ -46,6 +60,8 @@ public:
 
     void setRootDir (const QString& uri);
     void refresh();
+    void setItemProcessByUri(const QString& uri, float progress);
+    void setItemStatusByUri(const QString& uri, SandboxItem::SandboxItemStatus status);
 
 public:
     Qt::ItemFlags   flags       (const QModelIndex &index) const override;

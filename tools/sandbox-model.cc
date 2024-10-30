@@ -4,12 +4,29 @@
 
 #include "sandbox-model.h"
 
+#include <QUrl>
 #include <QDebug>
+
+#include "../app/utils.h"
 
 
 SandboxItem::SandboxItem(const QString& uri, SandboxItem* parent)
-    : QObject(parent), mUri(uri), mFile(g_file_new_for_uri(uri.toUtf8().constData())), mParent(parent)
+    : QObject(parent), mParent(parent), mStatus(SI_STATUS_NONE)
 {
+    auto uriFormat = [=] (const QString& uri) -> QString {
+        QUrl url(uri);
+        auto path = url.path();
+        while (path.startsWith("//")) {
+            path.remove(0, 1);
+        }
+        while ("/" != path && path.endsWith("/")) {
+            path.remove(path.size() - 1, 1);
+        }
+        return QString("%1://%2").arg(url.scheme(), path);
+    };
+
+    mUri = uriFormat(uri);
+    mFile = g_file_new_for_uri(mUri.toUtf8().constData());
 }
 
 int SandboxItem::row() const
@@ -38,7 +55,7 @@ bool SandboxItem::isDir()
         g_object_unref(fileInfo);
     }
 
-    qDebug() << "SandboxItem::uri: " << mUri << " isDir: " << isDir;
+    // qDebug() << "SandboxItem::uri: " << mUri << " isDir: " << isDir;
 
     return isDir;
 }
@@ -88,7 +105,7 @@ QIcon SandboxItem::icon()
     return icon;
 }
 
-QString SandboxItem::fileName()
+QString SandboxItem::fileName() const
 {
     QString qname = "";
     char* name = g_file_get_basename(mFile);
@@ -102,7 +119,7 @@ QString SandboxItem::fileName()
 
 int SandboxItem::findChildren()
 {
-    g_return_val_if_fail(isDir(), 0);
+    if (!isDir()) return 0;
 
     int add = 0;
     GFileEnumerator* em = g_file_enumerate_children (mFile, "*", G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, nullptr, nullptr);
@@ -164,6 +181,23 @@ void SandboxItem::setRootDir(const QString & uri)
     findChildren();
 }
 
+void SandboxItem::setStatus(SandboxItemStatus status)
+{
+    mStatus = status;
+}
+
+SandboxItem::SandboxItemStatus SandboxItem::status() const
+{
+    return mStatus;
+}
+
+void SandboxItem::setProgress(float process)
+{
+    if (process > mProgress) {
+        mProgress = process;
+    }
+}
+
 SandboxModel::SandboxModel(QObject * parent)
     : QAbstractTableModel(parent), mRootItem(nullptr)
 {
@@ -213,9 +247,18 @@ void SandboxModel::refresh()
     endResetModel();
 }
 
+void SandboxModel::setItemProcessByUri(const QString & uri, float progress)
+{
+
+}
+
+void SandboxModel::setItemStatusByUri(const QString & uri, SandboxItem::SandboxItemStatus status)
+{
+}
+
 Qt::ItemFlags SandboxModel::flags(const QModelIndex & index) const
 {
-    auto flags = QAbstractItemModel::flags (index);
+    Qt::ItemFlags flags = Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsAutoTristate;
 
     if (!index.isValid()) {
         return flags;
@@ -255,7 +298,7 @@ int SandboxModel::rowCount(const QModelIndex & parent) const
 
 int SandboxModel::columnCount(const QModelIndex & parent) const
 {
-    return 1;
+    return 2;
 }
 
 QVariant SandboxModel::data(const QModelIndex & index, int role) const
@@ -265,23 +308,38 @@ QVariant SandboxModel::data(const QModelIndex & index, int role) const
     auto item = static_cast<SandboxItem*>(index.internalPointer());
 
     switch (role) {
-    case Qt::DisplayRole: {
-        switch (index.column()) {
-        case 0: return item->fileName();
-        default: break;
+        case Qt::DisplayRole: {
+            switch (index.column()) {
+                case 0: return item->fileName();
+                case 1: return "";
+                default: break;
+            }
+            break;
         }
-        break;
-    }
-    case Qt::DecorationRole: {
-        switch (index.column()) {
-        case 0: return item->icon();
-        default: break;
+        case Qt::TextAlignmentRole: {
+            switch (index.column()) {
+                case 0: return Qt::AlignLeft;
+                case 1: return Qt::AlignCenter;
+            }
+            break;
         }
-        break;
-    }
-    default: {
-        break;
-    }
+        case Qt::SizeHintRole: {
+            switch (index.column()) {
+                case 1: return QSize(30, 30);
+                default: break;
+            }
+            break;
+        }
+        case Qt::DecorationRole: {
+            switch (index.column()) {
+                case 0: return item->icon();
+                default: break;
+            }
+            break;
+        }
+        default: {
+            break;
+        }
     }
 
     return {};

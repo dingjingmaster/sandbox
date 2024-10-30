@@ -7,6 +7,8 @@
 #include <stdint.h>
 #include <gio/gio.h>
 
+#include "vfs/sandbox-vfs-file.h"
+
 
 static GFile* get_gfile(const char* path);
 static bool check_is_mounted_by_config_path (const char* configPath, const char* dev, const char* mountPoint);

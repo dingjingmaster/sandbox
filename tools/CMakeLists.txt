@@ -10,6 +10,7 @@ add_executable(copy-files copy-files.cpp ${C_SRC} ${VFS_SRC}
         main-window.cc main-window.h
         sandbox-model.cc sandbox-model.h
         sandbox-view.cc sandbox-view.h
+        header-view.cc header-view.h
         ${RES}
 )
 target_include_directories(copy-files PUBLIC ${QT_INCLUDE_DIRS} ${GLIB_INCLUDE_DIRS} ../3thrd/clib)
