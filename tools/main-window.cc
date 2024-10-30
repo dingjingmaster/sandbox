@@ -30,10 +30,11 @@ SplitterWidget::SplitterWidget(const QString& title, bool inSandbox, QWidget * p
 
     mView = new SandboxView(inSandbox);
     mModel = new SandboxModel;
+    auto delegate = new SandboxViewDelegate(this);
 
     mView->setModel(mModel);
     mView->setHeader(new HeaderView());
-    mView->setItemDelegate(new SandboxViewDelegate(this));
+    mView->setItemDelegate(delegate);
 
     mView->setSelectionMode(QAbstractItemView::SingleSelection);
     mView->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -176,11 +177,11 @@ void CopyFileThread::doCopyFile()
                 QString uri = getFileUriByGFileInfo(curUri, fileInfo);
                 if (!uri.isNull() && !uri.isEmpty()) {
                     GFileType fileType = getFileType(uri);
-                    if (!dirFileter.contains(uri) && (G_FILE_TYPE_REGULAR != fileType)) {
+                    if (!dirFileter.contains(uri) && (G_FILE_TYPE_DIRECTORY == fileType)) {
                         dirs.append(uri);
                         dirFileter.insert(uri);
                     }
-                    else if (G_FILE_TYPE_REGULAR == fileType) {
+                    else {
                         files.append(uri);
                         mCopyAllSize += getFileSizeByUri(uri);
                     }
