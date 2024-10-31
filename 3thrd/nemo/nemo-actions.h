@@ -147,6 +147,7 @@
 #define NEMO_ACTION_STATUSBAR_SIDEBAR_TOGGLE "Statusbar Sidebar Toggle"
 
 #define NEMO_ACTION_OPEN_IN_TERMINAL "OpenInTerminal"
+#define NEMO_ACTION_OPEN_FILE_TRANSFER "FileTransfer"
 #define NEMO_ACTION_FOLLOW_SYMLINK "FollowSymbolicLink"
 #define NEMO_ACTION_OPEN_CONTAINING_FOLDER "OpenContainingFolder"
 

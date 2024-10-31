@@ -125,6 +125,7 @@
 		</placeholder>
 		<separator name="Open terminal separator"/>
         <menuitem name="OpenInTerminal" action="OpenInTerminal"/>
+		<menuitem name="FileTransfer" action="FileTransfer"/>
 		<separator name="View items separator"/>
 		<placeholder name="View Items"/>
 			<menuitem name="Show Hidden Files" action="Show Hidden Files"/>

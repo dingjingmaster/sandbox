@@ -66,15 +66,14 @@
 #include "libnemo-private/nemo-trash-monitor.h"
 #include <string.h>
 
-#define MENU_PATH_EXTENSION_ACTIONS                     "/MenuBar/File/Extension Actions"
-#define POPUP_PATH_EXTENSION_ACTIONS                     "/background/Before Zoom Items/Extension Actions"
-#define MENU_BAR_PATH                                    "/MenuBar"
+#define MENU_PATH_EXTENSION_ACTIONS							"/MenuBar/File/Extension Actions"
+#define POPUP_PATH_EXTENSION_ACTIONS						"/background/Before Zoom Items/Extension Actions"
+#define MENU_BAR_PATH										"/MenuBar"
 
-#define NETWORK_URI          "network:"
-#define COMPUTER_URI         "computer:"
+#define NETWORK_URI											"network:"
+#define COMPUTER_URI										"computer:"
 
-static void set_content_view_type(NemoWindow *window,
-                                  const gchar *view_id);
+static void set_content_view_type(NemoWindow *window, const gchar *view_id);
 
 enum {
     NULL_VIEW,
@@ -1321,8 +1320,9 @@ static void
 open_in_terminal_other (const gchar *path)
 {
     gchar *argv[2];
-    argv[0] = "sandbox-mate-terminal"; //g_settings_get_string (gnome_terminal_preferences, GNOME_DESKTOP_TERMINAL_EXEC);
+    argv[0] = INSTALL_DIR"/sandbox/bin/sandbox-mate-terminal"; //g_settings_get_string (gnome_terminal_preferences, GNOME_DESKTOP_TERMINAL_EXEC);
     argv[1] = NULL;
+	printf("%s\n", argv[0]);
     g_spawn_async(path, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
 }
 
@@ -1709,7 +1709,6 @@ nemo_window_create_toolbar_action_group (NemoWindow *window)
     g_signal_connect (action, "activate",
                       G_CALLBACK (action_toggle_location_entry_callback), window);
     gtk_action_set_icon_name (GTK_ACTION (action), "location-symbolic");
-
     g_object_unref (action);
 
     action = GTK_ACTION (gtk_action_new (NEMO_ACTION_NEW_FOLDER,
@@ -1727,11 +1726,20 @@ nemo_window_create_toolbar_action_group (NemoWindow *window)
                                                 _("Open a terminal in the active folder"),
                                                 NULL));
     gtk_action_group_add_action (action_group, GTK_ACTION (action));
+    gtk_action_set_icon_name (GTK_ACTION (action), "utilities-terminal-symbolic");
     g_signal_connect (action, "activate",
                       G_CALLBACK (action_open_terminal_callback), window);
-    gtk_action_set_icon_name (GTK_ACTION (action), "utilities-terminal-symbolic");
     g_object_unref (action);
 
+    action = GTK_ACTION (gtk_action_new (NEMO_ACTION_OPEN_FILE_TRANSFER,
+                                                _("File Transfer"),
+                                                _("File Transfer"),
+                                                NULL));
+    gtk_action_group_add_action (action_group, GTK_ACTION (action));
+    gtk_action_set_icon_name (GTK_ACTION (action), "utilities-terminal-symbolic");
+    g_signal_connect (action, "activate",
+                      G_CALLBACK (action_open_terminal_callback), window);
+    g_object_unref (action);
 
     action = GTK_ACTION (gtk_toggle_action_new (NEMO_ACTION_ICON_VIEW,
                          _("Icons"),

@@ -21,6 +21,7 @@ add_definitions(
         -D FUSE_USE_VERSION=31
         -D QT_MESSAGELOGCONTEXT
         -D C_LOG_TAG=\\"sandbox\\"
+        -DINSTALL_DIR=\"/usr/local/andsec/\"
         -D SANDBOX_MOUNT_POINT=\\"/usr/local/andsec/sandbox/.sandbox\\"
         -D PACKAGE_VERSION=\\"${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}\\"
 )

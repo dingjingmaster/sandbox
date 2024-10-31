@@ -114,30 +114,30 @@
 
 #define SELECTION_CHANGED_UPDATE_INTERVAL 50
 
-#define NEMO_VIEW_MENU_PATH_OPEN_PLACEHOLDER                  "/MenuBar/File/Open Placeholder"
-#define NEMO_VIEW_MENU_PATH_APPLICATIONS_SUBMENU_PLACEHOLDER  "/MenuBar/File/Open Placeholder/Open With/Applications Placeholder"
-#define NEMO_VIEW_MENU_PATH_APPLICATIONS_PLACEHOLDER          "/MenuBar/File/Open Placeholder/Applications Placeholder"
-#define NEMO_VIEW_MENU_PATH_SCRIPTS_PLACEHOLDER               "/MenuBar/File/Open Placeholder/Scripts/Scripts Placeholder"
-#define NEMO_VIEW_MENU_PATH_ACTIONS_PLACEHOLDER               "/MenuBar/File/Open Placeholder/ActionsPlaceholder"
-#define NEMO_VIEW_MENU_PATH_EXTENSION_ACTIONS_PLACEHOLDER     "/MenuBar/Edit/Extension Actions"
-#define NEMO_VIEW_MENU_PATH_NEW_DOCUMENTS_PLACEHOLDER        "/MenuBar/File/New Items Placeholder/New Documents/New Documents Placeholder"
-#define NEMO_VIEW_MENU_PATH_OPEN                  "/MenuBar/File/Open Placeholder/Open"
+#define NEMO_VIEW_MENU_PATH_OPEN_PLACEHOLDER                    "/MenuBar/File/Open Placeholder"
+#define NEMO_VIEW_MENU_PATH_APPLICATIONS_SUBMENU_PLACEHOLDER    "/MenuBar/File/Open Placeholder/Open With/Applications Placeholder"
+#define NEMO_VIEW_MENU_PATH_APPLICATIONS_PLACEHOLDER            "/MenuBar/File/Open Placeholder/Applications Placeholder"
+#define NEMO_VIEW_MENU_PATH_SCRIPTS_PLACEHOLDER                 "/MenuBar/File/Open Placeholder/Scripts/Scripts Placeholder"
+#define NEMO_VIEW_MENU_PATH_ACTIONS_PLACEHOLDER                 "/MenuBar/File/Open Placeholder/ActionsPlaceholder"
+#define NEMO_VIEW_MENU_PATH_EXTENSION_ACTIONS_PLACEHOLDER       "/MenuBar/Edit/Extension Actions"
+#define NEMO_VIEW_MENU_PATH_NEW_DOCUMENTS_PLACEHOLDER           "/MenuBar/File/New Items Placeholder/New Documents/New Documents Placeholder"
+#define NEMO_VIEW_MENU_PATH_OPEN                                "/MenuBar/File/Open Placeholder/Open"
 
-#define NEMO_VIEW_POPUP_PATH_SELECTION            "/selection"
-#define NEMO_VIEW_POPUP_PATH_OPEN_PLACEHOLDER      "/selection/Open Placeholder"
-#define NEMO_VIEW_POPUP_PATH_APPLICATIONS_SUBMENU_PLACEHOLDER "/selection/Open Placeholder/Open With/Applications Placeholder"
-#define NEMO_VIEW_POPUP_PATH_APPLICATIONS_PLACEHOLDER          "/selection/Open Placeholder/Applications Placeholder"
-#define NEMO_VIEW_POPUP_PATH_SCRIPTS_PLACEHOLDER          "/selection/Open Placeholder/Scripts/Scripts Placeholder"
-#define NEMO_VIEW_POPUP_PATH_ACTIONS_PLACEHOLDER           "/selection/Open Placeholder/ActionsPlaceholder"
-#define NEMO_VIEW_POPUP_PATH_EXTENSION_ACTIONS          "/selection/Extension Actions"
-#define NEMO_VIEW_POPUP_PATH_OPEN                  "/selection/Open Placeholder/Open"
+#define NEMO_VIEW_POPUP_PATH_SELECTION                          "/selection"
+#define NEMO_VIEW_POPUP_PATH_OPEN_PLACEHOLDER                   "/selection/Open Placeholder"
+#define NEMO_VIEW_POPUP_PATH_APPLICATIONS_SUBMENU_PLACEHOLDER   "/selection/Open Placeholder/Open With/Applications Placeholder"
+#define NEMO_VIEW_POPUP_PATH_APPLICATIONS_PLACEHOLDER           "/selection/Open Placeholder/Applications Placeholder"
+#define NEMO_VIEW_POPUP_PATH_SCRIPTS_PLACEHOLDER                "/selection/Open Placeholder/Scripts/Scripts Placeholder"
+#define NEMO_VIEW_POPUP_PATH_ACTIONS_PLACEHOLDER                "/selection/Open Placeholder/ActionsPlaceholder"
+#define NEMO_VIEW_POPUP_PATH_EXTENSION_ACTIONS                  "/selection/Extension Actions"
+#define NEMO_VIEW_POPUP_PATH_OPEN                               "/selection/Open Placeholder/Open"
 
-#define NEMO_VIEW_POPUP_PATH_BACKGROUND              "/background"
-#define NEMO_VIEW_POPUP_PATH_BACKGROUND_SCRIPTS_PLACEHOLDER      "/background/Before Zoom Items/New Object Items/Scripts/Scripts Placeholder"
-#define NEMO_VIEW_POPUP_PATH_BACKGROUND_ACTIONS_PLACEHOLDER   "/background/Before Zoom Items/New Object Items/ActionsPlaceholder"
+#define NEMO_VIEW_POPUP_PATH_BACKGROUND                         "/background"
+#define NEMO_VIEW_POPUP_PATH_BACKGROUND_SCRIPTS_PLACEHOLDER     "/background/Before Zoom Items/New Object Items/Scripts/Scripts Placeholder"
+#define NEMO_VIEW_POPUP_PATH_BACKGROUND_ACTIONS_PLACEHOLDER     "/background/Before Zoom Items/New Object Items/ActionsPlaceholder"
 #define NEMO_VIEW_POPUP_PATH_BACKGROUND_NEW_DOCUMENTS_PLACEHOLDER "/background/Before Zoom Items/New Object Items/New Documents/New Documents Placeholder"
 
-#define NEMO_VIEW_POPUP_PATH_LOCATION              "/location"
+#define NEMO_VIEW_POPUP_PATH_LOCATION                           "/location"
 
 #define NEMO_VIEW_POPUP_PATH_BOOKMARK_MOVETO_ENTRIES_PLACEHOLDER "/selection/File Actions/MoveToMenu/BookmarkMoveToPlaceHolder"
 #define NEMO_VIEW_POPUP_PATH_BOOKMARK_COPYTO_ENTRIES_PLACEHOLDER "/selection/File Actions/CopyToMenu/BookmarkCopyToPlaceHolder"
@@ -7202,8 +7202,8 @@ open_in_terminal (const gchar *path)
     gchar *argv[2];
     argv[1] = NULL;
 
-    if (g_file_test(INSTALL_DIR"/sandbox/bin/sandbox-mate-terminal", G_FILE_TEST_IS_EXECUTABLE)) {
-        argv[0] = INSTALL_DIR"/sandbox/bin/sandbox-mate-termnal";
+    if (g_file_test(INSTALL_DIR"sandbox/bin/sandbox-mate-terminal", G_FILE_TEST_IS_EXECUTABLE)) {
+        argv[0] = INSTALL_DIR"sandbox/bin/sandbox-mate-terminal";
     }
     else if (g_file_test("/bin/sandbox-mate-terminal", G_FILE_TEST_IS_EXECUTABLE)) {
         argv[0] = "/bin/sandbox-mate-terminal";
@@ -7343,8 +7343,22 @@ action_open_containing_folder_callback (GtkAction *action,
 }
 
 static void
-action_open_in_terminal_callback(GtkAction *action,
-                  gpointer callback_data)
+action_open_file_transfer_callback(GtkAction *action, gpointer callback_data)
+{
+    gchar *argv[2];
+    argv[1] = NULL;
+
+    if (g_file_test(INSTALL_DIR"sandbox/bin/copy-files", G_FILE_TEST_IS_EXECUTABLE)) {
+        argv[0] = INSTALL_DIR"sandbox/bin/copy-files";
+    }
+
+    if (argv[0]) {
+        g_spawn_async("/tmp", argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
+    }
+}
+
+static void
+action_open_in_terminal_callback(GtkAction *action, gpointer callback_data)
 {
     NemoView *view;
     GList *selection;
@@ -8315,6 +8329,12 @@ static const GtkActionEntry directory_view_entries[] = {
   /* label, accelerator */       N_("Open in Terminal"), "",
   /* tooltip */                  N_("Open terminal in the selected folder"),
                  G_CALLBACK (action_open_in_terminal_callback) },
+
+  /* name, stock id */         { NEMO_ACTION_OPEN_FILE_TRANSFER, "utilities-terminal-symbolic",
+  /* label, accelerator */       N_("File Transfer"), "",
+  /* tooltip */                  N_("File Transfer"),
+                 G_CALLBACK (action_open_file_transfer_callback) },
+
   // /* name, stock id */         { NEMO_ACTION_OPEN_AS_ROOT, "dialog-password-symbolic",
   // /* label, accelerator */       N_("Open as Root"), "",
   // /* tooltip */                  N_("Open the folder with administration privileges"),
@@ -9769,6 +9789,10 @@ real_update_menus (NemoView *view)
 
     action = gtk_action_group_get_action (view->details->dir_action_group,
                                          NEMO_ACTION_OPEN_IN_TERMINAL);
+    gtk_action_set_visible (action, no_selection_or_one_dir);
+
+    action = gtk_action_group_get_action (view->details->dir_action_group,
+                                         NEMO_ACTION_OPEN_FILE_TRANSFER);
     gtk_action_set_visible (action, no_selection_or_one_dir);
 
     action = gtk_action_group_get_action (view->details->dir_action_group,
