@@ -4,11 +4,15 @@
 
 #include "main-window.h"
 
+#include <QTimer>
 #include <QDebug>
+#include <QDir>
 #include <QThread>
 #include <QSplitter>
+#include <QScrollBar>
 #include <QEventLoop>
 #include <QMessageBox>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include "header-view.h"
@@ -16,7 +20,7 @@
 
 
 SplitterWidget::SplitterWidget(const QString& title, bool inSandbox, QWidget * parent)
-    : QWidget(parent)
+    : QWidget(parent), mTimer(new QTimer(this))
 {
     setContentsMargins(0, 0, 0, 0);
 
@@ -47,6 +51,14 @@ SplitterWidget::SplitterWidget(const QString& title, bool inSandbox, QWidget * p
     connect(mView, &SandboxView::selectDir, mModel, &SandboxModel::setRootDir);
     connect(mView, &SandboxView::copyFrom, this, &SplitterWidget::copyFileFrom);
     connect(mView, &SandboxView::selectedUriChanged, this, &SplitterWidget::selectChanged);
+    connect(mTimer, &QTimer::timeout, this, [=] () {
+        // 开始更新
+        // mView->update(mModel->getCurrentIndex());
+        // mView->update();
+        mView->viewport()->update();
+    });
+    mTimer->setInterval(1000);
+    // mTimer->start();
 }
 
 void SplitterWidget::setRootDir(const QString & uri) const
@@ -97,6 +109,10 @@ void CopyFileThread::doCopyFile()
     QList<QString> dirs;
     QSet<QString> dirFileter;
     QString curUri = mSrcUri;
+
+    QString srcBasePath = QUrl(mSrcUri).path();
+    QString dstBasePath = QUrl(mDstUri).path();
+
 
     auto getGFile = [&] (const QString& uri) -> GFile* {
         GFile* file = nullptr;
@@ -165,9 +181,90 @@ void CopyFileThread::doCopyFile()
         return size;
     };
 
+    auto copyRecursion = [&] (const QString& srcFile) ->void {
+
+        class GFileWrap
+        {
+        public:
+            GFileWrap(GFile* file) : mFile(file) {}
+            ~GFileWrap() { if (mFile) {g_object_unref(mFile); } }
+            void operator=(GFile* file) {mFile = file; };
+            GFile* get() const {return mFile;}
+        private:
+            GFile* mFile = nullptr;
+        };
+
+        GFileWrap copySrc = getGFile(srcFile);
+        if (!G_IS_FILE(copySrc.get())) { qWarning() << "malloc GFile error!"; return; }
+        auto filePath = QUrl(srcFile).path();
+        auto subPath = filePath.replace(srcBasePath, "/");
+        while (subPath.startsWith("/")) {
+            subPath = subPath.remove(0, 1);
+        }
+
+        // 创建 dst 目录
+        {
+            QString dstBasePath = mDstUri;
+            if (mDstUri.startsWith("sandbox://")) {
+                dstBasePath = dstBasePath.replace("sandbox://", SANDBOX_MOUNT_POINT);
+            }
+            else if (mDstUri.startsWith("file://")) {
+                dstBasePath = dstBasePath.replace("file://", "");
+            }
+
+            QDir dir(dstBasePath);
+            QString filePathT = subPath;
+
+            // 如果是文件夹，则创建文件夹
+            QFileInfo fi(filePath);
+            if (G_FILE_TYPE_DIRECTORY == g_file_query_file_type(copySrc.get(), G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, nullptr)) {
+                QDir dir;
+                QString dstDir = QString("%1/%2").arg(dstBasePath).arg(subPath);
+                if (dstDir.startsWith("file://")) {
+                    dstDir.replace("file://", "");
+                }
+                else if (dstDir.startsWith("sandbox://")) {
+                    dstDir.replace("sandbox://", SANDBOX_MOUNT_POINT);
+                }
+                dir.mkpath(dstDir);
+                return;
+            }
+
+            // 如果是文件，则继续
+            auto filePathT1 = subPath.split("/");
+            if (filePathT1.size() > 1) {
+                filePathT1.pop_back();
+                filePathT = filePathT1.join("/");
+            }
+            if (filePathT.startsWith("/")) {
+                filePathT = filePathT.remove(0, 1);
+            }
+            QString mkPath = dir.absoluteFilePath(filePathT);
+            if (!dir.exists(mkPath)) {
+                if (!dir.mkpath(mkPath)) {
+                    qWarning() << "Failed to create directory" << mkPath;
+                }
+            }
+        }
+
+        auto targetFilePath = QString("%1/%2").arg(mDstUri).arg(subPath);
+        GFileWrap copyDst = getGFile(targetFilePath);
+        if (G_IS_FILE(copyDst.get())) {
+            GError* error = nullptr;
+            qInfo () << "Copying file " << srcFile << " to " << targetFilePath;
+            bool ret = g_file_copy(copySrc.get(), copyDst.get(),
+                (GFileCopyFlags)(G_FILE_COPY_NOFOLLOW_SYMLINKS | G_FILE_COPY_OVERWRITE | G_FILE_COPY_ALL_METADATA),
+                nullptr, nullptr, nullptr, &error);
+            if (!ret) {
+                qWarning() << "Failed to copy file: " << srcFile << " error: " << (error->message ? error->message : "");
+                g_error_free(error);
+                error = nullptr;
+            }
+        }
+    };
+
     do {
         GFile* file = getGFile(curUri);
-        // qInfo() << "Current Uri:" << curUri;
         GFileType fileType1 = getFileType(curUri);
 
         if (G_FILE_TYPE_REGULAR != fileType1) {
@@ -179,6 +276,7 @@ void CopyFileThread::doCopyFile()
                     GFileType fileType = getFileType(uri);
                     if (!dirFileter.contains(uri) && (G_FILE_TYPE_DIRECTORY == fileType)) {
                         dirs.append(uri);
+                        files.append(uri);
                         dirFileter.insert(uri);
                     }
                     else {
@@ -210,6 +308,7 @@ void CopyFileThread::doCopyFile()
     qInfo() << "file count: " << files.size();
     for (auto& i : files) {
         // qInfo() << "[FILE] " << i;
+        copyRecursion(i);
         mCopiedSize += getFileSizeByUri(i);
         Q_EMIT progress(mCopiedSize, mCopyAllSize);
     }

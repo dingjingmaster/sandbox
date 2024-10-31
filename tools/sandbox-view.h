@@ -18,7 +18,6 @@ public:
 
     QString getSelectedDir() const;
     QString getSelectedUri();
-    SandboxItem* getSelectedItem() const;
 
 Q_SIGNALS:
     void selectDir (const QString& uri);
@@ -30,7 +29,7 @@ protected:
     void currentChanged(const QModelIndex & current, const QModelIndex & previous) override;
 
 private:
-    SandboxItem*                        mCurrentItem;
+    QTimer*                             mTimer;
     QModelIndex                         mCurrentSelectedIdx;
     QString                             mCurrentSelectedUri;
 };

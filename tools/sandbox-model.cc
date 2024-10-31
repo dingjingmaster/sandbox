@@ -11,7 +11,7 @@
 
 
 SandboxItem::SandboxItem(const QString& uri, SandboxItem* parent)
-    : QObject(parent), mParent(parent), mStatus(SI_STATUS_NONE)
+    : QObject(parent), mParent(parent), mStatus(SI_STATUS_NONE), mProgress(0.0)
 {
     auto uriFormat = [=] (const QString& uri) -> QString {
         QUrl url(uri);
@@ -27,6 +27,11 @@ SandboxItem::SandboxItem(const QString& uri, SandboxItem* parent)
 
     mUri = uriFormat(uri);
     mFile = g_file_new_for_uri(mUri.toUtf8().constData());
+}
+
+QString SandboxItem::getPath() const
+{
+    return QUrl(mUri).path();
 }
 
 int SandboxItem::row() const
@@ -198,6 +203,11 @@ void SandboxItem::setProgress(float process)
     }
 }
 
+QVector<SandboxItem *> SandboxItem::getChildren() const
+{
+    return mChilds;
+}
+
 SandboxModel::SandboxModel(QObject * parent)
     : QAbstractTableModel(parent), mRootItem(nullptr)
 {
@@ -224,6 +234,8 @@ void SandboxModel::setRootDir(const QString & uri)
     g_object_unref(file);
 
     beginResetModel();
+    mCurrIdx = QModelIndex();
+    mCurrItem = nullptr;
     if (!mRootItem) {
         mRootItem = new SandboxItem(uri);
     }
@@ -241,6 +253,8 @@ void SandboxModel::refresh()
         delete i;
     }
 
+    mCurrItem = nullptr;
+    mCurrIdx = QModelIndex();
     mRootItem->mChilds.clear();
     mRootItem->mIndex.clear();
     mRootItem->findChildren();
@@ -249,11 +263,105 @@ void SandboxModel::refresh()
 
 void SandboxModel::setItemProcessByUri(const QString & uri, float progress)
 {
+    mLocker.lock();
 
+    SandboxItem * resItem = findSandboxItemByUri(uri);
+    if (resItem) {
+        resItem->setProgress(progress);
+    }
+    else {
+        qWarning() << "item not found";
+    }
+
+    mLocker.unlock();
 }
 
 void SandboxModel::setItemStatusByUri(const QString & uri, SandboxItem::SandboxItemStatus status)
 {
+    mLocker.lock();
+
+    SandboxItem * resItem = findSandboxItemByUri(uri);
+    if (resItem) {
+        resItem->setStatus(status);
+    }
+    else {
+        qWarning() << "item not found";
+    }
+
+    mLocker.unlock();
+}
+
+QModelIndex SandboxModel::getCurrentIndex() const
+{
+    // qDebug() << "get current index: " << mCurrIdx;
+    return mCurrIdx;
+}
+
+void SandboxModel::updateCurrent()
+{
+    if (!mCurrItem) {
+        return;
+    }
+
+}
+
+// 加锁了
+SandboxItem * SandboxModel::findSandboxItemByUri(const QString & uri)
+{
+    if (nullptr == uri || uri.isEmpty() || !mRootItem) { return nullptr; }
+
+    QString pathF = QUrl(uri).path();
+
+    if (mCurrItem && pathF == mCurrItem->getPath()) {
+        return mCurrItem;
+    }
+
+    mCurrIdx = index(0, 1);
+
+    // 深度优先
+    std::function<SandboxItem*(SandboxItem*, QModelIndex)> findItem = [&] (SandboxItem* item, const QModelIndex& parentIdx=QModelIndex()) ->SandboxItem* {
+        if (!item) { return nullptr; }
+
+        if (pathF == item->getPath()) {
+            return item;
+        }
+
+        mCurrIdx = index(0, 1, parentIdx);
+        QModelIndex indexT = mCurrIdx;
+
+        int count = item->mChilds.size();
+        for (int i = 0; i < count; ++i) {
+            indexT = index(i, 1, parentIdx);
+            mCurrIdx = indexT;
+            auto res = findItem(item->mChilds.at(i), indexT);
+            if (res) {
+                return res;
+            }
+        }
+
+        mCurrIdx = parentIdx;
+        return nullptr;
+    };
+
+    SandboxItem * item = mRootItem;
+    SandboxItem* resItem = findItem(item, mCurrIdx);
+
+    if (!uri.isEmpty()) {
+        printf("uri: '%s', path: '%s'\n", uri.toUtf8().constData(), pathF.toUtf8().constData());
+    }
+
+    printf("start root: '%s'\n", mRootItem->getPath().toUtf8().data());
+
+    if (resItem) {
+        if (mCurrItem) {
+            mCurrItem->setStatus(SandboxItem::SI_STATUS_NONE);
+        }
+        mCurrItem = resItem;
+        printf("Found item '%s'\n", resItem->getPath().toUtf8().constData());
+    }
+    printf("\n");
+
+    return resItem;
 }
 
 Qt::ItemFlags SandboxModel::flags(const QModelIndex & index) const
@@ -359,7 +467,6 @@ QModelIndex SandboxModel::index(int row, int column, const QModelIndex & parent)
     SandboxItem* parentItem;
 
     if (!parent.isValid()) {
-        //parentItem = mRootItem;
         return createIndex (row, column, mRootItem);
     }
     else {

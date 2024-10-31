@@ -6,6 +6,7 @@
 #define sandbox_SANDBOX_MODEL_H
 
 #include <QIcon>
+#include <QMutex>
 #include <QAbstractTableModel>
 #include <gio/gio.h>
 
@@ -25,18 +26,20 @@ public:
 
     explicit SandboxItem(const QString& uri, SandboxItem* parent = nullptr);
 
-    QString             getUri          ();
-    bool                isDir           ();
-    bool                isFile          ();
-    bool                isLink          ();
-    QIcon               icon            ();
-    int                 findChildren    ();
-    int                 row             () const;
-    QString             fileName        () const;
-    SandboxItem*        child           (int row);
-    void                setRootDir      (const QString& uri);
-    SandboxItemStatus   status          () const;
-    void                setProgress     (float process);
+    QString                 getPath             () const;
+    QString                 getUri              ();
+    bool                    isDir               ();
+    bool                    isFile              ();
+    bool                    isLink              ();
+    QIcon                   icon                ();
+    int                     findChildren        ();
+    int                     row                 () const;
+    QString                 fileName            () const;
+    SandboxItem*            child               (int row);
+    void                    setRootDir          (const QString& uri);
+    SandboxItemStatus       status              () const;
+    void                    setProgress         (float process);
+    QVector<SandboxItem*>   getChildren         () const;
 
 private:
     void                setStatus       (SandboxItemStatus status);
@@ -58,10 +61,17 @@ public:
     explicit SandboxModel(QObject *parent = nullptr);
     ~SandboxModel() override;
 
-    void setRootDir (const QString& uri);
     void refresh();
+    void setRootDir (const QString& uri);
     void setItemProcessByUri(const QString& uri, float progress);
     void setItemStatusByUri(const QString& uri, SandboxItem::SandboxItemStatus status);
+    QModelIndex getCurrentIndex() const;
+
+public Q_SLOTS:
+    void updateCurrent();
+
+private:
+    SandboxItem* findSandboxItemByUri   (const QString& uri);
 
 public:
     Qt::ItemFlags   flags       (const QModelIndex &index) const override;
@@ -76,7 +86,10 @@ public:
     void            fetchMore   (const QModelIndex &parent) override;
 
 private:
-    SandboxItem*         mRootItem = nullptr;
+    QMutex                  mLocker;
+    QModelIndex             mCurrIdx;
+    SandboxItem*            mCurrItem = nullptr;
+    SandboxItem*            mRootItem = nullptr;
 };
 
 

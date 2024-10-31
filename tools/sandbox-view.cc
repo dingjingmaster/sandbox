@@ -16,7 +16,7 @@
 #include "sandbox-model.h"
 
 SandboxView::SandboxView(bool inSandbox, QWidget * parent)
-    : QTreeView(parent)
+    : QTreeView(parent), mTimer(new QTimer(this))
 {
     header()->setVisible (true);
     header()->setStretchLastSection (true);
@@ -25,6 +25,10 @@ SandboxView::SandboxView(bool inSandbox, QWidget * parent)
     setColumnWidth(2, 30);
     setContextMenuPolicy (Qt::CustomContextMenu);
     setSelectionMode(QAbstractItemView::NoSelection);
+
+    connect(mTimer, &QTimer::timeout, this, [=] () {
+        update();
+    });
 
     connect(this, &SandboxView::customContextMenuRequested, this, [=] (const QPoint &pos) ->void {
         QModelIndex idx = indexAt(pos);
@@ -80,11 +84,6 @@ QString SandboxView::getSelectedUri()
     return mCurrentSelectedUri;
 }
 
-SandboxItem * SandboxView::getSelectedItem() const
-{
-    return mCurrentItem;
-}
-
 void SandboxView::currentChanged(const QModelIndex & current, const QModelIndex & previous)
 {
     auto item = static_cast<SandboxItem*> (current.internalPointer());
@@ -94,8 +93,6 @@ void SandboxView::currentChanged(const QModelIndex & current, const QModelIndex 
     mCurrentSelectedUri = item->getUri();
 
     Q_EMIT selectedUriChanged(mCurrentSelectedUri);
-
-    mCurrentItem = item;
 
     QTreeView::currentChanged(current, previous);
 
@@ -131,47 +128,51 @@ void SandboxViewDelegate::paint(QPainter * p, const QStyleOptionViewItem & optio
     QColor color(255, 138, 140);
     auto item = static_cast<SandboxItem*>(index.internalPointer());
 
+    // qInfo() << index << "--" << item->getUri();
+
     switch (index.column()) {
         case 1: {
-            switch (item->status()) {
-                case SandboxItem::SI_STATUS_PREPARE: {
-                    p->save();
-                    int width = qMin(rect.width(), rect.height() - 3);
-                    p->setRenderHint(QPainter::Antialiasing);
-
-                    int outerRadius = (int) ((width - 1) * 0.5);
-                    int innerRadius = (int) ((width - 1) * 0.5 * 0.38);
-
-                    int capsuleHeight = outerRadius - innerRadius;
-                    int capsuleWidth  = (width > 32 ) ? (int) (capsuleHeight * .23) : (int) (capsuleHeight * .35);
-                    int capsuleRadius = capsuleWidth / 2;
-
-                    for (int i = 0; i < 12; ++i) {
-                        QColor color = Qt::darkRed; //(255, 255, 225);
-                        color.setAlphaF(1.0f - ((float)i / 12.0f));
-                        p->setPen(Qt::NoPen);
-                        p->setBrush(color);
-                        p->save();
-                        p->translate(rect.center());
-                        p->rotate((float) mAngle - (float) i * 30.0f);
-                        p->drawRoundedRect((int) (-capsuleWidth * 0.5), -(innerRadius+capsuleHeight), capsuleWidth, capsuleHeight, capsuleRadius, capsuleRadius);
-                        p->restore();
-                    }
-                    p->restore();
-                    break;
-                }
-                case SandboxItem::SI_STATUS_FINISHED: {
-                    p->drawPixmap(rect, QIcon(":/images/OK.png").pixmap(20, 20));
-                    break;
-                }
-                case SandboxItem::SI_STATUS_PROCESSING: {
-                    break;
-                }
-                default: {
-                    QStyledItemDelegate::paint (p, option, index);
-                    break;
-                }
-            }
+            // switch (item->status()) {
+            //     case SandboxItem::SI_STATUS_PREPARE: {
+            //         printf("prepare\n");
+            //         p->save();
+            //         int width = qMin(rect.width(), rect.height() - 3);
+            //         p->setRenderHint(QPainter::Antialiasing);
+            //
+            //         int outerRadius = (int) ((width - 1) * 0.5);
+            //         int innerRadius = (int) ((width - 1) * 0.5 * 0.38);
+            //
+            //         int capsuleHeight = outerRadius - innerRadius;
+            //         int capsuleWidth  = (width > 32 ) ? (int) (capsuleHeight * .23) : (int) (capsuleHeight * .35);
+            //         int capsuleRadius = capsuleWidth / 2;
+            //
+            //         for (int i = 0; i < 12; ++i) {
+            //             QColor color = Qt::black; //(255, 255, 225);
+            //             color.setAlphaF(1.0f - ((float)i / 12.0f));
+            //             p->setPen(Qt::NoPen);
+            //             p->setBrush(color);
+            //             p->save();
+            //             p->translate(rect.center());
+            //             p->rotate((float) mAngle - (float) i * 30.0f);
+            //             p->drawRoundedRect((int) (-capsuleWidth * 0.5), -(innerRadius+capsuleHeight), capsuleWidth, capsuleHeight, capsuleRadius, capsuleRadius);
+            //             p->restore();
+            //         }
+            //         p->restore();
+            //         break;
+            //     }
+            //     case SandboxItem::SI_STATUS_FINISHED: {
+            //         p->drawPixmap(rect, QIcon(":/icons/OK.png").pixmap(20, 20));
+            //         break;
+            //     }
+            //     case SandboxItem::SI_STATUS_PROCESSING: {
+            //         p->drawPixmap(rect, QIcon(":/icons/OK.png").pixmap(20, 20));
+            //         break;
+            //     }
+            //     default: {
+            //         QStyledItemDelegate::paint (p, option, index);
+            //         break;
+            //     }
+            // }
             break;
         }
         default: {

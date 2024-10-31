@@ -15,7 +15,7 @@
 #include "sandbox-view.h"
 #include "sandbox-model.h"
 
-
+class QTimer;
 class QSplitter;
 class SplitterWidget : public QWidget
 {
@@ -38,6 +38,7 @@ protected:
     void resizeEvent(QResizeEvent* event) override;
 
 private:
+    QTimer*                         mTimer = nullptr;
     QLayout*                        mMainLayout = nullptr;
     SandboxView*                    mView = nullptr;
     SandboxModel*                   mModel = nullptr;
