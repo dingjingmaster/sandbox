@@ -26,6 +26,7 @@ public:
     void setRootDir(const QString& uri) const;
     QString getCurrentUri() const;
     QString getSavedUri() const;
+    void refreshModel() const;
 
     void setStatusByUri(const QString& uri, SandboxItem::SandboxItemStatus status) const;
     void setProgressByUri(const QString& uri, float progress) const;

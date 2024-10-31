@@ -29,6 +29,21 @@ SandboxItem::SandboxItem(const QString& uri, SandboxItem* parent)
     mFile = g_file_new_for_uri(mUri.toUtf8().constData());
 }
 
+SandboxItem::~SandboxItem()
+{
+    if (mFile) {
+        g_object_unref(mFile);
+    }
+    if (mParent) {
+        mParent = nullptr;
+    }
+    for (auto c : mChilds) {
+        if (c) delete c;
+    }
+    mIndex.clear();
+    mChilds.clear();
+}
+
 QString SandboxItem::getPath() const
 {
     return QUrl(mUri).path();
@@ -127,7 +142,8 @@ int SandboxItem::findChildren()
     if (!isDir()) return 0;
 
     int add = 0;
-    GFileEnumerator* em = g_file_enumerate_children (mFile, "*", G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, nullptr, nullptr);
+    GFile* file = g_object_ref(mFile);
+    GFileEnumerator* em = g_file_enumerate_children (file, "*", G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, nullptr, nullptr);
     if (G_IS_FILE_ENUMERATOR(em)) {
         while (GFileInfo* info = g_file_enumerator_next_file (em, nullptr, nullptr)) {
             if (G_IS_FILE_INFO(info)) {
@@ -155,6 +171,9 @@ int SandboxItem::findChildren()
             }
         }
         g_object_unref(em);
+    }
+    if (file) {
+        g_object_unref(file);
     }
 
     return add;
@@ -346,20 +365,20 @@ SandboxItem * SandboxModel::findSandboxItemByUri(const QString & uri)
     SandboxItem * item = mRootItem;
     SandboxItem* resItem = findItem(item, mCurrIdx);
 
-    if (!uri.isEmpty()) {
-        printf("uri: '%s', path: '%s'\n", uri.toUtf8().constData(), pathF.toUtf8().constData());
-    }
+    // if (!uri.isEmpty()) {
+        // printf("uri: '%s', path: '%s'\n", uri.toUtf8().constData(), pathF.toUtf8().constData());
+    // }
 
-    printf("start root: '%s'\n", mRootItem->getPath().toUtf8().data());
+    // printf("start root: '%s'\n", mRootItem->getPath().toUtf8().data());
 
     if (resItem) {
         if (mCurrItem) {
             mCurrItem->setStatus(SandboxItem::SI_STATUS_NONE);
         }
         mCurrItem = resItem;
-        printf("Found item '%s'\n", resItem->getPath().toUtf8().constData());
+        // printf("Found item '%s'\n", resItem->getPath().toUtf8().constData());
     }
-    printf("\n");
+    // printf("\n");
 
     return resItem;
 }

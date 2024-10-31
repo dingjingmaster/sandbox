@@ -81,6 +81,11 @@ QString SplitterWidget::getSavedUri() const
     return mView->getSelectedDir();
 }
 
+void SplitterWidget::refreshModel() const
+{
+    mModel->refresh();
+}
+
 void SplitterWidget::setStatusByUri(const QString & uri, SandboxItem::SandboxItemStatus status) const
 {
     mModel->setItemStatusByUri(uri, status);
@@ -385,6 +390,7 @@ MainWindow::MainWindow(QWidget * parent)
             msg.exec();
         }
         Q_EMIT stopCopy();
+        mHost->refreshModel();
     });
 
     // 同步文件 -- 宿主机 -> 沙盒
@@ -405,12 +411,13 @@ MainWindow::MainWindow(QWidget * parent)
             msg.exec();
         }
         Q_EMIT stopCopy();
+        mSandbox->refreshModel();
     });
 }
 
 bool MainWindow::copyFile(SplitterWidget* view, const QString & srcUri, const QString & dstUri, GError ** error)
 {
-    printf("[COPY] %s --> %s\n", srcUri.toUtf8().constData(), dstUri.toUtf8().constData());
+    // printf("[COPY] %s --> %s\n", srcUri.toUtf8().constData(), dstUri.toUtf8().constData());
 
     CopyFileThread cp (srcUri, dstUri);
 
@@ -436,7 +443,7 @@ bool MainWindow::copyFile(SplitterWidget* view, const QString & srcUri, const QS
     mThread.start();
     mEventLoop.exec();
 
-    qInfo() << "[COPY] " << dstUri;
+    // qInfo() << "[COPY] " << dstUri;
 
     return true;
 }

@@ -25,6 +25,7 @@ public:
     } SandboxItemStatus;
 
     explicit SandboxItem(const QString& uri, SandboxItem* parent = nullptr);
+    ~SandboxItem() override;
 
     QString                 getPath             () const;
     QString                 getUri              ();
