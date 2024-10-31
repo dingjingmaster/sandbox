@@ -199,6 +199,89 @@ void CopyFileThread::doCopyFile()
             GFile* mFile = nullptr;
         };
 
+        class GFileInfoWrap
+        {
+        public:
+            GFileInfoWrap(GFileInfo* file) : mFile(file) {}
+            ~GFileInfoWrap() { if (mFile) {g_object_unref(mFile); } }
+            void operator=(GFileInfo* file) {mFile = file; };
+            GFileInfo* get() const {return mFile;}
+        private:
+            GFileInfo* mFile = nullptr;
+        };
+
+        QString copySrcPath = srcFile;
+        QString copyDstPath = mDstUri;
+
+        if (copySrcPath.startsWith("sandbox://")) {
+            copySrcPath = copySrcPath.replace("sandbox://", SANDBOX_MOUNT_POINT);
+        }
+        if (copyDstPath.startsWith("sandbox://")) {
+            copyDstPath = copyDstPath.replace("sandbox://", SANDBOX_MOUNT_POINT);
+        }
+        if (copySrcPath.startsWith("file://")) {
+            copySrcPath = copySrcPath.replace("file://", "");
+        }
+        if (copyDstPath.startsWith("file://")) {
+            copyDstPath = copyDstPath.replace("file://", "");
+        }
+
+        while (copySrcPath.contains("//")) { copySrcPath = copySrcPath.replace("//", "/"); }
+        while (copyDstPath.contains("//")) { copyDstPath = copyDstPath.replace("//", "/"); }
+
+        // qInfo() << "1 copySrcPath:" << copySrcPath << " copyDstPath:" << copyDstPath;
+
+        {
+            QString srcPath = mSrcUri.replace("sandbox://", SANDBOX_MOUNT_POINT);
+            srcPath = srcPath.replace("file://", "");
+            while (srcPath.contains("//")) { srcPath.replace("//", "/"); }
+            auto st = srcPath.split("/");
+            if (st.count() > 1) {
+                st.removeLast();
+            }
+            srcPath = st.join("/");
+            QString copySrcPathT = copySrcPath;
+            QString subPath = copySrcPathT.replace(srcPath, "");
+            while (subPath.startsWith("/")) { subPath = subPath.remove(0, 1); }
+            while (subPath.endsWith("/")) { subPath = subPath.remove(subPath.size() - 1, 1); }
+
+            if (!subPath.isNull() && !subPath.isEmpty()) {
+                copyDstPath = QString("%1/%2").arg(copyDstPath, subPath);
+            }
+        }
+        // qInfo() << "2 copySrcPath:" << copySrcPath << " copyDstPath:" << copyDstPath;
+
+        // dir
+        {
+            QFileInfo srcFileInfo(copySrcPath);
+            if (srcFileInfo.isDir()) {
+                QDir dir;
+                dir.mkpath(copyDstPath);
+                return;
+            }
+        }
+
+        // file dir
+        {
+            auto ls = copyDstPath.split("/");
+            ls.removeLast();
+            auto dstDir = ls.join("/");
+            QDir dir;
+            dir.mkpath(dstDir);
+        }
+
+        // file
+        {
+            if (!QFile::copy(copySrcPath, copyDstPath)) {
+                qWarning() << "[COPY] File: " << copySrcPath << "  ->  " << copyDstPath;
+            }
+            else {
+                QFile::setPermissions(copyDstPath, QFile::permissions(copySrcPath));
+                // qInfo() << "[COPY] File: " << copySrcPath << "  ->  " << copyDstPath;
+            }
+        }
+
+#if 0
         GFileWrap copySrc = getGFile(srcFile);
         if (!G_IS_FILE(copySrc.get())) { qWarning() << "malloc GFile error!"; return; }
         auto filePath = QUrl(srcFile).path();
@@ -221,9 +304,10 @@ void CopyFileThread::doCopyFile()
             QString filePathT = subPath;
 
             // 如果是文件夹，则创建文件夹
-            QFileInfo fi(filePath);
-            if (G_FILE_TYPE_DIRECTORY == g_file_query_file_type(copySrc.get(), G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, nullptr)) {
+            GFileInfoWrap fi = g_file_query_info(copySrc.get(), "standard::*", G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, nullptr, nullptr);
+            if (G_FILE_TYPE_DIRECTORY == g_file_info_get_attribute_uint32(fi.get(), G_FILE_ATTRIBUTE_STANDARD_TYPE)) {
                 QDir dir;
+            qInfo() << "filePath:" << srcFile << "is dir";
                 QString dstDir = QString("%1/%2").arg(dstBasePath).arg(subPath);
                 if (dstDir.startsWith("file://")) {
                     dstDir.replace("file://", "");
@@ -235,6 +319,7 @@ void CopyFileThread::doCopyFile()
                 return;
             }
 
+            qInfo() << "filePath:" << srcFile << "is file";
             // 如果是文件，则继续
             auto filePathT1 = subPath.split("/");
             if (filePathT1.size() > 1) {
@@ -253,10 +338,10 @@ void CopyFileThread::doCopyFile()
         }
 
         auto targetFilePath = QString("%1/%2").arg(mDstUri).arg(subPath);
+        qInfo () << "Copying file " << srcFile << " to " << targetFilePath;
         GFileWrap copyDst = getGFile(targetFilePath);
         if (G_IS_FILE(copyDst.get())) {
             GError* error = nullptr;
-            qInfo () << "Copying file " << srcFile << " to " << targetFilePath;
             bool ret = g_file_copy(copySrc.get(), copyDst.get(),
                 (GFileCopyFlags)(G_FILE_COPY_NOFOLLOW_SYMLINKS | G_FILE_COPY_OVERWRITE | G_FILE_COPY_ALL_METADATA),
                 nullptr, nullptr, nullptr, &error);
@@ -266,6 +351,7 @@ void CopyFileThread::doCopyFile()
                 error = nullptr;
             }
         }
+#endif
     };
 
     do {
@@ -426,7 +512,7 @@ bool MainWindow::copyFile(SplitterWidget* view, const QString & srcUri, const QS
 
     cp.moveToThread(&mThread);
     cp.connect(&mThread, &QThread::finished, &mEventLoop, [&] () {
-        qInfo() << "finished";
+        // qInfo() << "finished";
         mEventLoop.quit();
     });
     cp.connect(&mThread, &QThread::started, &cp, &CopyFileThread::doCopyFile);

@@ -137,35 +137,20 @@ gboolean sandbox_vfs_file_copy (GFile* src, GFile* dest, GFileCopyFlags flags, G
 {
     g_return_val_if_fail(G_IS_FILE (src) && G_IS_FILE (dest), false);
 
+return true;
     g_autofree char* path = g_file_get_uri (src);
+
+
+
+    qInfo() << "[COPY] " << g_file_get_uri(src) << " -- " << g_file_get_uri (dest);
 
     QString pathT = QString("file://%1").arg (path);
     pathT = pathT.replace ("sandbox://", SANDBOX_MOUNT_POINT);
 
     g_autoptr(GFile) target = g_file_new_for_uri (pathT.toUtf8().constData());      // 备份文件对象
-    g_autofree char* targetUri = g_file_get_uri (target);                           // 备份文件全路径
 
-    QString destT = QString(targetUri);
-    destT = destT.replace (SANDBOX_MOUNT_POINT, "");                                     // 还原后文件全路径
 
-    g_autoptr(GFile) destFile = nullptr;
-    g_autofree char* destUriTT = g_file_get_uri (dest);
-
-    if (0 == g_strcmp0 (destUriTT, "file:///")) {
-        destFile = g_file_new_for_uri (destT.toUtf8().constData());                 // 还原的文件对象
-    }
-    else {
-        destFile = (GFile*) g_object_ref(dest);
-    }
-    g_autofree char* destUri = g_file_get_uri (destFile);
-
-    if (g_file_query_exists (destFile, nullptr)) {
-        return true;
-    }
-
-    C_LOG_DEBUG("restore form: '%s' To '%s' ", targetUri, destUri);
-
-    return g_file_copy (target, destFile, (GFileCopyFlags) (flags | G_FILE_COPY_OVERWRITE), cancel, progress, udata, error);
+    return g_file_copy (src, target, (GFileCopyFlags) (flags | G_FILE_COPY_OVERWRITE), cancel, progress, udata, error);
 }
 
 

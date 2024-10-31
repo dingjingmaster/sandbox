@@ -7345,11 +7345,13 @@ action_open_containing_folder_callback (GtkAction *action,
 static void
 action_open_file_transfer_callback(GtkAction *action, gpointer callback_data)
 {
-    gchar *argv[2];
+    gchar *argv[3];
     argv[1] = NULL;
+    argv[2] = NULL;
 
-    if (g_file_test(INSTALL_DIR"sandbox/bin/copy-files", G_FILE_TEST_IS_EXECUTABLE)) {
-        argv[0] = INSTALL_DIR"sandbox/bin/copy-files";
+    if (g_file_test(INSTALL_DIR"sandbox/bin/sandbox", G_FILE_TEST_IS_EXECUTABLE)) {
+        argv[0] = INSTALL_DIR"sandbox/bin/sandbox";
+        argv[1] = "-s";
     }
 
     if (argv[0]) {

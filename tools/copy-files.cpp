@@ -16,8 +16,8 @@ void messageOutput (QtMsgType type, const QMessageLogContext& context, const QSt
 
 int main(int argc, char *argv[])
 {
-    g_log_set_writer_func(c_glog_handler, nullptr, nullptr);
-    qInstallMessageHandler (messageOutput);
+    // g_log_set_writer_func(c_glog_handler, nullptr, nullptr);
+    // qInstallMessageHandler (messageOutput);
 
     QGuiApplication::setApplicationName("Andsec");
     QGuiApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
