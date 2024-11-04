@@ -38,7 +38,7 @@ do {                                                    \
     if (c_file_test(cmdPath, C_FILE_TEST_EXISTS)) {     \
         C_LOG_VERB("run cmd: '%s'", cmdPath);           \
         errno = 0;                                      \
-        execvpe(cmdPath, NULL, env);                    \
+        execvpe(cmdPath, NULL, newEnv);                 \
         if (0 != errno) {                               \
             C_LOG_ERROR("execute cmd '%s' error: %s",   \
                 cmdPath, c_strerror(errno));            \
@@ -96,7 +96,6 @@ static cchar**  sandbox_get_client_env  (cchar** oldEnv, const GList* cliEnv);
 static csize    read_all_data           (GSocket* fr, char** out/*out*/);
 static bool     sandbox_send_cmd        (SandboxContext* context, const char* buf, gsize bufSize);
 static gboolean sandbox_new_req         (GSocketService* ls, GSocketConnection* conn, GObject* srcObj, gpointer uData);
-static void     sandbox_chroot_execute  (const char* cmd, const char* mountPoint, char** env);
 static gboolean sandbox_clean           (SandboxContext *context);
 
 static CmdLine gsCmdline = {0};
@@ -355,8 +354,34 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
     }
     C_LOG_VERB("chroot done");
 
+    int curIdx = 0;
+    guint32 newEnvLen = 0;
+    char** newEnv = NULL;
+
+    if (env) {
+        int idx = 0;
+        while (env[idx]) { ++idx; ++newEnvLen; }
+    }
+    newEnvLen += 10;
+
+#define SET_NEW_ENV(key, value)                                         \
+    G_STMT_START {                                                      \
+        if (!key || !value) {                                           \
+            break;                                                      \
+        }                                                               \
+        g_setenv(key, value, true);                                     \
+        if (curIdx < newEnvLen) {                                       \
+            char* kv = g_strdup_printf("%s=%s", key, value);            \
+            newEnv[curIdx] = kv; curIdx++;                              \
+        }                                                               \
+        else {                                                          \
+            C_LOG_ERROR("env set error");                               \
+        }                                                               \
+    } G_STMT_END
+
+    // HOME/USER/LD_PRELOAD/
+    newEnv = (char**) g_malloc0(sizeof(char*) * newEnvLen);
     // set env
-    C_LOG_VERB("Start merge environment profile");
     if (env) {
         for (int i = 0; env[i]; ++i) {
             char** arr = c_strsplit(env[i], "=", 2);
@@ -367,15 +392,21 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
 
             char* key = arr[0];
             char* val = arr[1];
-            C_LOG_VERB("[ENV] set %s", key);
+
+            if (!g_str_has_prefix(key, "HOME")
+                && !g_str_has_prefix(key, "USER")
+                && !g_str_has_prefix(key, "LD_PRELOAD")) {
+                SET_NEW_ENV(key, val);
+            }
             c_setenv(key, val, true);
             c_strfreev(arr);
         }
     }
-    C_LOG_VERB("Merge environment profile done");
+
+    // LD_PRELOAD
+    SET_NEW_ENV("LD_PRELOAD", "/usr/local/andsec/sandbox/hook/hook-connect.so");
 
     // change user
-    C_LOG_VERB("Start change user");
     if (c_getenv("USER")) {
         errno = 0;
         do {
@@ -384,6 +415,7 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
                 C_LOG_ERROR("get struct passwd error: %s", c_strerror(errno));
                 break;
             }
+            SET_NEW_ENV("USER", c_getenv("USER"));
             if (!c_file_test(pwd->pw_dir, C_FILE_TEST_EXISTS)) {
                 errno = 0;
                 if (!c_file_test("/home", C_FILE_TEST_EXISTS)) {
@@ -396,6 +428,7 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
             }
 
             if (pwd->pw_dir) {
+                SET_NEW_ENV("HOME", pwd->pw_dir);
                 c_setenv("HOME", pwd->pw_dir, true);
 
                 // change dir
@@ -409,7 +442,6 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
             setegid(pwd->pw_gid);
         } while (0);
     }
-    C_LOG_VERB("Change user OK!");
 
 #ifdef DEBUG
     cchar** envs = c_get_environ();
@@ -418,12 +450,21 @@ bool sandbox_execute_cmd(SandboxContext* context, const char ** env, const char 
     }
 #endif
 
+#if 0
+    int iidx = 0;
+    printf("============>env\n");
+    while (newEnv[iidx]) {
+        c_log_raw(C_LOG_LEVEL_INFO, "%s", newEnv[iidx]);
+        ++iidx;
+    }
+#endif
+
     // run command
     C_LOG_VERB("Start execute cmd '%s' ...", cmd);
     if (cmd[0] == '/') {
         C_LOG_VERB("run cmd: '%s'", cmd);
         errno = 0;
-        execvpe(cmd, NULL, env);
+        execvpe(cmd, NULL, newEnv);
         if (0 != errno) {
             C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno));
             goto end;
@@ -481,8 +522,34 @@ bool sandbox_execute_cmd_no_chroot(SandboxContext * context, const char ** env, 
     }
     C_LOG_VERB("chdir done");
 
+    int curIdx = 0;
+    guint32 newEnvLen = 0;
+    char** newEnv = NULL;
+
+    if (env) {
+        int idx = 0;
+        while (env[idx]) { ++idx; ++newEnvLen; }
+    }
+    newEnvLen += 10;
+
+#define SET_NEW_ENV(key, value)                                         \
+    G_STMT_START {                                                      \
+        if (!key || !value) {                                           \
+            break;                                                      \
+        }                                                               \
+        g_setenv(key, value, true);                                     \
+        if (curIdx < newEnvLen) {                                       \
+            char* kv = g_strdup_printf("%s=%s", key, value);            \
+            newEnv[curIdx] = kv; curIdx++;                              \
+        }                                                               \
+        else {                                                          \
+            C_LOG_ERROR("env set error");                               \
+        }                                                               \
+    } G_STMT_END
+
+    // HOME/USER/LD_PRELOAD/
+    newEnv = (char**) g_malloc0(sizeof(char*) * newEnvLen);
     // set env
-    C_LOG_VERB("Start merge environment profile");
     if (env) {
         for (int i = 0; env[i]; ++i) {
             char** arr = c_strsplit(env[i], "=", 2);
@@ -493,15 +560,21 @@ bool sandbox_execute_cmd_no_chroot(SandboxContext * context, const char ** env, 
 
             char* key = arr[0];
             char* val = arr[1];
-            C_LOG_VERB("[ENV] set %s", key);
+
+            if (!g_str_has_prefix(key, "HOME")
+                && !g_str_has_prefix(key, "USER")
+                && !g_str_has_prefix(key, "LD_PRELOAD")) {
+                SET_NEW_ENV(key, val);
+            }
             c_setenv(key, val, true);
             c_strfreev(arr);
         }
     }
-    C_LOG_VERB("Merge environment profile done");
+
+    // LD_PRELOAD
+    SET_NEW_ENV("LD_PRELOAD", "/usr/local/andsec/sandbox/hook/hook-connect.so");
 
     // change user
-    C_LOG_VERB("Start change user");
     if (c_getenv("USER")) {
         errno = 0;
         do {
@@ -510,6 +583,7 @@ bool sandbox_execute_cmd_no_chroot(SandboxContext * context, const char ** env, 
                 C_LOG_ERROR("get struct passwd error: %s", c_strerror(errno));
                 break;
             }
+            SET_NEW_ENV("USER", c_getenv("USER"));
             if (!c_file_test(pwd->pw_dir, C_FILE_TEST_EXISTS)) {
                 errno = 0;
                 if (!c_file_test("/home", C_FILE_TEST_EXISTS)) {
@@ -522,10 +596,8 @@ bool sandbox_execute_cmd_no_chroot(SandboxContext * context, const char ** env, 
             }
 
             if (pwd->pw_dir) {
+                SET_NEW_ENV("HOME", pwd->pw_dir);
                 c_setenv("HOME", pwd->pw_dir, true);
-
-                // change dir
-                chdir(pwd->pw_dir);
             }
 
             setuid(pwd->pw_uid);
@@ -535,6 +607,7 @@ bool sandbox_execute_cmd_no_chroot(SandboxContext * context, const char ** env, 
             setegid(pwd->pw_gid);
         } while (0);
     }
+
     C_LOG_VERB("Change user OK!");
 
 #ifdef DEBUG
@@ -549,7 +622,7 @@ bool sandbox_execute_cmd_no_chroot(SandboxContext * context, const char ** env, 
     if (cmd[0] == '/') {
         C_LOG_VERB("run cmd: '%s'", cmd);
         errno = 0;
-        execvpe(cmd, NULL, env);
+        execvpe(cmd, NULL, newEnv);
         if (0 != errno) { C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno)); exit(0); }
     }
     else {
@@ -625,108 +698,6 @@ bool sandbox_is_first()
     }
 
     return ret;
-}
-
-
-static void sandbox_chroot_execute (const char* cmd, const char* mountPoint, char** env)
-{
-    C_LOG_INFO("cmd: '%s', mountpoint: '%s'", cmd ? cmd : "<null>", mountPoint ? mountPoint : "<null>");
-
-    c_return_if_fail(cmd && mountPoint);
-
-    // chdir
-    errno = 0;
-    if ( 0 != chdir(mountPoint)) {
-        C_LOG_ERROR("chdir error: %s", c_strerror(errno));
-        return;
-    }
-
-    // chroot
-    errno = 0;
-    if ( 0 != chroot(mountPoint)) {
-        C_LOG_ERROR("chroot error: %s", c_strerror(errno));
-        return;
-    }
-
-    // set env
-    if (env) {
-        for (int i = 0; env[i]; ++i) {
-            char** arr = c_strsplit(env[i], "=", 2);
-            if (c_strv_length(arr) != 2) {
-                // C_LOG_ERROR("error ENV %s", env[i]);
-                c_strfreev(arr);
-                continue;
-            }
-
-            char* key = arr[0];
-            char* val = arr[1];
-            C_LOG_VERB("[ENV] set %s", key);
-            c_setenv(key, val, true);
-            c_strfreev(arr);
-        }
-    }
-
-    // change user
-    if (c_getenv("USER")) {
-        errno = 0;
-        do {
-            struct passwd* pwd = getpwnam(c_getenv("USER"));
-            if (!pwd) {
-                C_LOG_ERROR("get struct passwd error: %s", c_strerror(errno));
-                break;
-            }
-            if (!c_file_test(pwd->pw_dir, C_FILE_TEST_EXISTS)) {
-                errno = 0;
-                if (!c_file_test("/home", C_FILE_TEST_EXISTS)) {
-                    c_mkdir("/home", 0755);
-                }
-                if (0 != c_mkdir(pwd->pw_dir, 0700)) {
-                    C_LOG_ERROR("mkdir error: %s", c_strerror(errno));
-                }
-                chown(pwd->pw_dir, pwd->pw_uid, pwd->pw_gid);
-            }
-
-            if (pwd->pw_dir) {
-                c_setenv("HOME", pwd->pw_dir, true);
-            }
-
-            setuid(pwd->pw_uid);
-            seteuid(pwd->pw_uid);
-
-            setgid(pwd->pw_gid);
-            setegid(pwd->pw_gid);
-        } while (0);
-    }
-
-#ifdef DEBUG
-    cchar** envs = c_get_environ();
-    for (int i = 0; envs[i]; ++i) {
-        c_log_raw(C_LOG_LEVEL_VERB, "%s", envs[i]);
-    }
-#endif
-
-    // run command
-    if (cmd[0] == '/') {
-        C_LOG_VERB("run cmd: '%s'", cmd);
-        errno = 0;
-        execvpe(cmd, NULL, env);
-        if (0 != errno) { C_LOG_ERROR("execute cmd '%s' error: %s", cmd, c_strerror(errno)); return; }
-    }
-    else {
-        do {
-            CHECK_AND_RUN("/bin");
-            CHECK_AND_RUN("/usr/bin");
-            CHECK_AND_RUN("/usr/local/bin");
-
-            CHECK_AND_RUN("/sbin");
-            CHECK_AND_RUN("/usr/sbin");
-            CHECK_AND_RUN("/usr/local/sbin");
-
-            C_LOG_ERROR("Cannot found binary path");
-        } while (0);
-    }
-
-    C_LOG_INFO("Finished!");
 }
 
 gboolean sandbox_clean(SandboxContext * context)

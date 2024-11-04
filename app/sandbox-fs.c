@@ -1866,7 +1866,7 @@ void sandbox_fs_execute_chroot(SandboxFs * sandboxFs, const char ** env, const c
     g_return_if_fail(sandboxFs && exe && env);
     C_LOG_INFO("cmd: '%s', mountpoint: '%s'", exe ? exe : "<null>", sandboxFs->mountPoint? sandboxFs->mountPoint : "<null>");
 
-   // chdir
+    // chdir
     errno = 0;
     if ( 0 != chdir(sandboxFs->mountPoint)) {
         C_LOG_ERROR("chdir error: %s", c_strerror(errno));
@@ -1880,23 +1880,57 @@ void sandbox_fs_execute_chroot(SandboxFs * sandboxFs, const char ** env, const c
         return;
     }
 
+    int curIdx = 0;
+    guint32 newEnvLen = 0;
+    char** newEnv = NULL;
+
+    if (env) {
+        int idx = 0;
+        while (env[idx]) { ++idx; ++newEnvLen; }
+    }
+    newEnvLen += 10;
+
+#define SET_NEW_ENV(key, value)                                         \
+    G_STMT_START {                                                      \
+        if (!key || !value) {                                           \
+            break;                                                      \
+        }                                                               \
+        g_setenv(key, value, true);                                     \
+        if (curIdx < newEnvLen) {                                       \
+            char* kv = g_strdup_printf("%s=%s", key, value);            \
+            newEnv[curIdx] = kv; curIdx++;                              \
+        }                                                               \
+        else {                                                          \
+            C_LOG_ERROR("env set error");                               \
+        }                                                               \
+    } G_STMT_END
+
+    // HOME/USER/LD_PRELOAD/
+    newEnv = (char**) g_malloc0(sizeof(char*) * newEnvLen);
     // set env
     if (env) {
         for (int i = 0; env[i]; ++i) {
             char** arr = c_strsplit(env[i], "=", 2);
             if (c_strv_length(arr) != 2) {
-                // C_LOG_ERROR("error ENV %s", env[i]);
                 c_strfreev(arr);
                 continue;
             }
 
             char* key = arr[0];
             char* val = arr[1];
-            C_LOG_VERB("[ENV] set %s", key);
+
+            if (!g_str_has_prefix(key, "HOME")
+                && !g_str_has_prefix(key, "USER")
+                && !g_str_has_prefix(key, "LD_PRELOAD")) {
+                SET_NEW_ENV(key, val);
+            }
             c_setenv(key, val, true);
             c_strfreev(arr);
         }
     }
+
+    // LD_PRELOAD
+    SET_NEW_ENV("LD_PRELOAD", "/usr/local/andsec/hook/hook-connect.so");
 
     // change user
     if (c_getenv("USER")) {
@@ -1907,6 +1941,7 @@ void sandbox_fs_execute_chroot(SandboxFs * sandboxFs, const char ** env, const c
                 C_LOG_ERROR("get struct passwd error: %s", c_strerror(errno));
                 break;
             }
+            SET_NEW_ENV("USER", c_getenv("USER"));
             if (!c_file_test(pwd->pw_dir, C_FILE_TEST_EXISTS)) {
                 errno = 0;
                 if (!c_file_test("/home", C_FILE_TEST_EXISTS)) {
@@ -1919,6 +1954,7 @@ void sandbox_fs_execute_chroot(SandboxFs * sandboxFs, const char ** env, const c
             }
 
             if (pwd->pw_dir) {
+                SET_NEW_ENV("HOME", pwd->pw_dir);
                 c_setenv("HOME", pwd->pw_dir, true);
             }
 
@@ -1937,6 +1973,15 @@ void sandbox_fs_execute_chroot(SandboxFs * sandboxFs, const char ** env, const c
     }
 #endif
 
+#if 1
+    int iidx = 0;
+    printf("============>env\n");
+    while (newEnv[iidx]) {
+        c_log_raw(C_LOG_LEVEL_INFO, "%s", newEnv[iidx]);
+        ++iidx;
+    }
+#endif
+
     // run command
 #define CHECK_AND_RUN(dir)                              \
 do {                                                    \
@@ -1945,11 +1990,11 @@ do {                                                    \
     if (c_file_test(cmdPath, C_FILE_TEST_EXISTS)) {     \
         C_LOG_VERB("run cmd: '%s'", cmdPath);           \
         errno = 0;                                      \
-        execvpe(cmdPath, NULL, env);                    \
+        execvpe(cmdPath, NULL, newEnv);                 \
         if (0 != errno) {                               \
             C_LOG_ERROR("execute cmd '%s' error: %s",   \
                 cmdPath, c_strerror(errno));            \
-            return;                                     \
+            goto out;                                   \
         }                                               \
     }                                                   \
     c_free(cmdPath);                                    \
@@ -1958,8 +2003,11 @@ do {                                                    \
     if (exe[0] == '/') {
         C_LOG_VERB("run cmd: '%s'", exe);
         errno = 0;
-        execvpe(exe, NULL, env);
-        if (0 != errno) { C_LOG_ERROR("execute cmd '%s' error: %s", exe, c_strerror(errno)); return; }
+        execvpe(exe, NULL, newEnv);
+        if (0 != errno) {
+            C_LOG_ERROR("execute cmd '%s' error: %s", exe, c_strerror(errno));
+            goto out;
+        }
     }
     else {
         do {
@@ -1973,6 +2021,14 @@ do {                                                    \
 
             C_LOG_ERROR("Cannot found binary path");
         } while (0);
+    }
+
+out:
+    if (newEnv) {
+        int idx = 0;
+        while (newEnv[idx]) { g_free(newEnv[idx]); ++idx; }
+        g_free(newEnv);
+        newEnv = NULL;
     }
 
     C_LOG_INFO("Finished!");
