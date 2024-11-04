@@ -173,3 +173,21 @@ target_compile_definitions(test-rc4 PUBLIC
         -DPACKAGE_NAME=\"test-rc4\"
 )
 
+add_executable(test-cgroup cgourp.c
+        ../app/cgroup.c
+)
+target_link_libraries(test-cgroup PUBLIC
+        ${GLIB_LIBRARIES}
+        ${CLIB_LIBRARIES}
+)
+
+target_include_directories(test-cgroup PUBLIC
+        ${GLIB_INCLUDE_DIRS}
+        ${CLIB_INCLUDE_DIRS}
+        ${CMAKE_SOURCE_DIR}/3thrd/clib
+)
+
+target_compile_definitions(test-cgroup PUBLIC
+        -DPACKAGE_NAME=\"test-cgroup\"
+)
+

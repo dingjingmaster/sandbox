@@ -3,6 +3,9 @@ file(GLOB SANDBOX_SRC
         ${CMAKE_SOURCE_DIR}/app rc4.h
         ${CMAKE_SOURCE_DIR}/app rc4.c
 
+        ${CMAKE_SOURCE_DIR}/app cgroup.h
+        ${CMAKE_SOURCE_DIR}/app cgroup.c
+
         ${CMAKE_SOURCE_DIR}/app rootfs.h
         ${CMAKE_SOURCE_DIR}/app rootfs.c
 

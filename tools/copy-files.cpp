@@ -75,3 +75,4 @@ void messageOutput (QtMsgType type, const QMessageLogContext& context, const QSt
 
     C_LOG_RAW(level, "copy-file", file, line, function, msg.toUtf8().constData());
 }
+
